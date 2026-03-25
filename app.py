@@ -7,9 +7,9 @@ import streamlit as st
 from auth import AuthManager
 from database import db
 from config import MESES_LISTA
-from pages.caixa import CaixaManager
-from pages.cadastros import CadastrosManager
-from pages.admin import AdminManager
+from modules.caixa import CaixaManager
+from modules.cadastros import CadastrosManager
+from modules.admin import AdminManager
 
 # ==========================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -61,6 +61,7 @@ if col_logout.button("Sair", use_container_width=True):
 # ==========================================
 if menu == "1- Controle de Caixa":
     CaixaManager.renderizar()
+
 
 elif menu == "2- Projeção de Gastos":
     st.header("📉 Projeção de Gastos (Cartão/Parcelas)")
