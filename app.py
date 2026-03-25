@@ -10,6 +10,7 @@ from config import MESES_LISTA
 from modules.caixa import CaixaManager
 from modules.cadastros import CadastrosManager
 from modules.admin import AdminManager
+from modules.parcelas_exemplo import ParcelasManager
 
 # ==========================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -62,10 +63,8 @@ if col_logout.button("Sair", use_container_width=True):
 if menu == "1- Controle de Caixa":
     CaixaManager.renderizar()
 
-
 elif menu == "2- Projeção de Gastos":
-    st.header("📉 Projeção de Gastos (Cartão/Parcelas)")
-    st.info("ℹ️ Módulo em desenvolvimento...")
+    ParcelasManager.renderizar()
 
 elif menu == "3- Cadastros":
     CadastrosManager.renderizar()
