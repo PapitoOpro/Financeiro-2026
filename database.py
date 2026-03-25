@@ -88,7 +88,9 @@ class DatabaseManager:
             id SERIAL PRIMARY KEY, 
             nome TEXT, 
             username TEXT UNIQUE, 
-            senha TEXT)''')
+            senha TEXT,
+            aprovado BOOLEAN DEFAULT FALSE,
+            data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
 
 # Instância global
 db = DatabaseManager()

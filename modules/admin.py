@@ -140,30 +140,73 @@ class AdminManager:
     
     @staticmethod
     def _tab_usuarios():
-        """Gerenciar usuários."""
+        """Gerenciar usuários com aprovação."""
         st.subheader("👥 Gerenciar Usuários")
         
-        df_usuarios = db.buscar("SELECT id, nome, username FROM usuarios ORDER BY nome")
+        # Subabas para usuários pendentes e aprovados
+        subTab1, subTab2 = st.tabs(["⏳ Pendentes de Aprovação", "✅ Usuários Aprovados"])
         
-        if df_usuarios.empty:
-            st.info("Nenhum usuário cadastrado")
-            return
+        with subTab1:
+            st.markdown("### Usuários Aguardando Aprovação")
+            
+            df_pendentes = db.buscar("""
+                SELECT id, nome, username, data_criacao 
+                FROM usuarios 
+                WHERE aprovado = FALSE 
+                ORDER BY data_criacao DESC
+            """)
+            
+            if df_pendentes.empty:
+                st.info("✅ Nenhum usuário aguardando aprovação")
+            else:
+                st.warning(f"⏳ {len(df_pendentes)} usuário(s) aguardando sua aprovação")
+                
+                for idx, row in df_pendentes.iterrows():
+                    col1, col2, col3, col4 = st.columns([2, 1.5, 1, 1])
+                    
+                    col1.markdown(f"**{row['nome']}** (`{row['username']}`)")
+                    col2.caption(f"📅 {row['data_criacao']}")
+                    
+                    if col3.button("✅ Aprovar", key=f"aprova_{row['id']}", use_container_width=True):
+                        db.executar("UPDATE usuarios SET aprovado = TRUE WHERE id = ?", (row['id'],))
+                        st.success(f"✅ Usuário '{row['username']}' aprovado!")
+                        st.rerun()
+                    
+                    if col4.button("❌ Rejeitar", key=f"rejeita_{row['id']}", use_container_width=True):
+                        db.executar("DELETE FROM usuarios WHERE id = ?", (row['id'],))
+                        st.success(f"❌ Usuário '{row['username']}' rejeitado e deletado!")
+                        st.rerun()
+                    
+                    st.divider()
         
-        st.dataframe(df_usuarios, use_container_width=True, hide_index=True)
-        
-        st.markdown("---")
-        
-        # Deletar usuário
-        st.markdown("### Deletar Usuário")
-        username = st.selectbox(
-            "Selecione usuário para deletar",
-            df_usuarios['username'].tolist()
-        )
-        
-        if st.button("🗑️ Deletar Usuário", use_container_width=True):
-            db.executar("DELETE FROM usuarios WHERE username = ?", (username,))
-            st.success(f"✅ Usuário '{username}' deletado!")
-            st.rerun()
+        with subTab2:
+            st.markdown("### Usuários Aprovados")
+            
+            df_aprovados = db.buscar("""
+                SELECT id, nome, username, data_criacao 
+                FROM usuarios 
+                WHERE aprovado = TRUE 
+                ORDER BY nome
+            """)
+            
+            if df_aprovados.empty:
+                st.info("Nenhum usuário aprovado ainda")
+            else:
+                st.dataframe(df_aprovados, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                st.markdown("### Deletar Usuário Aprovado")
+                
+                username = st.selectbox(
+                    "Selecione usuário para deletar",
+                    df_aprovados['username'].tolist(),
+                    key="delete_user_select"
+                )
+                
+                if st.button("🗑️ Deletar Usuário", use_container_width=True):
+                    db.executar("DELETE FROM usuarios WHERE username = ?", (username,))
+                    st.success(f"✅ Usuário '{username}' deletado!")
+                    st.rerun()
     
     @staticmethod
     def _deletar_dados():

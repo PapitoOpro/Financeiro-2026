@@ -55,27 +55,55 @@ class UtilsManager:
     @staticmethod
     def extrair_parcelas(texto):
         """
-        Extrai parcelas do texto da fatura.
-        Procura por padrões como:
+        Extrai parcelas do texto da fatura com múltiplos padrões.
+        Procura por variações como:
         - "Compra (1/12) R$ 100,00"
-        - "Parcelado: 1/12 - R$ 100,00"
+        - "Compra - 1/12 - R$ 100,00"
+        - "1/12 parcelas de R$ 100,00"
         """
         parcelas = []
         
-        # Padrão: "qualquer coisa (X/Y) R$ valor"
-        padrao = r'(.+?)\s*\((\d+)/(\d+)\)\s*R\$\s*([\d.,]+)'
-        matches = re.finditer(padrao, texto)
+        # Remove quebras de linha e espaços extras para melhor matching
+        texto_limpo = " ".join(texto.split())
         
-        for match in matches:
-            descricao, parcela_atual, total_parcelas, valor = match.groups()
-            
-            # Limpa descrição
-            descricao = descricao.strip()
-            
-            # Converte valor para float
+        # Padrão 1: "qualquer coisa (X/Y) R$ valor" (mais comum em Itaú, Bradesco)
+        padrao1 = r'(.+?)\s*\((\d+)/(\d+)\)\s*[Rr]\$\s*([\d.,]+)'
+        
+        # Padrão 2: "X/Y parcelas de R$ valor" ou "X/Y - R$ valor" (Nubank, Inter)
+        padrao2 = r'(\d+)/(\d+)\s*(?:parcelas? de|[-–])\s*[Rr]\$\s*([\d.,]+)'
+        
+        # Padrão 3: "Descrição X/Y R$ valor" (sem parênteses) (Santander)
+        padrao3 = r'(.+?)\s+(\d+)/(\d+)\s+[Rr]\$\s*([\d.,]+)'
+        
+        # Padrão 4: "X/Y \n R$ valor" (com quebra de linha)
+        padrao4 = r'(\d+)/(\d+)[\s\n]+[Rr]\$\s*([\d.,]+)'
+        
+        matches = []
+        
+        # Tenta padrão 1 (com descrição e parênteses)
+        for match in re.finditer(padrao1, texto_limpo, re.IGNORECASE | re.DOTALL):
+            parcelas_dados = match.groups()
+            descricao, parcela_atual, total_parcelas, valor = parcelas_dados
+            if descricao.strip() and parcela_atual and total_parcelas and valor:
+                matches.append((descricao.strip(), f"{parcela_atual}/{total_parcelas}", valor))
+        
+        # Se não encontrou com padrão 1, tenta os outros
+        if not matches:
+            for match in re.finditer(padrao2, texto_limpo, re.IGNORECASE):
+                parcela_atual, total_parcelas, valor = match.groups()
+                if parcela_atual and total_parcelas and valor:
+                    # Extrai descrição do contexto (pega 50 chars antes)
+                    pos = match.start()
+                    contexto = texto_limpo[max(0, pos-100):pos]
+                    descricao = contexto.split('\n')[-1] if '\n' in contexto else contexto[-50:]
+                    matches.append((descricao.strip(), f"{parcela_atual}/{total_parcelas}", valor))
+        
+        # Processa matches encontrados
+        for descricao, parc_info, valor_str in matches:
             try:
-                valor_float = float(valor.replace(".", "").replace(",", "."))
-                parcelas.append((descricao, f"{parcela_atual}/{total_parcelas}", valor_float))
+                # Converte valor para float
+                valor_float = float(valor_str.replace(".", "").replace(",", "."))
+                parcelas.append((descricao, parc_info, valor_float))
             except:
                 pass
         
