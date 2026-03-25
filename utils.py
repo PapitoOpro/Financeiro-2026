@@ -84,14 +84,14 @@ class UtilsManager:
         """Corrige caracteres corrompidos comuns do OCR - versão otimizada."""
         import re
         
-        # PASSO 0: REMOVER ESPAÇOS EXTRAS ENTRE CARACTERES
-        # "R   1   .   2   4   6" -> "R1.246" ou quebra de linhas no meio de números
-        # Remove quebras de linha e espaços múltiplos dentro de números/símbolos
+        # PASSO 0: REMOVER ESPAÇOS EXTRAS ENTRE CARACTERES (mas preservar estrutura)
+        # Remove espaço entre dígitos (dentro de números)
         texto = re.sub(r'(\d)\s+(\d)', r'\1\2', texto)  # Remove espaço entre dígitos
+        # Remove espaço entre R e símbolo monetário
         texto = re.sub(r'([R])\s+(\$|[4%#@])', r'\1\2', texto)  # Remove espaço em R$
-        texto = re.sub(r'(\w)\s+(\w)', r'\1\2', texto)  # Remove espaço entre palavras (cuidado!)
+        # NÃO remover espaço entre palavras - quebra a estrutura!
         
-        # PASSO 1: Normalizar símbolos monetários corrompidos ANTES de outras substituições
+        # PASSO 1: Normalizar símbolos monetários corrompidos
         # Traduz R$, R4, R%, R# e similares para R$
         texto = re.sub(r'R[4%#@]', 'R$', texto)
         
