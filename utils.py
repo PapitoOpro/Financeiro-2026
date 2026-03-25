@@ -60,6 +60,7 @@ class UtilsManager:
         - "Compra (1/12) R$ 100,00"
         - "Compra - 1/12 - R$ 100,00"
         - "1/12 parcelas de R$ 100,00"
+        - Formato Santander: "DESCRICAO 01/04 70,28"
         """
         parcelas = []
         
@@ -78,6 +79,10 @@ class UtilsManager:
         # Padrão 4: "X/Y \n R$ valor" (com quebra de linha)
         padrao4 = r'(\d+)/(\d+)[\s\n]+[Rr]\$\s*([\d.,]+)'
         
+        # Padrão 5: Santander especial - "DESCRICAO PARCELA VALOR" sem símbolo R$
+        # Exemplo: "QUITA*052PAGBOLETO 09/17 70,28"
+        padrao5 = r'([A-Z\*0-9\s]+?)\s+(\d+)/(\d+)\s+([\d,]+)(?:\s|$)'
+        
         matches = []
         
         # Tenta padrão 1 (com descrição e parênteses)
@@ -85,29 +90,54 @@ class UtilsManager:
             parcelas_dados = match.groups()
             descricao, parcela_atual, total_parcelas, valor = parcelas_dados
             if descricao.strip() and parcela_atual and total_parcelas and valor:
-                matches.append((descricao.strip(), f"{parcela_atual}/{total_parcelas}", valor))
+                try:
+                    val_float = float(valor.replace(".", "").replace(",", "."))
+                    if val_float > 0:  # Filtra valores válidos
+                        matches.append((descricao.strip(), f"{parcela_atual}/{total_parcelas}", val_float))
+                except:
+                    pass
         
         # Se não encontrou com padrão 1, tenta os outros
         if not matches:
+            # Tenta padrão 5 (Santander sem R$)
+            for match in re.finditer(padrao5, texto_limpo, re.IGNORECASE):
+                descricao, parcela_atual, total_parcelas, valor = match.groups()
+                if descricao.strip() and parcela_atual and total_parcelas and valor:
+                    try:
+                        val_float = float(valor.replace(".", "").replace(",", "."))
+                        if val_float > 0:
+                            matches.append((descricao.strip(), f"{parcela_atual}/{total_parcelas}", val_float))
+                    except:
+                        pass
+        
+        if not matches:
+            # Tenta padrão 2
             for match in re.finditer(padrao2, texto_limpo, re.IGNORECASE):
                 parcela_atual, total_parcelas, valor = match.groups()
                 if parcela_atual and total_parcelas and valor:
-                    # Extrai descrição do contexto (pega 50 chars antes)
-                    pos = match.start()
-                    contexto = texto_limpo[max(0, pos-100):pos]
-                    descricao = contexto.split('\n')[-1] if '\n' in contexto else contexto[-50:]
-                    matches.append((descricao.strip(), f"{parcela_atual}/{total_parcelas}", valor))
+                    try:
+                        val_float = float(valor.replace(".", "").replace(",", "."))
+                        if val_float > 0:
+                            pos = match.start()
+                            contexto = texto_limpo[max(0, pos-100):pos]
+                            descricao = contexto.split('\n')[-1] if '\n' in contexto else contexto[-50:]
+                            matches.append((descricao.strip(), f"{parcela_atual}/{total_parcelas}", val_float))
+                    except:
+                        pass
         
-        # Processa matches encontrados
-        for descricao, parc_info, valor_str in matches:
-            try:
-                # Converte valor para float
-                valor_float = float(valor_str.replace(".", "").replace(",", "."))
-                parcelas.append((descricao, parc_info, valor_float))
-            except:
-                pass
+        if not matches:
+            # Tenta padrão 3
+            for match in re.finditer(padrao3, texto_limpo, re.IGNORECASE):
+                descricao, parcela_atual, total_parcelas, valor = match.groups()
+                if descricao.strip() and parcela_atual and total_parcelas and valor:
+                    try:
+                        val_float = float(valor.replace(".", "").replace(",", "."))
+                        if val_float > 0:
+                            matches.append((descricao.strip(), f"{parcela_atual}/{total_parcelas}", val_float))
+                    except:
+                        pass
         
-        return parcelas
+        return matches
     
     @staticmethod
     def get_cor_saldo(valor):
