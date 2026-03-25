@@ -28,8 +28,9 @@ class UtilsManager:
     
     @staticmethod
     def extrair_texto_pdf(file, senha=None):
-        """Extrai texto de arquivo PDF."""
+        """Extrai texto de arquivo PDF com fallback para pytesseract no Streamlit Cloud."""
         try:
+            # TENTATIVA 1: PyPDF2 (rápido, funciona offline)
             pdf_reader = PyPDF2.PdfReader(
                 io.BytesIO(file.read()),
                 password=senha if senha else None
@@ -37,7 +38,33 @@ class UtilsManager:
             texto = ""
             for page in pdf_reader.pages:
                 texto += page.extract_text() or ""
-            return texto
+            
+            # Se conseguiu extrair texto significativo, retorna
+            if texto and len(texto.strip()) > 50:
+                return texto
+            
+            # TENTATIVA 2: pytesseract (mais robusto, funciona no Streamlit Cloud)
+            try:
+                from PIL import Image
+                import pytesseract
+                
+                file.seek(0)  # Volta ao início do arquivo
+                from pdf2image import convert_from_bytes
+                
+                images = convert_from_bytes(file.read())
+                texto_tesseract = ""
+                
+                for img in images[:5]:  # Limita a 5 páginas para não demorar
+                    texto_tesseract += pytesseract.image_to_string(img, lang='por') + "\n"
+                
+                if texto_tesseract and len(texto_tesseract.strip()) > 50:
+                    return texto_tesseract
+                
+            except Exception as e:
+                pass  # Se pytesseract falhar, retorna resultado do PyPDF2
+            
+            return texto if texto else "Erro: Não foi possível extrair texto do PDF"
+            
         except Exception as e:
             return f"Erro ao ler PDF: {str(e)}"
     
@@ -57,24 +84,32 @@ class UtilsManager:
         """Corrige caracteres corrompidos comuns do OCR - versão otimizada."""
         import re
         
+        # PASSO 0: REMOVER ESPAÇOS EXTRAS ENTRE CARACTERES
+        # "R   1   .   2   4   6" -> "R1.246" ou quebra de linhas no meio de números
+        # Remove quebras de linha e espaços múltiplos dentro de números/símbolos
+        texto = re.sub(r'(\d)\s+(\d)', r'\1\2', texto)  # Remove espaço entre dígitos
+        texto = re.sub(r'([R])\s+(\$|[4%#@])', r'\1\2', texto)  # Remove espaço em R$
+        texto = re.sub(r'(\w)\s+(\w)', r'\1\2', texto)  # Remove espaço entre palavras (cuidado!)
+        
         # PASSO 1: Normalizar símbolos monetários corrompidos ANTES de outras substituições
         # Traduz R$, R4, R%, R# e similares para R$
         texto = re.sub(r'R[4%#@]', 'R$', texto)
         
         # PASSO 2: Corrigir números corrompidos em valores monetários
-        # "R$ +%,03" -> "R$ 48,03"
-        # Substitui caracteres estranhos por números próximos
         substituicoes_numeros = {
             '+': '8',        # + -> 8
             '%': '8',        # % -> 8
             ')': '0',        # ) -> 0
             '(': '0',        # ( -> 0
             'O': '0',        # O -> 0 (apenas em contexto de números)
+            'o': '0',        # o -> 0 minúsculo também
             'l': '1',        # l -> 1
             'L': '1',        # L -> 1
-            'M': '1',        # M -> 1 (difícil, pode afetar descrições também)
+            'M': '1',        # M -> 1
             'S': '5',        # S -> 5
             'B': '8',        # B -> 8
+            'Z': '2',        # Z -> 2
+            'z': '2',        # z minúsculo também
         }
         
         resultado = texto
@@ -83,29 +118,13 @@ class UtilsManager:
         
         # PASSO 3: Corrigir caracteres acentuados corrompidos
         substituicoes_chars = {
-            'õ': 'o',
-            'ó': 'o',
-            'ô': 'o',
-            'í': 'i',
-            'ì': 'i',
-            'î': 'i',
-            'á': 'a',
-            'à': 'a',
-            'â': 'a',
-            'ã': 'a',
-            'ç': 'c',
-            'é': 'e',
-            'è': 'e',
-            'ê': 'e',
-            'ú': 'u',
-            'ù': 'u',
-            'û': 'u',
-            'ö': 'o',
-            'ä': 'a',
-            'ü': 'u',
-            'ï': 'i',
-            'ñ': 'n',
-            'ý': 'y',
+            'õ': 'o', 'ó': 'o', 'ô': 'o',
+            'í': 'i', 'ì': 'i', 'î': 'i',
+            'á': 'a', 'à': 'a', 'â': 'a', 'ã': 'a',
+            'ç': 'c', 'é': 'e', 'è': 'e', 'ê': 'e',
+            'ú': 'u', 'ù': 'u', 'û': 'u',
+            'ö': 'o', 'ä': 'a', 'ü': 'u', 'ï': 'i',
+            'ñ': 'n', 'ý': 'y',
         }
         
         for char_errado, char_correto in substituicoes_chars.items():
@@ -136,7 +155,12 @@ class UtilsManager:
         # PADRÃO 2.5: Mercado Pago "Parcela X de Y R$ VALOR"
         # "FERROLHOGO Parcela 12 de 19 R$ 48,03" ou "Parce1a 12 de 19" (após limpeza)
         # Usa [1l] para aceitar tanto "1" quanto "l" após limpeza
+        # Também aceita espaços dispersos: "R  $" ou "1  2  de  1  9"
         padrao_mercadopago = r'(.+?)\s+Parce[1l]a\s+(\d+)\s+de\s+(\d+)\s+[Rr]\$\s*[+\-]?\s*([\d.,]+)'
+        
+        # PADRÃO 2.6: Mercado Pago alternativo (muito quebrado)
+        # Se o OCR está fazendo loucura, tenta um padrão mais vago
+        padrao_mercadopago_alt = r'(.+?)\s+Parce\w+\s+(\d{1,2})\s+de\s+(\d{1,2})\s+[Rr][\$4%#@]\s*[+\-]?\s*([\d.,]+)'
         
         # PADRÃO 3: "X de Y parcelas" ou "X/Y parcelas"
         # "5 de 12 parcelas R$ 150,00" ou "1/12 parcelas de R$ 100,00"
@@ -173,6 +197,23 @@ class UtilsManager:
         
         # Tenta padrão Mercado Pago "Parcela X de Y"
         for match in re.finditer(padrao_mercadopago, texto_limpo, re.IGNORECASE):
+            desc, parc_atual, parc_total, valor = match.groups()
+            desc = desc.strip()
+            if desc and len(desc) > 2 and not desc[0].isdigit():
+                try:
+                    val_float = float(valor.replace(".", "").replace(",", "."))
+                    if val_float > 0:
+                        parc_tuple = (desc, f"{parc_atual}/{parc_total}", val_float)
+                        if parc_tuple not in matches:
+                            matches.append(parc_tuple)
+                except:
+                    pass
+        
+        if matches:
+            return matches
+        
+        # Tenta padrão Mercado Pago alternativo (mais robusto)
+        for match in re.finditer(padrao_mercadopago_alt, texto_limpo, re.IGNORECASE):
             desc, parc_atual, parc_total, valor = match.groups()
             desc = desc.strip()
             if desc and len(desc) > 2 and not desc[0].isdigit():
