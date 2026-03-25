@@ -6,6 +6,7 @@
 
 import streamlit as st
 import pandas as pd
+import re
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from config import MESES_LISTA, CORES
@@ -209,11 +210,11 @@ class ParcelasManager:
     
     @staticmethod
     def _tab_previsao():
-        """Aba com previsão de gastos."""
-        st.subheader("📅 Previsão de Gastos")
+        """Aba com previsão de gastos - Dashboard completo."""
+        st.subheader("📅 Dashboard de Previsão de Gastos")
         
         df_p = db.buscar("""
-            SELECT t.data_vencimento, t.descricao, t.valor, c.nome as banco
+            SELECT t.id, t.data_vencimento, t.descricao, t.valor, c.nome as banco
             FROM transacoes t
             LEFT JOIN contas c ON t.conta_id = c.id
             WHERE t.tipo_fluxo='CARTAO'
@@ -225,18 +226,94 @@ class ParcelasManager:
             return
         
         df_p['data_vencimento'] = pd.to_datetime(df_p['data_vencimento'])
+        
+        # ==============================
+        # 🏆 1. MÉTRICAS DE TOPO
+        # ==============================
         total_divida = abs(df_p['valor'].sum())
         
-        # Cards de resumo
+        # Agrupa os valores por Mês/Ano para o gráfico
+        df_p['Mes_Ano'] = df_p['data_vencimento'].dt.to_period('M')
+        agrupado_mes = df_p.groupby('Mes_Ano')['valor'].sum().abs().reset_index()
+        agrupado_mes['Mes_Ano_Str'] = agrupado_mes['Mes_Ano'].astype(str)
+        
+        mes_mais_pesado = agrupado_mes.loc[agrupado_mes['valor'].idxmax()]
+        
         col1, col2 = st.columns(2)
-        col1.metric("Total Parcelado", moeda(total_divida), delta=None)
-        col2.metric("Parcelas", len(df_p), delta=None)
+        col1.metric("💰 Total Parcelado", moeda(total_divida))
+        col2.metric("⚠️ Mês Mais Pesado", f"{mes_mais_pesado['Mes_Ano_Str']} - {moeda(mes_mais_pesado['valor'])}")
         
         st.markdown("---")
         
-        # Gráfico por mês
-        df_mes = df_p.copy()
-        df_mes['mes_ano'] = df_mes['data_vencimento'].dt.to_period('M')
-        df_grafico = df_mes.groupby('mes_ano')['valor'].sum().abs()
+        # ==============================
+        # 📊 2. GRÁFICO DE EVOLUÇÃO
+        # ==============================
+        st.markdown("**📈 Evolução do Parcelamento nos Próximos Meses**")
+        df_grafico = agrupado_mes[['Mes_Ano_Str', 'valor']].set_index('Mes_Ano_Str')
+        st.bar_chart(df_grafico, color="#e74c3c", use_container_width=True)
         
-        st.line_chart(df_grafico)
+        st.markdown("---")
+        
+        # ==============================
+        # 📝 3. LISTAGEM CASCATA COM EDIÇÃO
+        # ==============================
+        st.markdown("**📋 Detalhamento por Mês**")
+        meses_previsao = st.slider("Ver previsão detalhada para quantos meses?", 1, 24, 6)
+        primeiro_mes = df_p['data_vencimento'].min().replace(day=1)
+        
+        for i in range(meses_previsao):
+            mes_atual = primeiro_mes + relativedelta(months=i)
+            f_mes = df_p[
+                (df_p['data_vencimento'].dt.month == mes_atual.month) &
+                (df_p['data_vencimento'].dt.year == mes_atual.year)
+            ]
+            
+            if not f_mes.empty:
+                total_mes = abs(f_mes['valor'].sum())
+                
+                with st.expander(f"📅 **{mes_atual.strftime('%B/%Y').upper()}** — Total: {moeda(total_mes)}", expanded=False):
+                    cartoes_no_mes = f_mes['banco'].fillna("Desconhecido").unique()
+                    
+                    for cartao in cartoes_no_mes:
+                        f_cartao = f_mes[f_mes['banco'].fillna("Desconhecido") == cartao]
+                        subtotal_cartao = abs(f_cartao['valor'].sum())
+                        
+                        st.markdown(f"**💳 Fatura: {cartao}** — Subtotal: **{moeda(subtotal_cartao)}**")
+                        
+                        # Tabela com parcelas
+                        for _, r in f_cartao.iterrows():
+                            col1, col2, col3, col4 = st.columns([5, 2, 1, 1])
+                            
+                            desc_limpa = re.sub(r'^\[.*?\]\s*', '', r['descricao'])
+                            
+                            col1.write(f"↳ {desc_limpa}")
+                            col2.write(f"**{moeda(abs(r['valor']))}**")
+                            
+                            # Button editar
+                            with col3:
+                                if st.button("✏️", key=f"edit_parc_{r['id']}", help="Editar parcela"):
+                                    st.session_state[f"edit_parc_{r['id']}"] = True
+                            
+                            # Button deletar
+                            if col4.button("🗑️", key=f"del_parc_{r['id']}", help="Deletar parcela"):
+                                db.executar("DELETE FROM transacoes WHERE id=?", (r['id'],))
+                                st.success("✅ Parcela deletada!")
+                                st.rerun()
+                            
+                            # Popover de edição
+                            if st.session_state.get(f"edit_parc_{r['id']}", False):
+                                with st.popover(f"Editar {desc_limpa}", use_container_width=True):
+                                    n_desc = st.text_input("Descrição", value=r['descricao'], key=f"ed_desc_{r['id']}")
+                                    n_val = st.number_input("Valor (R$)", value=abs(float(r['valor'])), min_value=0.0, step=0.01, key=f"ed_val_{r['id']}")
+                                    n_data = st.date_input("Data", value=pd.to_datetime(r['data_vencimento']).date(), key=f"ed_data_{r['id']}")
+                                    
+                                    if st.button("💾 Salvar", key=f"save_parc_{r['id']}", use_container_width=True):
+                                        db.executar(
+                                            "UPDATE transacoes SET descricao=?, valor=?, data_vencimento=? WHERE id=?",
+                                            (n_desc, -n_val, n_data, r['id'])
+                                        )
+                                        st.success("✅ Parcela atualizada!")
+                                        st.session_state[f"edit_parc_{r['id']}"] = False
+                                        st.rerun()
+                        
+                        st.divider()

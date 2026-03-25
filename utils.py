@@ -61,11 +61,12 @@ class UtilsManager:
         parcelas = []
         texto_limpo = " ".join(texto.split())
         
-        # Padrão 6: Santander/Visa com data de compra
+        # Padrão 6: Santander/Visa com data de compra - VERSÃO ULTRA MELHORADA
         # Formato: [num] DATA_COMPRA DESCRICAO DATA_PARCELA VALOR
-        # Exemplo: "2 12/06 QUITA*052PAGBOLETO 09/17 70,28"
-        # Ou: "21/10 CPFL PAULISTA 05/10 47,02"
-        padrao6 = r'(\d+)?\s*(\d{2}/\d{2})\s+([A-Z0-9\*\s]+?)\s+(\d{2}/\d{2})\s+([\d,]+)(?:\s|$)'
+        # Exemplo: "2 12/06 QUITA*052PAGBOLETO 09/17 70,28" ou "21/10 CPFL PAULISTA 05/10 47,02"
+        # Exemplo: "2 13/02 CONSORCIO *EMBRACON 01/03 913,34"
+        # Padrão mais flexível: permite qualquer caractere na descrição (menos dígitos no começo após espaço)
+        padrao6_flexivel = r'(\d+)?\s+(\d{2}/\d{2})\s+(.+?)\s+(\d{2}/\d{2})\s+([\d,]+?)(?:\s{2,}|$)'
         
         # Padrão 1: "qualquer coisa (X/Y) R$ valor"
         padrao1 = r'(.+?)\s*\((\d+)/(\d+)\)\s*[Rr]\$\s*([\d.,]+)'
@@ -78,27 +79,27 @@ class UtilsManager:
         
         matches = []
         
-        # Tenta padrão 6 (Santander com data de compra)
-        for match in re.finditer(padrao6, texto_limpo, re.IGNORECASE):
+        # Tenta padrão 6 flexível (Santander com data de compra)
+        for match in re.finditer(padrao6_flexivel, texto_limpo, re.IGNORECASE):
             groups = match.groups()
             if len(groups) == 5:
                 num_parcela, data_compra, descricao, data_parcela, valor = groups
                 descricao = descricao.strip()
                 
-                if descricao and data_parcela and valor:
+                # Filtra: descrição deve ter pelo menos 3 caracteres e não começar com dígitos
+                if (descricao and len(descricao) > 2 and data_parcela and valor and 
+                    not descricao[0].isdigit()):
                     try:
                         val_float = float(valor.replace(".", "").replace(",", "."))
                         if val_float > 0:
-                            # Tenta extrair X/Y da descrição ou usa data_parcela como aproximação
-                            if "/" in data_parcela:
-                                parc_info = data_parcela
-                            else:
-                                parc_info = f"01/{num_parcela if num_parcela else '01'}"
-                            matches.append((descricao, parc_info, val_float))
+                            parc_tuple = (descricao, data_parcela, val_float)
+                            # Evita duplicatas
+                            if parc_tuple not in matches:
+                                matches.append(parc_tuple)
                     except:
                         pass
         
-        # Se encontrou com padrão 6, retorna (prioridade alta)
+        # Se encontrou com padrão 6, retorna
         if matches:
             return matches
         
