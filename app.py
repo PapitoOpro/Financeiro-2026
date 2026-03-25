@@ -9,6 +9,7 @@ from database import db
 from config import MESES_LISTA
 from pages.caixa import CaixaManager
 from pages.cadastros import CadastrosManager
+from pages.admin import AdminManager
 
 # ==========================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -43,6 +44,7 @@ menu = st.sidebar.radio(
         "2- Projeção de Gastos",
         "3- Cadastros",
         "4- Relatórios",
+        "5- Admin 🔧",
     ],
     key="main_menu"
 )
@@ -70,6 +72,9 @@ elif menu == "3- Cadastros":
 elif menu == "4- Relatórios":
     st.header("📊 Relatórios Analíticos")
     st.info("ℹ️ Módulo em desenvolvimento...")
+
+elif menu == "5- Admin 🔧":
+    AdminManager.renderizar()
 
 # ==========================================
 # RODAPÉ
