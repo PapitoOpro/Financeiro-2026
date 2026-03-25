@@ -53,11 +53,43 @@ class UtilsManager:
         return "GENÉRICO"
     
     @staticmethod
+    def limpar_texto_ocr(texto):
+        """Corrige caracteres corrompidos comuns do OCR."""
+        # Mapa de substituições para caracteres danificados
+        correcoes = {
+            'R4': 'R$',      # R4 -> R$
+            'R%': 'R$',      # R% -> R$
+            'R#': 'R$',      # R# -> R$
+            'M': '1',        # M -> 1 (em contexto de números)
+            '%': '8',        # % -> 8 
+            ')': '0',        # ) -> 0
+            '+': '8',        # + -> 8
+            'õ': 'o',        # õ -> o
+            'í': 'i',        # í -> i
+            'á': 'a',        # á -> a
+            'à': 'a',        # à -> a
+            'ç': 'c',        # ç -> c
+            'é': 'e',        # é -> e
+            'ù': 'u',        # ù -> u
+            'ö': 'o',        # ö -> o
+            'è': 'e',        # è -> e
+        }
+        
+        resultado = texto
+        for char_errado, char_correto in correcoes.items():
+            resultado = resultado.replace(char_errado, char_correto)
+        
+        return resultado
+    
+    @staticmethod
     def extrair_parcelas(texto):
         """
         Extrai parcelas do texto da fatura com múltiplos padrões.
         Suporta: Itaú, Bradesco, Nubank, Inter, Santander, Visa, Mercado Pago, etc.
         """
+        # PRIMEIRO: Limpar o texto de caracteres corrompidos do OCR
+        texto = UtilsManager.limpar_texto_ocr(texto)
+        
         parcelas = []
         texto_limpo = " ".join(texto.split())
         
@@ -213,6 +245,7 @@ moeda = UtilsManager.formatar_moeda
 remover_acentos = UtilsManager.remover_acentos
 extrair_texto_pdf = UtilsManager.extrair_texto_pdf
 detectar_banco = UtilsManager.detectar_banco
+limpar_texto_ocr = UtilsManager.limpar_texto_ocr
 extrair_parcelas = UtilsManager.extrair_parcelas
 get_cor_saldo = UtilsManager.get_cor_saldo
 get_cor_valor = UtilsManager.get_cor_valor

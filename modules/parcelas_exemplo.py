@@ -1,8 +1,7 @@
 # ==========================================
 # MÓDULO: PROJEÇÃO DE GASTOS (EXEMPLO)
 # ==========================================
-# Este é um exemplo de como adicionar um novo módulo
-# Para usar: descomentar as importações em app.py
+
 
 import streamlit as st
 import pandas as pd
