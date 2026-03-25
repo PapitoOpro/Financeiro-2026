@@ -73,7 +73,7 @@ class DatabaseManager:
             return None
     
     def inicializar_banco(self):
-        """Cria as tabelas se não existirem."""
+        """Cria as tabelas se não existirem e aplica migrações."""
         self.executar('CREATE TABLE IF NOT EXISTS contas (id SERIAL PRIMARY KEY, nome TEXT UNIQUE)')
         self.executar('CREATE TABLE IF NOT EXISTS categorias (id SERIAL PRIMARY KEY, nome TEXT UNIQUE)')
         self.executar('''CREATE TABLE IF NOT EXISTS transacoes (
@@ -88,9 +88,24 @@ class DatabaseManager:
             id SERIAL PRIMARY KEY, 
             nome TEXT, 
             username TEXT UNIQUE, 
-            senha TEXT,
-            aprovado BOOLEAN DEFAULT FALSE,
-            data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+            senha TEXT)''')
+        
+        # MIGRAÇÕES - Adiciona colunas se não existirem
+        try:
+            # Adiciona coluna 'aprovado' se não existir
+            self.executar(
+                "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS aprovado BOOLEAN DEFAULT FALSE"
+            )
+        except:
+            pass
+        
+        try:
+            # Adiciona coluna 'data_criacao' se não existir
+            self.executar(
+                "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            )
+        except:
+            pass
 
 # Instância global
 db = DatabaseManager()
