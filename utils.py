@@ -54,29 +54,61 @@ class UtilsManager:
     
     @staticmethod
     def limpar_texto_ocr(texto):
-        """Corrige caracteres corrompidos comuns do OCR."""
-        # Mapa de substituições para caracteres danificados
-        correcoes = {
-            'R4': 'R$',      # R4 -> R$
-            'R%': 'R$',      # R% -> R$
-            'R#': 'R$',      # R# -> R$
-            'M': '1',        # M -> 1 (em contexto de números)
-            '%': '8',        # % -> 8 
-            ')': '0',        # ) -> 0
+        """Corrige caracteres corrompidos comuns do OCR - versão otimizada."""
+        import re
+        
+        # PASSO 1: Normalizar símbolos monetários corrompidos ANTES de outras substituições
+        # Traduz R$, R4, R%, R# e similares para R$
+        texto = re.sub(r'R[4%#@]', 'R$', texto)
+        
+        # PASSO 2: Corrigir números corrompidos em valores monetários
+        # "R$ +%,03" -> "R$ 48,03"
+        # Substitui caracteres estranhos por números próximos
+        substituicoes_numeros = {
             '+': '8',        # + -> 8
-            'õ': 'o',        # õ -> o
-            'í': 'i',        # í -> i
-            'á': 'a',        # á -> a
-            'à': 'a',        # à -> a
-            'ç': 'c',        # ç -> c
-            'é': 'e',        # é -> e
-            'ù': 'u',        # ù -> u
-            'ö': 'o',        # ö -> o
-            'è': 'e',        # è -> e
+            '%': '8',        # % -> 8
+            ')': '0',        # ) -> 0
+            '(': '0',        # ( -> 0
+            'O': '0',        # O -> 0 (apenas em contexto de números)
+            'l': '1',        # l -> 1
+            'L': '1',        # L -> 1
+            'M': '1',        # M -> 1 (difícil, pode afetar descrições também)
+            'S': '5',        # S -> 5
+            'B': '8',        # B -> 8
         }
         
         resultado = texto
-        for char_errado, char_correto in correcoes.items():
+        for char_errado, char_correto in substituicoes_numeros.items():
+            resultado = resultado.replace(char_errado, char_correto)
+        
+        # PASSO 3: Corrigir caracteres acentuados corrompidos
+        substituicoes_chars = {
+            'õ': 'o',
+            'ó': 'o',
+            'ô': 'o',
+            'í': 'i',
+            'ì': 'i',
+            'î': 'i',
+            'á': 'a',
+            'à': 'a',
+            'â': 'a',
+            'ã': 'a',
+            'ç': 'c',
+            'é': 'e',
+            'è': 'e',
+            'ê': 'e',
+            'ú': 'u',
+            'ù': 'u',
+            'û': 'u',
+            'ö': 'o',
+            'ä': 'a',
+            'ü': 'u',
+            'ï': 'i',
+            'ñ': 'n',
+            'ý': 'y',
+        }
+        
+        for char_errado, char_correto in substituicoes_chars.items():
             resultado = resultado.replace(char_errado, char_correto)
         
         return resultado
@@ -102,8 +134,9 @@ class UtilsManager:
         padrao_santander = r'(\d+)?\s+(\d{2}/\d{2})\s+(.+?)\s+(\d{2}/\d{2})\s+([\d,]+?)(?:\s{2,}|$)'
         
         # PADRÃO 2.5: Mercado Pago "Parcela X de Y R$ VALOR"
-        # "FERROLHOGO Parcela 12 de 19 R$ 48,03" (OCR às vezes coloca +/- extras)
-        padrao_mercadopago = r'(.+?)\s+Parcela\s+(\d+)\s+de\s+(\d+)\s+[Rr]\$\s*[+\-]?\s*([\d.,]+)'
+        # "FERROLHOGO Parcela 12 de 19 R$ 48,03" ou "Parce1a 12 de 19" (após limpeza)
+        # Usa [1l] para aceitar tanto "1" quanto "l" após limpeza
+        padrao_mercadopago = r'(.+?)\s+Parce[1l]a\s+(\d+)\s+de\s+(\d+)\s+[Rr]\$\s*[+\-]?\s*([\d.,]+)'
         
         # PADRÃO 3: "X de Y parcelas" ou "X/Y parcelas"
         # "5 de 12 parcelas R$ 150,00" ou "1/12 parcelas de R$ 100,00"
