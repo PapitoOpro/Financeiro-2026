@@ -90,90 +90,86 @@ class ParcelasManager:
         """Aba para importar faturas PDF com debug melhorado."""
         st.subheader("📄 Importador Universal de Faturas via OCR")
         
-        senha_pdf = st.text_input("Senha do PDF (se houver)", type="password")
+        senha_pdf = st.text_input("Senha do PDF (geralmente CPF ou primeiros dígitos)", type="password")
         file = st.file_uploader("Envie a fatura PDF", type="pdf")
 
         if file:
-            with st.spinner("🔄 Lendo a fatura com OCR... Processando texto..."):
-                texto = extrair_texto_pdf(file, senha_pdf or None)
-            
-            if not texto or "Erro" in texto:
-                st.error("❌ Falha ao extrair texto. Verifique a senha ou o arquivo.")
-                return
-            
-            # Detecta banco
-            banco = detectar_banco(texto)
-            
-            if banco != "GENÉRICO":
-                st.success(f"✅ Banco detectado: **{banco}**")
+            with st.spinner("Lendo a fatura com inteligência artificial... Isso pode demorar uns segundos."):
+                texto = extrair_texto_pdf(file, senha_pdf if senha_pdf else None)
+
+            if texto.strip() == "":
+                st.error("Falha ao extrair o texto. Verifique se a senha está correta.")
             else:
-                st.warning("⚠️ Banco não identificado automaticamente (continuando...)")
-            
-            # Mostra preview do texto extraído
-            with st.expander("📋 Ver texto bruto extraído pelo OCR"):
-                st.text_area("Texto do PDF:", texto, height=200, disabled=True)
-            
-            st.divider()
-            
-            # Extrai parcelas
-            dados = extrair_parcelas(texto)
-            
-            if dados:
-                st.success(f"✅ **{len(dados)} parcelas encontradas!**")
+                banco = detectar_banco(texto)
                 
-                with st.expander("👀 Pré-visualizar parcelas encontradas"):
-                    df_preview = []
-                    for desc, parc, val in dados[:10]:
-                        df_preview.append({
-                            "Descrição": desc[:50],
-                            "Parcela": parc,
-                            "Valor": f"R$ {val:,.2f}"
-                        })
-                    
-                    if df_preview:
-                        import pandas as pd
-                        st.dataframe(pd.DataFrame(df_preview), use_container_width=True, hide_index=True)
-                    
-                    if len(dados) > 10:
-                        st.caption(f"... e mais {len(dados) - 10} parcelas")
-                
-                st.divider()
-                
-                # Formulário de importação
-                with st.form("importar_pdf_form"):
-                    st.markdown("### Confirmar Importação")
-                    
-                    conta = st.selectbox("💳 Cartão destino", df_contas['nome'] if not df_contas.empty else [""])
-                    cat = st.selectbox("🏷️ Categoria", df_cats['nome'] if not df_cats.empty else [""])
-                    data_base = st.date_input("📅 Data da 1ª parcela")
-                    
-                    # Trava de segurança
-                    if banco != "GENÉRICO" and banco not in conta.upper():
-                        st.warning(
-                            f"⚠️ **Aviso:** PDF detectado como **{banco}**, "
-                            f"mas você selecionou **{conta}** como destino.\n\n"
-                            "Se estiver correto, marque a caixa abaixo para confirmar."
-                        )
-                        confirmar = st.checkbox("✓ Confirmo que estou importando para a conta correta")
-                    else:
-                        confirmar = True
-                    
-                    if st.form_submit_button("📥 Importar Parcelas", use_container_width=True):
-                        if not confirmar:
-                            st.error("❌ Confirme que a conta está correta antes de importar.")
+                # Feedback visual de qual banco a IA detectou
+                if banco != "GENÉRICO":
+                    st.success(f"🏦 Banco detectado na fatura: **{banco}**")
+                else:
+                    st.warning("⚠️ Não foi possível identificar o banco automaticamente pelo texto.")
+
+                with st.expander("Ver texto bruto lido pelo OCR"):
+                    st.text(texto)
+
+                dados = extrair_parcelas(texto)
+
+                if dados:
+                    st.info(f"✅ {len(dados)} parcelas encontradas no documento.")
+                    for d in dados[:5]:  # Mostra só as 5 primeiras para não poluir muito a tela
+                        st.write(d)
+                    if len(dados) > 5:
+                        st.caption(f"... e mais {len(dados) - 5} parcelas.")
+
+                    with st.form("importar_pdf_form"):
+                        conta = st.selectbox("Cartão destino", df_contas['nome'])
+                        cat = st.selectbox("Categoria principal", df_cats['nome'])
+                        data_base = st.date_input("Data base da 1ª parcela da fatura")
+                        
+                        # 🔒 CAMADA 1: Checkbox de liberação manual
+                        ignorar_trava = st.checkbox("Forçar importação (Marque apenas se o nome da sua conta no sistema for muito diferente do banco real)")
+
+                        submit_import = st.form_submit_button("Importar no sistema")
+
+                    if submit_import:
+                        # Verifica se o banco detectado está no nome da conta que o usuário selecionou
+                        if banco != "GENÉRICO" and banco not in conta.upper() and not ignorar_trava:
+                            st.error(f"⛔ **BLOQUEADO:** O PDF é do **{banco}**, mas você tentou importar no cartão **{conta}**.\nSe estiver correto, marque a caixa 'Forçar importação' acima.")
                         else:
-                            ParcelasManager._importar_pdf_dados(
-                                dados, banco, conta, cat, data_base, df_contas, df_cats
-                            )
-            else:
-                st.error(
-                    "❌ **Nenhuma parcela encontrada!**\n\n"
-                    "Possíveis causas:\n"
-                    "- O PDF não contém informações de parcelamento\n"
-                    "- O formato das parcelas é diferente do esperado\n"
-                    "- O texto não foi extraído corretamente\n\n"
-                    "💡 Dica: Verifique o texto bruto acima para ver como o OCR leu o documento."
-                )
+                            cid = int(df_contas[df_contas.nome == conta].id.values[0])
+                            ctid = int(df_cats[df_cats.nome == cat].id.values[0])
+                            novos = 0
+                            duplicados = 0
+
+                            for desc, parc, val in dados:
+                                atual, total = map(int, parc.split("/"))
+                                for i in range(atual-1, total):
+                                    venc = data_base + relativedelta(months=i-(atual-1))
+                                    desc_f = f"[{conta}] {desc} ({i+1:02d}/{total:02d})"
+
+                                    # 🔒 CAMADA 2: Trava Universal de Duplicidade (Ignora o prefixo do cartão)
+                                    # O LIKE "%]" faz ele ignorar se está escrito [Itaú] ou [Nubank] na hora de checar
+                                    desc_like = f"%] {desc} ({i+1:02d}/{total:02d})"
+
+                                    check = db.buscar_um("""
+                                        SELECT id FROM transacoes 
+                                        WHERE descricao LIKE ? AND valor=? AND data_vencimento=?
+                                    """, (desc_like, -val, venc))
+
+                                    if not check:
+                                        db.executar(
+                                            "INSERT INTO transacoes (descricao, valor, data_vencimento, conta_id, categoria_id, tipo_fluxo) VALUES (?,?,?,?,?,'CARTAO')",
+                                            (desc_f, -val, venc, cid, ctid)
+                                        )
+                                        novos += 1
+                                    else:
+                                        duplicados += 1
+                            
+                            if novos > 0:
+                                st.success(f"🚀 {novos} novas parcelas importadas com sucesso!")
+                            if duplicados > 0:
+                                st.warning(f"🛡️ {duplicados} parcelas ignoradas porque já existiam no sistema (Prevenção de Duplicidade ativada).")
+                else:
+                    st.warning("Nenhuma parcela encontrada pelo Regex 😕. Abra o texto bruto acima para ver como o OCR leu o arquivo e ajustar o padrão.")
     
     @staticmethod
     def _importar_pdf_dados(dados, banco, conta, cat, data_base, df_contas, df_cats):
