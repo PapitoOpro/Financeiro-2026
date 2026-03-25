@@ -81,42 +81,41 @@ class UtilsManager:
     
     @staticmethod
     def limpar_texto_ocr(texto):
-        """Corrige caracteres corrompidos comuns do OCR - versão otimizada."""
+        """Corrige caracteres corrompidos comuns do OCR - versão INTELIGENTE."""
         import re
         
-        # PASSO 0: REMOVER ESPAÇOS EXTRAS ENTRE CARACTERES (mas preservar estrutura)
-        # Remove espaço entre dígitos (dentro de números)
-        texto = re.sub(r'(\d)\s+(\d)', r'\1\2', texto)  # Remove espaço entre dígitos
-        # Remove espaço entre R e símbolo monetário
-        texto = re.sub(r'([R])\s+(\$|[4%#@])', r'\1\2', texto)  # Remove espaço em R$
-        # NÃO remover espaço entre palavras - quebra a estrutura!
+        # PASSO 0: Remover espaços extras APENAS entre dígitos
+        texto = re.sub(r'(\d)\s+(\d)', r'\1\2', texto)
+        texto = re.sub(r'([R])\s+(\$|[4%#@])', r'\1\2', texto)
         
-        # PASSO 1: Normalizar símbolos monetários corrompidos
-        # Traduz R$, R4, R%, R# e similares para R$
+        # PASSO 1: Corrigir "R$" corrompido GLOBALMENTE
         texto = re.sub(r'R[4%#@]', 'R$', texto)
         
-        # PASSO 2: Corrigir números corrompidos em valores monetários
-        substituicoes_numeros = {
-            '+': '8',        # + -> 8
-            '%': '8',        # % -> 8
-            ')': '0',        # ) -> 0
-            '(': '0',        # ( -> 0
-            'O': '0',        # O -> 0 (apenas em contexto de números)
-            'o': '0',        # o -> 0 minúsculo também
-            'l': '1',        # l -> 1
-            'L': '1',        # L -> 1
-            'M': '1',        # M -> 1
-            'S': '5',        # S -> 5
-            'B': '8',        # B -> 8
-            'Z': '2',        # Z -> 2
-            'z': '2',        # z minúsculo também
-        }
+        # PASSO 2: Limpar CONTEXTOS DE VALORES (onde há R$ e números)
+        # Procura por padrão: "R$ XXX,XX" com caracteres corrompidos
+        # Substitui APENAS dentro dessas sequências
+        def limpar_valor(match):
+            valor_str = match.group(0)
+            # Aqui sim faz substituições agressivas dentro do valor
+            valor_str = valor_str.replace('+', '8').replace('%', '8').replace(')', '0')
+            valor_str = valor_str.replace('(', '0').replace('M', '8').replace('Z', '2').replace('z', '2')
+            return valor_str
         
-        resultado = texto
-        for char_errado, char_correto in substituicoes_numeros.items():
-            resultado = resultado.replace(char_errado, char_correto)
+        # Procura por "R$ [dígitos/caracteres,dígitos]"
+        texto = re.sub(r'R\$\s*[+\-]?[\d.,)\(M%ZzO]+', limpar_valor, texto)
         
-        # PASSO 3: Corrigir caracteres acentuados corrompidos
+        # PASSO 3: Limpar CONTEXTOS DE NÚMEROS DE PARCELAS (X/Y)
+        def limpar_parcela(match):
+            parc_str = match.group(0)
+            parc_str = parc_str.replace('M', '1').replace('L', '1').replace('l', '1')
+            parc_str = parc_str.replace('O', '0').replace(')', '0')
+            return parc_str
+        
+        # Procura por "X/Y" onde X e Y podem ter caracteres corrompidos
+        texto = re.sub(r'[MmLlOo0-9]+/[MmLlOo0-9]+', limpar_parcela, texto)
+        
+        # PASSO 4: Limpar acentos/caracteres corrompidos GLOBALMENTE
+        # Isso é seguro pois não afeta números
         substituicoes_chars = {
             'õ': 'o', 'ó': 'o', 'ô': 'o',
             'í': 'i', 'ì': 'i', 'î': 'i',
@@ -127,8 +126,12 @@ class UtilsManager:
             'ñ': 'n', 'ý': 'y',
         }
         
+        resultado = texto
         for char_errado, char_correto in substituicoes_chars.items():
             resultado = resultado.replace(char_errado, char_correto)
+        
+        # PASSO 5: Remover espaços múltiplos
+        resultado = re.sub(r'\s+', ' ', resultado)
         
         return resultado
     
