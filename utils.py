@@ -56,92 +56,114 @@ class UtilsManager:
     def extrair_parcelas(texto):
         """
         Extrai parcelas do texto da fatura com múltiplos padrões.
-        Suporta: Itaú, Bradesco, Nubank, Inter, Santander, Visa, etc.
+        Suporta: Itaú, Bradesco, Nubank, Inter, Santander, Visa, Mercado Pago, etc.
         """
         parcelas = []
         texto_limpo = " ".join(texto.split())
         
-        # Padrão 6: Santander/Visa com data de compra - VERSÃO ULTRA MELHORADA
-        # Formato: [num] DATA_COMPRA DESCRICAO DATA_PARCELA VALOR
-        # Exemplo: "2 12/06 QUITA*052PAGBOLETO 09/17 70,28" ou "21/10 CPFL PAULISTA 05/10 47,02"
-        # Exemplo: "2 13/02 CONSORCIO *EMBRACON 01/03 913,34"
-        # Padrão mais flexível: permite qualquer caractere na descrição (menos dígitos no começo após espaço)
-        padrao6_flexivel = r'(\d+)?\s+(\d{2}/\d{2})\s+(.+?)\s+(\d{2}/\d{2})\s+([\d,]+?)(?:\s{2,}|$)'
+        # PADRÃO 1: Com parênteses (X/Y) - Mais comum
+        # "Curso Python (1/12) R$ 99,00" ou "Compra (1/12) R$ 100,00"
+        padrao_parenteses = r'([^(]+?)\s*\(\s*(\d+)\s*/\s*(\d+)\s*\)\s*[Rr]\$\s*([\d.,]+)'
         
-        # Padrão 1: "qualquer coisa (X/Y) R$ valor"
-        padrao1 = r'(.+?)\s*\((\d+)/(\d+)\)\s*[Rr]\$\s*([\d.,]+)'
+        # PADRÃO 2: Santander/Visa com datas
+        # "2 12/06 QUITA*052PAGBOLETO 09/17 70,28"
+        padrao_santander = r'(\d+)?\s+(\d{2}/\d{2})\s+(.+?)\s+(\d{2}/\d{2})\s+([\d,]+?)(?:\s{2,}|$)'
         
-        # Padrão 2: "X/Y parcelas de R$ valor"
-        padrao2 = r'(\d+)/(\d+)\s*(?:parcelas? de|[-–])\s*[Rr]\$\s*([\d.,]+)'
+        # PADRÃO 3: "X de Y parcelas" ou "X/Y parcelas"
+        # "5 de 12 parcelas R$ 150,00" ou "1/12 parcelas de R$ 100,00"
+        padrao_de_parcelas = r'(\d+)\s+(?:de|/)\s+(\d+)\s*parcelas?\s+[Dd]e\s+[Rr]\$\s*([\d.,]+)'
         
-        # Padrão 3: "Descrição X/Y R$ valor"
-        padrao3 = r'(.+?)\s+(\d+)/(\d+)\s+[Rr]\$\s*([\d.,]+)'
+        # PADRÃO 4: Mercado Pago ou format simples
+        # "Descrição 1/12 R$ 100,00"
+        padrao_simples = r'([A-Z0-9\s\*\-]{5,}?)\s+(\d+)/(\d+)\s+[Rr]\$\s*([\d.,]+)'
+        
+        # PADRÃO 5: Apenas números
+        # "1/12 R$ 100,00"
+        padrao_apenas_numeros = r'^(\d+)/(\d+)\s+[Rr]\$\s*([\d.,]+)'
+        
+        # PADRÃO 6: Com ponto e vírgula ou separadores
+        # "Desc ; 1/12 ; R$ 100"
+        padrao_separado = r'([^;:]+?);\s*(\d+)/(\d+)\s*;\s*[Rr]\$\s*([\d.,]+)'
         
         matches = []
         
-        # Tenta padrão 6 flexível (Santander com data de compra)
-        for match in re.finditer(padrao6_flexivel, texto_limpo, re.IGNORECASE):
+        # Tenta padrão com parênteses (mais confiável)
+        for match in re.finditer(padrao_parenteses, texto_limpo, re.IGNORECASE):
+            desc, parc_atual, parc_total, valor = match.groups()
+            desc = desc.strip()
+            if desc and len(desc) > 2 and not desc[0].isdigit():
+                try:
+                    val_float = float(valor.replace(".", "").replace(",", "."))
+                    if val_float > 0:
+                        matches.append((desc, f"{parc_atual}/{parc_total}", val_float))
+                except:
+                    pass
+        
+        if matches:
+            return matches
+        
+        # Tenta padrão Santander
+        for match in re.finditer(padrao_santander, texto_limpo, re.IGNORECASE):
             groups = match.groups()
             if len(groups) == 5:
-                num_parcela, data_compra, descricao, data_parcela, valor = groups
-                descricao = descricao.strip()
-                
-                # Filtra: descrição deve ter pelo menos 3 caracteres e não começar com dígitos
-                if (descricao and len(descricao) > 2 and data_parcela and valor and 
-                    not descricao[0].isdigit()):
+                _, data_compra, desc, data_parc, valor = groups
+                desc = desc.strip()
+                if desc and len(desc) > 2 and not desc[0].isdigit():
                     try:
                         val_float = float(valor.replace(".", "").replace(",", "."))
                         if val_float > 0:
-                            parc_tuple = (descricao, data_parcela, val_float)
-                            # Evita duplicatas
+                            parc_tuple = (desc, data_parc, val_float)
                             if parc_tuple not in matches:
                                 matches.append(parc_tuple)
                     except:
                         pass
         
-        # Se encontrou com padrão 6, retorna
         if matches:
             return matches
         
-        # Tenta padrão 1 (com descrição e parênteses)
-        for match in re.finditer(padrao1, texto_limpo, re.IGNORECASE | re.DOTALL):
-            descricao, parcela_atual, total_parcelas, valor = match.groups()
-            if descricao.strip() and parcela_atual and total_parcelas and valor:
+        # Tenta "X de Y parcelas"
+        for match in re.finditer(padrao_de_parcelas, texto_limpo, re.IGNORECASE):
+            parc_atual, parc_total, valor = match.groups()
+            try:
+                val_float = float(valor.replace(".", "").replace(",", "."))
+                if val_float > 0:
+                    # Extrai descrição do contexto
+                    pos = match.start()
+                    contexto = texto_limpo[max(0, pos-150):pos]
+                    desc = contexto.split()[-3] if len(contexto.split()) > 3 else "Parcela"
+                    matches.append((desc, f"{parc_atual}/{parc_total}", val_float))
+            except:
+                pass
+        
+        if matches:
+            return matches
+        
+        # Tenta padrão simples (Mercado Pago)
+        for match in re.finditer(padrao_simples, texto_limpo, re.IGNORECASE):
+            desc, parc_atual, parc_total, valor = match.groups()
+            desc = desc.strip()
+            if desc and len(desc) > 2:
                 try:
                     val_float = float(valor.replace(".", "").replace(",", "."))
                     if val_float > 0:
-                        matches.append((descricao.strip(), f"{parcela_atual}/{total_parcelas}", val_float))
+                        parc_tuple = (desc, f"{parc_atual}/{parc_total}", val_float)
+                        if parc_tuple not in matches:
+                            matches.append(parc_tuple)
                 except:
                     pass
         
         if matches:
             return matches
         
-        # Tenta padrão 2
-        for match in re.finditer(padrao2, texto_limpo, re.IGNORECASE):
-            parcela_atual, total_parcelas, valor = match.groups()
-            if parcela_atual and total_parcelas and valor:
+        # Tenta padrão com separador (ponto-vírgula)
+        for match in re.finditer(padrao_separado, texto_limpo, re.IGNORECASE):
+            desc, parc_atual, parc_total, valor = match.groups()
+            desc = desc.strip()
+            if desc and len(desc) > 2:
                 try:
                     val_float = float(valor.replace(".", "").replace(",", "."))
                     if val_float > 0:
-                        pos = match.start()
-                        contexto = texto_limpo[max(0, pos-100):pos]
-                        descricao = contexto.split('\n')[-1] if '\n' in contexto else contexto[-50:]
-                        matches.append((descricao.strip(), f"{parcela_atual}/{total_parcelas}", val_float))
-                except:
-                    pass
-        
-        if matches:
-            return matches
-        
-        # Tenta padrão 3 (último recurso)
-        for match in re.finditer(padrao3, texto_limpo, re.IGNORECASE):
-            descricao, parcela_atual, total_parcelas, valor = match.groups()
-            if descricao.strip() and parcela_atual and total_parcelas and valor:
-                try:
-                    val_float = float(valor.replace(".", "").replace(",", "."))
-                    if val_float > 0:
-                        matches.append((descricao.strip(), f"{parcela_atual}/{total_parcelas}", val_float))
+                        matches.append((desc, f"{parc_atual}/{parc_total}", val_float))
                 except:
                     pass
         
