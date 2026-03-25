@@ -69,6 +69,10 @@ class UtilsManager:
         # "2 12/06 QUITA*052PAGBOLETO 09/17 70,28"
         padrao_santander = r'(\d+)?\s+(\d{2}/\d{2})\s+(.+?)\s+(\d{2}/\d{2})\s+([\d,]+?)(?:\s{2,}|$)'
         
+        # PADRÃO 2.5: Mercado Pago "Parcela X de Y R$ VALOR"
+        # "FERROLHOGO Parcela 12 de 19 R$ 48,03" (OCR às vezes coloca +/- extras)
+        padrao_mercadopago = r'(.+?)\s+Parcela\s+(\d+)\s+de\s+(\d+)\s+[Rr]\$\s*[+\-]?\s*([\d.,]+)'
+        
         # PADRÃO 3: "X de Y parcelas" ou "X/Y parcelas"
         # "5 de 12 parcelas R$ 150,00" ou "1/12 parcelas de R$ 100,00"
         padrao_de_parcelas = r'(\d+)\s+(?:de|/)\s+(\d+)\s*parcelas?\s+[Dd]e\s+[Rr]\$\s*([\d.,]+)'
@@ -96,6 +100,23 @@ class UtilsManager:
                     val_float = float(valor.replace(".", "").replace(",", "."))
                     if val_float > 0:
                         matches.append((desc, f"{parc_atual}/{parc_total}", val_float))
+                except:
+                    pass
+        
+        if matches:
+            return matches
+        
+        # Tenta padrão Mercado Pago "Parcela X de Y"
+        for match in re.finditer(padrao_mercadopago, texto_limpo, re.IGNORECASE):
+            desc, parc_atual, parc_total, valor = match.groups()
+            desc = desc.strip()
+            if desc and len(desc) > 2 and not desc[0].isdigit():
+                try:
+                    val_float = float(valor.replace(".", "").replace(",", "."))
+                    if val_float > 0:
+                        parc_tuple = (desc, f"{parc_atual}/{parc_total}", val_float)
+                        if parc_tuple not in matches:
+                            matches.append(parc_tuple)
                 except:
                     pass
         
