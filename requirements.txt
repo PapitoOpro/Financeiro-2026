@@ -4,3 +4,6 @@ psycopg2-binary
 bcrypt
 plotly
 python-dateutil
+PyPDF2
+pytesseract
+Pillow
