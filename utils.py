@@ -175,3 +175,28 @@ def processar_fatura(file, senha_pdf=None):
     except Exception as e:
         print("Erro ao processar fatura:", e)
         return "ERRO", "", []
+
+
+# ==========================================
+# 💰 FUNÇÕES UTILITÁRIAS - FORMATAÇÃO
+# ==========================================
+
+def moeda(valor):
+    """Formata valor como moeda brasileira (R$)."""
+    if valor is None:
+        return "R$ 0,00"
+    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def get_cor_saldo(saldo):
+    """Retorna cor baseada no saldo (positivo=verde, negativo=vermelho)."""
+    if saldo >= 0:
+        return "#10B981"  # Verde
+    else:
+        return "#EF4444"  # Vermelho
+
+def get_cor_valor(valor):
+    """Retorna cor baseada no valor (positivo=verde, negativo=vermelho)."""
+    if valor >= 0:
+        return "#10B981"  # Verde
+    else:
+        return "#EF4444"  # Vermelho
