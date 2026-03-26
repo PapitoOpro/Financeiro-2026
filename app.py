@@ -79,10 +79,11 @@ elif menu == "5- Admin 🔧":
 # ==========================================
 # RODAPÉ
 # ==========================================
-st.markdown("---")
-st.markdown(
+##st.markdown("---")
+##st.markdown(
     "<div style='text-align: center; color: gray; font-size: 12px;'>"
     "Sistema Financeiro 2026 | v1.0 | Desenvolvido com Streamlit"
     "</div>",
     unsafe_allow_html=True
 )
+## teste de subida para o github
