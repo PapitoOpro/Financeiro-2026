@@ -139,16 +139,32 @@ def parser_generico(texto):
 
 def extrair_parcelas(texto):
     import re
+    desc = re.sub(r'[^A-Za-z0-9\s]', '', desc)
     resultados = []
 
+    # ?? Normalização básica do OCR
+    texto = texto.replace("R4", "R$")
+    texto = texto.replace("õ", "o").replace("ó", "o").replace("í", "i")
+
+    # ?? Regex focado em "Parcela X de Y"
     padrao = re.findall(
-        r'(\d{1,2}/\d{1,2})\s+(.+?)\s+R\$\s?([\d\.,]+)',
-        texto
+        r'(.+?)\s+Parcela\s+(\d{1,2})\s+de\s+(\d{1,2})\s+R\$\s?([\d\.,\+]+)',
+        texto,
+        re.IGNORECASE
     )
 
-    for parc, desc, valor in padrao:
-        valor = float(valor.replace('.', '').replace(',', '.'))
-        resultados.append((desc.strip(), parc, valor))
+    for desc, atual, total, valor in padrao:
+        try:
+            # limpa valor
+            valor = valor.replace("+", "").replace(".", "").replace(",", ".")
+            valor = float(valor)
+
+            parcela = f"{int(atual)}/{int(total)}"
+
+            resultados.append((desc.strip(), parcela, valor))
+
+        except:
+            continue
 
     return resultados
 
