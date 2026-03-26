@@ -8,7 +8,9 @@ import re
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from database import db
-from utils import moeda, processar_fatura
+import plotly.express as px
+import plotly.graph_objects as go
+from utils import moeda, processar_fatura, get_cor_valor, get_cor_saldo
 
 class ParcelasManager:
     """Gerenciador de Projeção de Gastos (Parcelas)."""
@@ -358,75 +360,169 @@ class ParcelasManager:
     def _tab_previsao():
         """Aba com previsão de gastos - Dashboard completo."""
         st.subheader("📅 Dashboard de Previsão de Gastos")
-        
+
+        # Carrega contas e categorias (necessário para edição)
+        df_contas = db.buscar("SELECT * FROM contas ORDER BY nome")
+        df_cats = db.buscar("SELECT * FROM categorias ORDER BY nome")
+
         df_p = db.buscar("""
-            SELECT t.id, t.data_vencimento, t.descricao, t.valor, c.nome as banco
+            SELECT t.id, t.data_vencimento, t.descricao, t.valor, c.nome as banco, cat.nome as categoria
             FROM transacoes t
             LEFT JOIN contas c ON t.conta_id = c.id
+            LEFT JOIN categorias cat ON t.categoria_id = cat.id
             WHERE t.tipo_fluxo='CARTAO'
             ORDER BY t.data_vencimento ASC
         """)
-        
+
         if df_p.empty:
             st.info("ℹ️ Nenhuma parcela lançada no cartão ainda.")
             return
-        
+
         df_p['data_vencimento'] = pd.to_datetime(df_p['data_vencimento'])
-        
+        df_p['valor_abs'] = df_p['valor'].abs()
+
         # 1. MÉTRICAS DE TOPO
-        total_divida = abs(df_p['valor'].sum())
-        
+        total_divida = df_p['valor_abs'].sum()
+
         df_p['Mes_Ano'] = df_p['data_vencimento'].dt.to_period('M')
-        agrupado_mes = df_p.groupby('Mes_Ano')['valor'].sum().abs().reset_index()
+        agrupado_mes = df_p.groupby('Mes_Ano')['valor_abs'].sum().reset_index()
         agrupado_mes['Mes_Ano_Str'] = agrupado_mes['Mes_Ano'].astype(str)
-        
-        mes_mais_pesado = agrupado_mes.loc[agrupado_mes['valor'].idxmax()]
-        
+        agrupado_mes = agrupado_mes.sort_values('Mes_Ano')
+
+        mes_mais_pesado = agrupado_mes.loc[agrupado_mes['valor_abs'].idxmax()]
+
         col1, col2 = st.columns(2)
         col1.metric("💰 Total Parcelado a Pagar", moeda(total_divida))
-        col2.metric("⚠️ Mês Mais Pesado", f"{mes_mais_pesado['Mes_Ano_Str']} - {moeda(mes_mais_pesado['valor'])}")
-        
+        col2.metric("⚠️ Mês Mais Pesado", f"{mes_mais_pesado['Mes_Ano_Str']} - {moeda(mes_mais_pesado['valor_abs'])}")
+
         st.markdown("---")
-        
-        # 2. GRÁFICO DE EVOLUÇÃO
+
+        # 2. GRÁFICO DE EVOLUÇÃO (Plotly: barras mensais + linha cumulativa)
         st.markdown("**📈 Evolução do Parcelamento nos Próximos Meses**")
-        df_grafico = agrupado_mes[['Mes_Ano_Str', 'valor']].set_index('Mes_Ano_Str')
-        st.bar_chart(df_grafico, color="#e74c3c", use_container_width=True)
-        
+        agrupado_mes['cumulativo'] = agrupado_mes['valor_abs'].cumsum()
+        fig = go.Figure()
+        fig.add_bar(x=agrupado_mes['Mes_Ano_Str'], y=agrupado_mes['valor_abs'], name='Mensal', marker_color='#e74c3c')
+        fig.add_trace(go.Scatter(x=agrupado_mes['Mes_Ano_Str'], y=agrupado_mes['cumulativo'], mode='lines+markers', name='Cumulativo', line=dict(color='#1f77b4')))
+        fig.update_layout(yaxis_title='Valor (R$)', xaxis_title='Mês/Ano', legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1))
+        fig.update_yaxes(tickprefix='R$ ')
+        st.plotly_chart(fig, use_container_width=True)
+
         st.markdown("---")
-        
-        # 3. LISTAGEM CASCATA
+
+        # 3. DISTRIBUIÇÃO POR CARTÃO / CATEGORIA
+        st.markdown("**🧭 Distribuição por Cartão / Categoria (Próximos Meses)**")
+        distrib_cartao = df_p.groupby('banco')['valor_abs'].sum().reset_index().sort_values('valor_abs', ascending=False)
+        distrib_categoria = df_p.groupby('categoria')['valor_abs'].sum().reset_index().sort_values('valor_abs', ascending=False)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            if not distrib_cartao.empty:
+                fig1 = px.pie(distrib_cartao, values='valor_abs', names='banco', title='Por Cartão', hole=0.4)
+                st.plotly_chart(fig1, use_container_width=True)
+            else:
+                st.info("Sem dados por cartão.")
+        with c2:
+            if not distrib_categoria.empty:
+                fig2 = px.pie(distrib_categoria, values='valor_abs', names='categoria', title='Por Categoria', hole=0.4)
+                st.plotly_chart(fig2, use_container_width=True)
+            else:
+                st.info("Sem dados por categoria.")
+
+        st.markdown("---")
+
+        # 4. EXPORTAÇÃO / RELATÓRIO
+        st.markdown("**📥 Exportar Relatório**")
+        csv_rel = df_p[['id','data_vencimento','descricao','valor_abs','banco','categoria']].copy()
+        csv_rel = csv_rel.rename(columns={'valor_abs':'valor','banco':'cartao'})
+        csv_bytes = csv_rel.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Baixar CSV de Previsão", data=csv_bytes, file_name="previsao_parcelas.csv", mime="text/csv")
+
+        st.markdown("---")
+
+        # 5. LISTAGEM CASCATA COM EDIÇÃO/EXCLUSÃO
         st.markdown("**📋 Detalhamento por Mês**")
         meses_previsao = st.slider("Ver previsão detalhada para quantos meses?", 1, 24, 6)
         primeiro_mes = df_p['data_vencimento'].min().replace(day=1)
-        
+
         for i in range(meses_previsao):
             mes_atual = primeiro_mes + relativedelta(months=i)
             f_mes = df_p[
                 (df_p['data_vencimento'].dt.month == mes_atual.month) &
                 (df_p['data_vencimento'].dt.year == mes_atual.year)
             ]
-            
+
             if not f_mes.empty:
-                total_mes = abs(f_mes['valor'].sum())
-                
+                total_mes = f_mes['valor_abs'].sum()
+
                 with st.expander(f"📅 **{mes_atual.strftime('%m/%Y')}** — Total: {moeda(total_mes)}", expanded=False):
                     cartoes_no_mes = f_mes['banco'].fillna("Desconhecido").unique()
-                    
+
                     for cartao in cartoes_no_mes:
                         f_cartao = f_mes[f_mes['banco'].fillna("Desconhecido") == cartao]
-                        subtotal_cartao = abs(f_cartao['valor'].sum())
-                        
+                        subtotal_cartao = f_cartao['valor_abs'].sum()
+
                         st.markdown(f"**💳 Fatura: {cartao}** — Subtotal: **{moeda(subtotal_cartao)}**")
-                        
+
                         for _, r in f_cartao.iterrows():
-                            c1, c2, c3 = st.columns([6, 2, 1])
+                            c1, c2, c3, c4 = st.columns([6, 2, 1, 1])
                             desc_limpa = re.sub(r'^\[.*?\]\s*', '', r['descricao'])
-                            
+
                             c1.write(f"↳ {desc_limpa}")
-                            c2.write(f"**{moeda(abs(r['valor']))}**")
-                            
-                            # Simplificado o delete para evitar recargas complexas dentro do loop
-                            if c3.button("🗑️", key=f"del_parc_{r['id']}", help="Deletar parcela"):
-                                db.executar("DELETE FROM transacoes WHERE id=?", (r['id'],))
-                                st.rerun()
+                            c2.write(f"**{moeda(r['valor_abs'])}**")
+
+                            # Edit button -> abrir modal
+                            if c3.button("✏️", key=f"edit_parc_{r['id']}", help="Editar parcela"):
+                                st.session_state['edit_id'] = int(r['id'])
+                                st.session_state['edit_desc'] = desc_limpa
+                                st.session_state['edit_val'] = float(r['valor_abs'])
+                                st.session_state['edit_date'] = pd.to_datetime(r['data_vencimento']).date()
+                                st.session_state['edit_cartao'] = cartao if cartao is not None else ""
+                                st.session_state['edit_categoria'] = r.get('categoria', "") if 'categoria' in r else ""
+                                st.experimental_rerun()
+
+                            # Delete button -> pede confirmação via modal
+                            if c4.button("🗑️", key=f"del_parc_{r['id']}", help="Deletar parcela"):
+                                st.session_state['del_id'] = int(r['id'])
+                                st.experimental_rerun()
+
+        # Modal de confirmação para exclusão
+        if st.session_state.get('del_id'):
+            del_id = st.session_state.get('del_id')
+            with st.modal("Confirmação de Exclusão"):
+                st.warning("Tem certeza que deseja excluir esta parcela? Esta ação é irreversível.")
+                col_ok, col_cancel = st.columns(2)
+                if col_ok.button("Sim, excluir"):
+                    db.executar("DELETE FROM transacoes WHERE id=?", (del_id,))
+                    st.success("Parcela excluída.")
+                    st.session_state['del_id'] = None
+                    st.experimental_rerun()
+                if col_cancel.button("Cancelar"):
+                    st.session_state['del_id'] = None
+                    st.experimental_rerun()
+
+        # Modal de edição
+        if st.session_state.get('edit_id'):
+            edit_id = st.session_state.get('edit_id')
+            with st.modal("Editar Parcela"):
+                with st.form("form_edit_parcela"):
+                    d_desc = st.text_input("Descrição", value=st.session_state.get('edit_desc', ''))
+                    d_val = st.number_input("Valor (R$)", min_value=0.0, value=float(st.session_state.get('edit_val', 0.0)))
+                    d_date = st.date_input("Data de Vencimento", value=st.session_state.get('edit_date', pd.to_datetime('today').date()))
+                    conta_op = df_contas['nome'].tolist() if not df_contas.empty else []
+                    cat_op = df_cats['nome'].tolist() if not df_cats.empty else []
+                    sel_conta = st.selectbox("Cartão", conta_op, index=conta_op.index(st.session_state.get('edit_cartao')) if st.session_state.get('edit_cartao') in conta_op else 0)
+                    sel_cat = st.selectbox("Categoria", cat_op, index=cat_op.index(st.session_state.get('edit_categoria')) if st.session_state.get('edit_categoria') in cat_op else 0)
+
+                    if st.form_submit_button("Salvar alterações"):
+                        try:
+                            cid = int(df_contas[df_contas.nome == sel_conta].id.values[0])
+                            ctid = int(df_cats[df_cats.nome == sel_cat].id.values[0])
+                            # Atualiza: armazenar valor negativo (fluxo de cartão)
+                            db.executar("""
+                                UPDATE transacoes SET descricao=?, valor=?, data_vencimento=?, conta_id=?, categoria_id=? WHERE id=?
+                            """, (f"[{sel_conta}] {d_desc}", -abs(float(d_val)), d_date, cid, ctid, edit_id))
+                            st.success("Parcela atualizada com sucesso.")
+                        except Exception as e:
+                            st.error(f"Erro ao atualizar parcela: {e}")
+                        st.session_state['edit_id'] = None
+                        st.experimental_rerun()
