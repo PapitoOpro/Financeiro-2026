@@ -139,7 +139,6 @@ def parser_generico(texto):
 
 def extrair_parcelas(texto):
     import re
-    desc = re.sub(r'[^A-Za-z0-9\s]', '', desc)
     resultados = []
 
     # ?? Normalização básica do OCR
