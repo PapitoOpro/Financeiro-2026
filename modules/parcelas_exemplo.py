@@ -65,32 +65,51 @@ class ParcelasManager:
     
     @staticmethod
     def _lancar_parcelas(desc, val, p_atual, p_total, cnt, cat, dt_ini, df_contas, df_cats):
-        """Lança parcelas no banco."""
-        cid = int(df_contas[df_contas.nome == cnt].id.values[0])
-        ctid = int(df_cats[df_cats.nome == cat].id.values[0])
-        
-        parcelas_lancar = (int(p_total) - int(p_atual)) + 1
+        """Lança as parcelas no banco de dados usando o DatabaseManager."""
+        try:
+            # 1. Recuperar IDs das chaves estrangeiras
+            cid = int(df_contas[df_contas.nome == cnt].id.values[0])
+            ctid = int(df_cats[df_cats.nome == cat].id.values[0])
+            
+            # 2. Calcular quantas parcelas restam (incluindo a atual)
+            # Ex: Se é 02/10, faltam (10 - 2) + 1 = 9 parcelas
+            parcelas_lancar = (int(p_total) - int(p_atual)) + 1
+
+            # 3. Loop de inserção
+            for i in range(parcelas_lancar):
+                # Calcula data: soma meses com base na data inicial fornecida
+                venc = dt_ini + relativedelta(months=i)
+                num_parc = int(p_atual) + i
+                
+                # Monta a descrição: [NuBank] Compra X (02/10)
+                d_final = f"[{cnt}] {desc} ({num_parc:02d}/{int(p_total):02d})"
+                
+                # Executa a query via DatabaseManager
+                # Nota: Dependendo do seu DB (SQLite ou Postgres), use %s ou ?
+                query = """
+                    INSERT INTO transacoes 
+                    (descricao, valor, data_vencimento, conta_id, categoria_id, tipo_fluxo) 
+                    VALUES (%s, %s, %s, %s, %s, 'CARTAO')
+                """
+                db.executar(query, (d_final, -float(val), venc, cid, ctid))
+            
+            st.success(f"✅ {parcelas_lancar} parcelas lançadas com sucesso!")
+            
+            # 4. Após o sucesso, limpamos o estado do PDF e reiniciamos
+            ParcelasManager._resetar_estado_pdf()
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"Erro ao lançar parcelas: {e}")
 
     @staticmethod
     def _resetar_estado_pdf():
-        """Limpa estado de importação de PDF entre uploads."""
+        """Limpa apenas as variáveis de controle da interface."""
         st.session_state["ocr_file_name"] = None
         st.session_state["ocr_banco"] = "GENÉRICO"
         st.session_state["ocr_texto"] = ""
         st.session_state["ocr_dados"] = []
-        
-        for i in range(parcelas_lancar):
-            venc = dt_ini + relativedelta(months=i)
-            num_parc = int(p_atual) + i
-            d_final = f"[{cnt}] {desc} ({num_parc:02d}/{int(p_total):02d})"
-            
-            db.executar(
-                "INSERT INTO transacoes (descricao, valor, data_vencimento, conta_id, categoria_id, tipo_fluxo) VALUES (?,?,?,?,?,'CARTAO')",
-                (d_final, -val, venc, cid, ctid)
-            )
-        
-        st.success(f"✅ {parcelas_lancar} parcelas lançadas!")
-        st.rerun()
+        # Remova o loop daqui, o reset deve apenas 'limpar a mesa'
     
     @staticmethod
     def _tab_importar_pdf(df_contas, df_cats):
