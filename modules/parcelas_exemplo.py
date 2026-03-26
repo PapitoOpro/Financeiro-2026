@@ -159,8 +159,9 @@ class ParcelasManager:
                         dados_salvos, banco_detectado, conta, cat, data_base, df_contas, df_cats
                     )
     @staticmethod
+    @staticmethod
     def _tab_importar_csv(df_contas, df_cats):
-        """Aba para importar faturas via arquivo CSV (Otimizada)."""
+        """Aba para importar faturas via arquivo CSV (Otimizada e com Conversor de Moeda)."""
         st.subheader("📊 Importador de Faturas via CSV")
         
         file_csv = st.file_uploader("Envie a fatura em formato CSV", type=["csv"])
@@ -192,14 +193,37 @@ class ParcelasManager:
                         dados_extraidos = []
                         
                         for _, row in df_csv.iterrows():
+                            # Define desc_original aqui, lendo a coluna escolhida
                             desc_original = str(row[col_desc])
                             
                             try:
-                                # Limpa o valor monetário
-                                val_str = str(row[col_val]).replace("R$", "").replace(".", "").replace(",", ".").strip()
-                                val = float(val_str)
+                                # --- CONVERSOR DE MOEDA INTELIGENTE ---
+                                val_raw = row[col_val]
                                 
-                                # Ignora valores nulos/vazios
+                                # Pula se a linha for nula/vazia
+                                if pd.isna(val_raw):
+                                    continue
+                                    
+                                # Se o Pandas já leu como número (int ou float)
+                                if isinstance(val_raw, (int, float)):
+                                    val = float(val_raw)
+                                else:
+                                    # Limpeza de texto de moeda
+                                    val_str = str(val_raw).replace("R$", "").strip()
+                                    
+                                    # Resolve conflitos de ponto vs virgula
+                                    if "." in val_str and "," in val_str:
+                                        if val_str.rfind(",") > val_str.rfind("."):
+                                            val_str = val_str.replace(".", "").replace(",", ".")
+                                        else:
+                                            val_str = val_str.replace(",", "")
+                                    elif "," in val_str:
+                                        val_str = val_str.replace(",", ".")
+                                        
+                                    val = float(val_str)
+                                # ---------------------------------------
+                                
+                                # Ignora valores zerados
                                 if abs(val) == 0:
                                     continue
                                 
@@ -214,9 +238,9 @@ class ParcelasManager:
                                         if parc_match:
                                             parc_formatada = f"{int(parc_match.group(1))}/{int(parc_match.group(2))}"
                                 
-                                # CENÁRIO 2: Extrair de textos como "Loja (Compra: 12/02 | 02/05)"
+                                # CENÁRIO 2: Extrair de textos
                                 else:
-                                    # Limpa o texto da data "(Compra: DD/MM)" e "(À vista)" para não confundir o Regex
+                                    # Remove texto de data (Ex: Compra: 12/02) para não confundir com parcela
                                     texto_busca = re.sub(r'\(Compra:\s*\d{1,2}/\d{1,2}.*?\)', '', desc_original)
                                     texto_busca = re.sub(r'\(À vista\)', '', texto_busca, flags=re.IGNORECASE)
                                     
@@ -224,13 +248,12 @@ class ParcelasManager:
                                     
                                     if parc_match:
                                         parc_formatada = f"{int(parc_match.group(1))}/{int(parc_match.group(2))}"
-                                        # Remove o texto da parcela "02/05" da descrição final
                                         desc_limpa = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', '', desc_original).strip()
                                 
                                 dados_extraidos.append((desc_limpa, parc_formatada, abs(val)))
                                     
                             except Exception:
-                                continue # Pula linhas inválidas (cabeçalhos extras, etc)
+                                continue # Pula linhas inválidas
                                 
                         st.session_state["csv_dados"] = dados_extraidos
                         st.success(f"✅ {len(dados_extraidos)} registros processados com sucesso!")
@@ -238,7 +261,7 @@ class ParcelasManager:
             except Exception as e:
                 st.error(f"Erro ao ler o CSV. O arquivo pode estar corrompido: {e}")
 
-        # 3. Exibição e Lançamento (Idêntico ao PDF)
+        # 3. Exibição e Lançamento
         dados_salvos = st.session_state.get("csv_dados", [])
         
         if dados_salvos:
@@ -260,7 +283,6 @@ class ParcelasManager:
                 
                 if st.form_submit_button("🚀 Salvar no Banco (Aplicar Trava Anti-Duplicidade)", use_container_width=True):
                     
-                    # Reaproveitando 100% da inteligência da trava anti-duplicidade!
                     ParcelasManager._importar_pdf_dados(
                         dados=dados_salvos, 
                         banco="CSV IMPORT", 
@@ -271,7 +293,7 @@ class ParcelasManager:
                         df_cats=df_cats
                     )
                     
-                    st.session_state["csv_dados"] = []                
+                    st.session_state["csv_dados"] = []               
 
     @staticmethod
     def _importar_pdf_dados(dados, banco, conta, cat, data_base, df_contas, df_cats):
