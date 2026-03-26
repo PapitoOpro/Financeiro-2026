@@ -141,29 +141,39 @@ def extrair_parcelas(texto):
     import re
     resultados = []
 
-    # ?? Normalização básica do OCR
-    texto = texto.replace("R4", "R$")
-    texto = texto.replace("õ", "o").replace("ó", "o").replace("í", "i")
-
-    # ?? Regex focado em "Parcela X de Y"
-    padrao = re.findall(
-        r'(.+?)\s+Parcela\s+(\d{1,2})\s+de\s+(\d{1,2})\s+R\$\s?([\d\.,\+]+)',
-        texto,
-        re.IGNORECASE
+    # 1. Limpeza de ruídos comuns de OCR
+    texto = texto.replace("R4", "R$").replace("I0F", "IOF")
+    
+    # PADRÃO A: "Descricao Parcela 01 de 10 R$ 100,00" (Mercado Pago / Nubank)
+    # Pega: Nome da Loja + "Parcela" + num + "de" + total + valor
+    regex_extenso = re.findall(
+        r'(.+?)\s+Parcela\s+(\d{1,2})\s+de\s+(\d{1,2})\s+R\$\s?([\d\.,]+)', 
+        texto, re.IGNORECASE
     )
 
-    for desc, atual, total, valor in padrao:
+    # PADRÃO B: "Descricao 01/10 R$ 100,00" (Itaú / Santander)
+    # Pega: Nome da Loja + espaco + "01/10" + espaco + valor
+    regex_barra = re.findall(
+        r'(.+?)\s+(\d{1,2}/\d{1,2})\s+R\$\s?([\d\.,]+)', 
+        texto, re.IGNORECASE
+    )
+
+    # Processando Padrão A
+    for desc, atual, total, valor in regex_extenso:
         try:
-            # limpa valor
-            valor = valor.replace("+", "").replace(".", "").replace(",", ".")
-            valor = float(valor)
+            val_limpo = float(valor.replace(".", "").replace(",", "."))
+            parc_formatada = f"{int(atual)}/{int(total)}"
+            resultados.append((desc.strip(), parc_formatada, val_limpo))
+        except: continue
 
-            parcela = f"{int(atual)}/{int(total)}"
-
-            resultados.append((desc.strip(), parcela, valor))
-
-        except:
-            continue
+    # Processando Padrão B (apenas se não for duplicado)
+    for desc, parc, valor in regex_barra:
+        try:
+            val_limpo = float(valor.replace(".", "").replace(",", "."))
+            # Verifica se já não pegamos esse item no regex anterior
+            if not any(desc.strip() in r[0] for r in resultados):
+                resultados.append((desc.strip(), parc, val_limpo))
+        except: continue
 
     return resultados
 

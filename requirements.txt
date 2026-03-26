@@ -1,13 +1,13 @@
-streamlit==1.55.0
-pandas==2.3.3
-psycopg2-binary==2.9.11
-bcrypt==5.0.0
-plotly==6.6.0
-python-dateutil==2.9.0.post0
-PyPDF2==3.0.1
-pytesseract==0.3.13
-Pillow==12.1.1
-pdf2image==1.16.3
-pdfplumber==0.10.3
-numpy==1.26.3
-opencv-python-headless==4.8.1.78
+streamlit>=1.30.0
+pandas>=2.0.0
+psycopg2-binary
+bcrypt
+plotly
+python-dateutil
+PyPDF2
+pytesseract
+Pillow
+pdf2image
+pdfplumber
+numpy<2.0.0  # Evite o numpy 2.0 por enquanto, causa conflito com muitas libs
+opencv-python-headless

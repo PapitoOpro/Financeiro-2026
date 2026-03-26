@@ -112,105 +112,118 @@ class ParcelasManager:
         # Remova o loop daqui, o reset deve apenas 'limpar a mesa'
     
     @staticmethod
+    @staticmethod
     def _tab_importar_pdf(df_contas, df_cats):
-        """Aba para importar faturas PDF com debug melhorado."""
-        st.subheader("📄 Importador Universal de Faturas via OCR")
+        """Aba para importar faturas PDF corrigida."""
+        st.subheader("📄 Importador de Faturas via OCR")
         
-        senha_pdf = st.text_input("Senha do PDF (geralmente CPF ou primeiros dígitos)", type="password")
+        senha_pdf = st.text_input("Senha do PDF", type="password")
         file = st.file_uploader("Envie a fatura PDF", type="pdf")
 
-        # Limpa estado anterior quando a fatura enviada muda (nome de arquivo diferente)
-        if file and st.session_state.get("ocr_file_name") != getattr(file, "name", None):
+        # Reset ao trocar de arquivo
+        if file and st.session_state.get("ocr_file_name") != file.name:
             ParcelasManager._resetar_estado_pdf()
-            st.session_state["ocr_file_name"] = getattr(file, "name", None)
+            st.session_state["ocr_file_name"] = file.name
 
-        banco = st.session_state.get("ocr_banco", "GENÉRICO")
-        texto = st.session_state.get("ocr_texto", "")
-        dados = st.session_state.get("ocr_dados", [])
-
-        if file and st.button("Processar Fatura"):
-            with st.spinner("Lendo a fatura com inteligência artificial..."):
+        # Botão de Processamento
+        if file and st.button("🔍 Extrair Dados do PDF"):
+            with st.spinner("Analisando fatura..."):
+                # Chama a função do seu utils.py
                 banco, texto, dados = processar_fatura(file, senha_pdf)
-
-            st.session_state["ocr_banco"] = banco
-            st.session_state["ocr_texto"] = texto
-            st.session_state["ocr_dados"] = dados
-            st.success(f"🏦 Banco detectado: {banco}")
-
-        if texto:
-            with st.expander("DEBUG TEXTO"):
-                st.text(texto[:2000])
-
-            if texto.strip() == "":
-                st.error("Falha ao extrair o texto. Verifique se a senha está correta.")
-            else:
-                banco = detectar_banco(texto)
                 
-                if banco != "GENÉRICO":
-                    st.success(f"🏦 Banco detectado na fatura: **{banco}**")
+                # Salva TUDO no estado para sobreviver ao próximo clique
+                st.session_state["ocr_banco"] = banco
+                st.session_state["ocr_texto"] = texto
+                st.session_state["ocr_dados"] = dados
+                
+                if not dados:
+                    st.warning("Texto extraído, mas nenhuma parcela detectada pelo padrão (Regex).")
                 else:
-                    st.warning("⚠️ Não foi possível identificar o banco automaticamente pelo texto.")
+                    st.success(f"✅ {len(dados)} parcelas encontradas!")
 
-            with st.expander("Ver texto bruto lido pelo OCR"):
-                st.text(texto)
+        # Exibição dos resultados (só aparece se houver dados no state)
+        dados_salvos = st.session_state.get("ocr_dados", [])
+        
+        if dados_salvos:
+            st.markdown(f"### 🏦 Banco: {st.session_state.get('ocr_banco', 'Desconhecido')}")
+            
+            # Mostra uma prévia em tabela para o usuário conferir
+            df_preview = pd.DataFrame(dados_salvos, columns=["Descrição", "Parcela", "Valor"])
+            st.table(df_preview.head(10)) 
 
-            dados = extrair_parcelas(texto)
-            st.session_state["ocr_dados"] = dados
-
-            if dados:
-                st.info(f"✅ {len(dados)} parcelas encontradas no documento.")
-                for d in dados[:5]:
-                    st.write(d)
-                if len(dados) > 5:
-                    st.caption(f"... e mais {len(dados) - 5} parcelas.")
-
-                with st.form("importar_pdf_form"):
-                    conta = st.selectbox("Cartão destino", df_contas['nome'])
-                    cat = st.selectbox("Categoria principal", df_cats['nome'])
-                    data_base = st.date_input("Data base da 1ª parcela da fatura")
-                    ignorar_trava = st.checkbox("Forçar importação (Marque apenas se o nome da sua conta no sistema for muito diferente do banco real)")
-                    submit_import = st.form_submit_button("Importar no sistema")
-
-                if submit_import:
-                    if banco != "GENÉRICO" and banco not in conta.upper() and not ignorar_trava:
-                        st.error(f"⛔ **BLOQUEADO:** O PDF é do **{banco}**, mas você tentou importar no cartão **{conta}**.\nSe estiver correto, marque a caixa 'Forçar importação' acima.")
-                    else:
-                        ParcelasManager._importar_pdf_dados(dados, banco, conta, cat, data_base, df_contas, df_cats)
-            else:
-                st.warning("Nenhuma parcela encontrada pelo Regex 😕. Abra o texto bruto acima para ver como o OCR leu o arquivo e ajustar o padrão.")
+            with st.form("confirmar_importacao"):
+                col1, col2 = st.columns(2)
+                conta = col1.selectbox("Cartão de Destino", df_contas['nome'])
+                data_base = col2.date_input("Vencimento da 1ª Parcela")
+                cat = st.selectbox("Categoria", df_cats['nome'])
+                
+                if st.form_submit_button("🚀 Confirmar e Salvar no Banco"):
+                    ParcelasManager._importar_pdf_dados(
+                        dados_salvos, 
+                        st.session_state["ocr_banco"], 
+                        conta, cat, data_base, df_contas, df_cats
+                    )
     
     @staticmethod
     def _importar_pdf_dados(dados, banco, conta, cat, data_base, df_contas, df_cats):
-        """Importa dados do PDF para o BD."""
-        cid = int(df_contas[df_contas.nome == conta].id.values[0])
-        ctid = int(df_cats[df_cats.nome == cat].id.values[0])
-        novos = duplicados = 0
-        
-        for desc, parc, val in dados:
+        """Importa dados do PDF para o BD com trava de duplicidade."""
+    # 1. Recuperar IDs necessários
+    cid = int(df_contas[df_contas.nome == conta].id.values[0])
+    ctid = int(df_cats[df_cats.nome == cat].id.values[0])
+    
+    novos = 0
+    duplicados = 0
+    
+    # 2. Iterar sobre os dados extraídos (desc, parc, val)
+    for desc, parc, val in dados:
+        try:
+            # Extrai os números da parcela (ex: "02/10" -> atual=2, total=10)
             atual, total = map(int, parc.split("/"))
-            for i in range(atual-1, total):
-                venc = data_base + relativedelta(months=i-(atual-1))
-                desc_f = f"[{conta}] {desc} ({i+1:02d}/{total:02d})"
-                desc_like = f"%] {desc} ({i+1:02d}/{total:02d})"
+            
+            # 3. Gerar todas as parcelas restantes a partir da atual
+            for i in range(atual - 1, total):
+                # Calcula o vencimento futuro baseado na data_base informada
+                venc = data_base + relativedelta(months=i - (atual - 1))
                 
-                check = db.buscar_um(
-                    "SELECT id FROM transacoes WHERE descricao LIKE ? AND valor=? AND data_vencimento=?",
-                    (desc_like, -val, venc)
-                )
+                # Monta a descrição padrão para busca e inserção
+                # Usamos um padrão LIKE para ignorar o nome do banco no início se necessário
+                desc_f = f"[{conta}] {desc} ({i+1:02d}/{total:02d})"
+                desc_busca = f"%{desc}%({i+1:02d}/{total:02d})%" 
+                
+                # 4. TRAVA: Verificar se já existe no banco
+                # Ajuste o '?' para '%s' se estiver usando PostgreSQL/Supabase
+                query_check = """
+                    SELECT id FROM transacoes 
+                    WHERE (descricao LIKE %s OR descricao = %s)
+                    AND valor = %s 
+                    AND data_vencimento = %s
+                """
+                check = db.buscar_um(query_check, (desc_busca, desc_f, -float(val), venc))
                 
                 if not check:
-                    db.executar(
-                        "INSERT INTO transacoes (descricao, valor, data_vencimento, conta_id, categoria_id, tipo_fluxo) VALUES (?,?,?,?,?,'CARTAO')",
-                        (desc_f, -val, venc, cid, ctid)
-                    )
+                    # 5. Se não existe, insere
+                    query_ins = """
+                        INSERT INTO transacoes 
+                        (descricao, valor, data_vencimento, conta_id, categoria_id, tipo_fluxo) 
+                        VALUES (%s, %s, %s, %s, %s, 'CARTAO')
+                    """
+                    db.executar(query_ins, (desc_f, -float(val), venc, cid, ctid))
                     novos += 1
                 else:
                     duplicados += 1
-        
-        if novos > 0:
-            st.success(f"🚀 {novos} parcelas importadas!")
-        if duplicados > 0:
-            st.info(f"ℹ️ {duplicados} duplicadas (ignoradas)")
+        except Exception as e:
+            st.warning(f"Erro ao processar item {desc}: {e}")
+            continue
+
+    # 6. Feedback final ao usuário
+    if novos > 0:
+        st.success(f"🚀 {novos} novas parcelas importadas com sucesso!")
+    if duplicados > 0:
+        st.info(f"ℹ️ {duplicados} parcelas já existiam e foram ignoradas para evitar duplicidade.")
+    
+    # Limpa o estado e recarrega para atualizar os gráficos
+    ParcelasManager._resetar_estado_pdf()
+    st.rerun()
     
     @staticmethod
     def _tab_previsao():
