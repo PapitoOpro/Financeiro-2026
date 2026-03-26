@@ -10,7 +10,7 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from config import MESES_LISTA, CORES
 from database import db
-from utils import moeda, extrair_texto_pdf, detectar_banco, extrair_parcelas, get_cor_valor
+from utils import moeda, extrair_texto_pdf, detectar_banco, extrair_parcelas, get_cor_valor, processar_fatura
 
 class ParcelasManager:
     """Gerenciador de Projeção de Gastos (Parcelas)."""
@@ -93,8 +93,11 @@ class ParcelasManager:
         file = st.file_uploader("Envie a fatura PDF", type="pdf")
 
         if file:
-            with st.spinner("Lendo a fatura com inteligência artificial... Isso pode demorar uns segundos."):
-                texto = extrair_texto_pdf(file, senha_pdf if senha_pdf else None)
+            with st.spinner("Lendo a fatura com inteligência artificial..."):
+                banco, texto, dados = processar_fatura(file, senha_pdf)
+                st.success(f"🏦 Banco detectado: {banco}")
+            with st.expander("DEBUG TEXTO"):
+                st.text(texto[:2000])
 
             if texto.strip() == "":
                 st.error("Falha ao extrair o texto. Verifique se a senha está correta.")
