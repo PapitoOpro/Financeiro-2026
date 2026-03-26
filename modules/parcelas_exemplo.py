@@ -13,24 +13,28 @@ from utils import moeda, processar_fatura
 class ParcelasManager:
     """Gerenciador de Projeção de Gastos (Parcelas)."""
     
+    
     @staticmethod
     def renderizar():
         """Renderiza a página de projeção de gastos."""
         st.header("📉 Projeção de Gastos (Cartão/Parcelas)")
         
-        # Carrega dados essenciais no início para evitar erros de "não definido"
         df_contas = db.buscar("SELECT * FROM contas ORDER BY nome")
         df_cats = db.buscar("SELECT * FROM categorias ORDER BY nome")
         
-        tab1, tab2, tab3 = st.tabs(["Manual", "Importar PDF", "Previsão"])
+        # 👇 Adicionamos a tab "Importar CSV" aqui
+        tab1, tab2, tab3, tab4 = st.tabs(["Manual", "Importar PDF", "Importar CSV", "Previsão"])
         
         with tab1:
             ParcelasManager._tab_manual(df_contas, df_cats)
         
         with tab2:
             ParcelasManager._tab_importar_pdf(df_contas, df_cats)
+            
+        with tab3: # 👇 Nova aba
+            ParcelasManager._tab_importar_csv(df_contas, df_cats)
         
-        with tab3:
+        with tab4:
             ParcelasManager._tab_previsao()
     
     @staticmethod
@@ -154,6 +158,120 @@ class ParcelasManager:
                     ParcelasManager._importar_pdf_dados(
                         dados_salvos, banco_detectado, conta, cat, data_base, df_contas, df_cats
                     )
+    @staticmethod
+    def _tab_importar_csv(df_contas, df_cats):
+        """Aba para importar faturas via arquivo CSV (Otimizada)."""
+        st.subheader("📊 Importador de Faturas via CSV")
+        
+        file_csv = st.file_uploader("Envie a fatura em formato CSV", type=["csv"])
+
+        # Resetar estado se mudar de arquivo
+        if file_csv and st.session_state.get("csv_file_name") != file_csv.name:
+            st.session_state["csv_dados"] = []
+            st.session_state["csv_file_name"] = file_csv.name
+
+        if file_csv:
+            try:
+                # Tenta ler o CSV de forma flexível (suporta separador vírgula e ponto-e-vírgula)
+                df_csv = pd.read_csv(file_csv, sep=None, engine='python')
+                
+                st.markdown("**1. Prévia do Arquivo:**")
+                st.dataframe(df_csv.head(3), use_container_width=True)
+
+                st.markdown("**2. Mapeamento de Colunas:**")
+                c1, c2, c3 = st.columns(3)
+                col_desc = c1.selectbox("Coluna da Descrição?", df_csv.columns)
+                col_val = c2.selectbox("Coluna do Valor?", df_csv.columns)
+                
+                # Nova opção: Escolher coluna da parcela se existir
+                opcoes_parc = ["Nenhuma (Extrair da Descrição)"] + list(df_csv.columns)
+                col_parc = c3.selectbox("Coluna da Parcela? (Opcional)", opcoes_parc)
+
+                if st.button("🔍 Extrair Dados do CSV", use_container_width=True):
+                    with st.spinner("Lendo linhas..."):
+                        dados_extraidos = []
+                        
+                        for _, row in df_csv.iterrows():
+                            desc_original = str(row[col_desc])
+                            
+                            try:
+                                # Limpa o valor monetário
+                                val_str = str(row[col_val]).replace("R$", "").replace(".", "").replace(",", ".").strip()
+                                val = float(val_str)
+                                
+                                # Ignora valores nulos/vazios
+                                if abs(val) == 0:
+                                    continue
+                                
+                                parc_formatada = "1/1"
+                                desc_limpa = desc_original.strip()
+                                
+                                # CENÁRIO 1: O CSV já tem a coluna "Parcela"
+                                if col_parc != "Nenhuma (Extrair da Descrição)":
+                                    parc_val = str(row[col_parc]).strip()
+                                    if "à vista" not in parc_val.lower():
+                                        parc_match = re.search(r'(\d{1,2})/(\d{1,2})', parc_val)
+                                        if parc_match:
+                                            parc_formatada = f"{int(parc_match.group(1))}/{int(parc_match.group(2))}"
+                                
+                                # CENÁRIO 2: Extrair de textos como "Loja (Compra: 12/02 | 02/05)"
+                                else:
+                                    # Limpa o texto da data "(Compra: DD/MM)" e "(À vista)" para não confundir o Regex
+                                    texto_busca = re.sub(r'\(Compra:\s*\d{1,2}/\d{1,2}.*?\)', '', desc_original)
+                                    texto_busca = re.sub(r'\(À vista\)', '', texto_busca, flags=re.IGNORECASE)
+                                    
+                                    parc_match = re.search(r'(\d{1,2})/(\d{1,2})', texto_busca)
+                                    
+                                    if parc_match:
+                                        parc_formatada = f"{int(parc_match.group(1))}/{int(parc_match.group(2))}"
+                                        # Remove o texto da parcela "02/05" da descrição final
+                                        desc_limpa = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', '', desc_original).strip()
+                                
+                                dados_extraidos.append((desc_limpa, parc_formatada, abs(val)))
+                                    
+                            except Exception:
+                                continue # Pula linhas inválidas (cabeçalhos extras, etc)
+                                
+                        st.session_state["csv_dados"] = dados_extraidos
+                        st.success(f"✅ {len(dados_extraidos)} registros processados com sucesso!")
+
+            except Exception as e:
+                st.error(f"Erro ao ler o CSV. O arquivo pode estar corrompido: {e}")
+
+        # 3. Exibição e Lançamento (Idêntico ao PDF)
+        dados_salvos = st.session_state.get("csv_dados", [])
+        
+        if dados_salvos:
+            st.markdown("---")
+            st.markdown("### 📋 Conferência e Lançamento (CSV)")
+            
+            df_preview = pd.DataFrame(dados_salvos, columns=["Descrição", "Parcela", "Valor"])
+            st.dataframe(df_preview, use_container_width=True)
+
+            with st.form("confirmar_importacao_csv"):
+                col1, col2 = st.columns(2)
+                
+                lista_contas = df_contas['nome'].tolist() if not df_contas.empty else ["Sem contas"]
+                lista_cats = df_cats['nome'].tolist() if not df_cats.empty else ["Sem categorias"]
+                
+                conta = col1.selectbox("Cartão de Destino", lista_contas)
+                data_base = col2.date_input("Vencimento da 1ª Parcela do Lote")
+                cat = st.selectbox("Categoria Padrão", lista_cats)
+                
+                if st.form_submit_button("🚀 Salvar no Banco (Aplicar Trava Anti-Duplicidade)", use_container_width=True):
+                    
+                    # Reaproveitando 100% da inteligência da trava anti-duplicidade!
+                    ParcelasManager._importar_pdf_dados(
+                        dados=dados_salvos, 
+                        banco="CSV IMPORT", 
+                        conta=conta, 
+                        cat=cat, 
+                        data_base=data_base, 
+                        df_contas=df_contas, 
+                        df_cats=df_cats
+                    )
+                    
+                    st.session_state["csv_dados"] = []                
 
     @staticmethod
     def _importar_pdf_dados(dados, banco, conta, cat, data_base, df_contas, df_cats):
