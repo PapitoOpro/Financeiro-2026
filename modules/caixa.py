@@ -42,8 +42,8 @@ class CaixaManager:
         df_cats = db.buscar("SELECT * FROM categorias ORDER BY nome")
         
         df_caixa = db.buscar(f"""
-            SELECT t.id, t.data_vencimento as Data, t.descricao, t.valor,
-                   cat.nome as Categoria, c.nome as Banco 
+            SELECT t.id, t.data_vencimento as data, t.descricao, t.valor,
+                   cat.nome as categoria, c.nome as banco 
             FROM transacoes t 
             LEFT JOIN categorias cat ON t.categoria_id = cat.id 
             LEFT JOIN contas c ON t.conta_id = c.id
@@ -139,12 +139,12 @@ class CaixaManager:
             c1, c2, c3, c4, c5 = st.columns([1.5, 3.5, 2.5, 0.8, 0.8])
             
             # Data
-            c1.write(pd.to_datetime(row['Data']).strftime('%d/%m/%Y'))
+            c1.write(pd.to_datetime(row['data']).strftime('%d/%m/%Y'))
             
             # Descrição e categoria
             c2.markdown(
                 f"**{row['descricao']}**<br>"
-                f"<span style='color:gray; font-size:12px;'>{row['Categoria']} | {row['Banco']}</span>",
+                f"<span style='color:gray; font-size:12px;'>{row['categoria']} | {row['banco']}</span>",
                 unsafe_allow_html=True
             )
             
