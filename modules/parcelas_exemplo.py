@@ -94,7 +94,9 @@ class ParcelasManager:
 
         if file:
             with st.spinner("Lendo a fatura com inteligência artificial..."):
-                banco, texto, dados = processar_fatura(file, senha_pdf)
+                if file and st.button("Processar Fatura"):
+                    with st.spinner("Processando..."):
+                        banco, texto, dados = processar_fatura(file, senha_pdf)
                 st.success(f"🏦 Banco detectado: {banco}")
             with st.expander("DEBUG TEXTO"):
                 st.text(texto[:2000])
