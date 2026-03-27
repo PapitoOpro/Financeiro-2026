@@ -192,7 +192,13 @@ class AdminManager:
             if df_aprovados.empty:
                 st.info("Nenhum usuário aprovado ainda")
             else:
-                st.dataframe(df_aprovados, width='stretch', hide_index=True)
+                df_exibir = df_aprovados.rename(columns={
+                    'id': 'ID',
+                    'nome': 'Nome',
+                    'username': 'Usuário',
+                    'data_criacao': 'Data de Criação'
+                })
+                st.dataframe(df_exibir, width='stretch', hide_index=True)
                 
                 st.markdown("---")
                 st.markdown("### Deletar Usuário Aprovado")

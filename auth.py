@@ -4,6 +4,8 @@
 
 import streamlit as st
 import bcrypt
+import base64
+import os
 from database import db
 
 class AuthManager:
@@ -149,7 +151,21 @@ class AuthManager:
 
         with col2:
             st.markdown('<div class="login-container">', unsafe_allow_html=True)
-            st.markdown('<div class="login-header">📈 Finanças Pro 2026</div>', unsafe_allow_html=True)
+
+            # Logo centralizada
+            logo_path = os.path.join(os.path.dirname(__file__), "assets", "logo.png")
+            if os.path.exists(logo_path):
+                with open(logo_path, "rb") as f:
+                    logo_b64 = base64.b64encode(f.read()).decode()
+                st.markdown(
+                    f'<div style="text-align:center; margin-bottom:8px;">'
+                    f'<img src="data:image/png;base64,{logo_b64}" style="max-width:220px; border-radius:12px;">'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown('<div class="login-header">📈 Finanças Pro 2026</div>', unsafe_allow_html=True)
+
             st.markdown('<div class="login-welcome">Seja bem-vindo.</div>', unsafe_allow_html=True)
             st.markdown('---')
 

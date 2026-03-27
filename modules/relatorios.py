@@ -19,12 +19,14 @@ class RelatoriosManager:
         st.header("📊 Relatórios Analíticos")
 
         c1, c2 = st.columns(2)
-        mes_sel = c1.selectbox("Mês de Análise:", MESES_LISTA, index=datetime.now().month - 1)
-        ano_sel = c2.number_input("Ano:", 2025, 2030, 2026)
+        hoje = datetime.now().date()
+        primeiro_dia_mes = hoje.replace(day=1)
+        d_ini = c1.date_input("Data Início", value=primeiro_dia_mes)
+        d_fim = c2.date_input("Data Fim", value=hoje)
 
-        m_num = MESES_LISTA.index(mes_sel) + 1
-        d_ini = f"{ano_sel}-{m_num:02d}-01"
-        d_fim = (datetime(ano_sel, m_num, 1) + relativedelta(months=1) - relativedelta(days=1)).strftime('%Y-%m-%d')
+        if d_ini > d_fim:
+            st.error("❌ A data de início não pode ser maior que a data de fim.")
+            return
 
         # Query base (ajustada para diferentes drivers)
         q = f"""
@@ -119,7 +121,19 @@ class RelatoriosManager:
                 visible_cols.append(categoria_col)
             visible_cols.append(f'{valor_col}_fmt')
 
-            st.dataframe(df_extrato[visible_cols], hide_index=True, width='stretch')
+            # Renomeia colunas para exibição amigável
+            rename_map = {
+                date_col: 'Data',
+                f'{valor_col}_fmt': 'Valor',
+            }
+            if desc_col:
+                rename_map[desc_col] = 'Descrição'
+            if banco_col:
+                rename_map[banco_col] = 'Cartão / Banco'
+            if categoria_col:
+                rename_map[categoria_col] = 'Categoria'
+
+            st.dataframe(df_extrato[visible_cols].rename(columns=rename_map), hide_index=True, width='stretch')
 
         with t_abc:
             st.markdown("**Curva ABC: Descubra quais despesas consomem mais do seu orçamento.**")
@@ -154,5 +168,12 @@ class RelatoriosManager:
                 cols_abc.append(desc_col)
             cols_abc.extend(['Valor Absoluto', '% Acumulada'])
 
-            st.dataframe(df_abc[cols_abc], hide_index=True, width='stretch')
+            # Renomeia colunas para exibição amigável
+            rename_abc = {}
+            if date_col in df_abc.columns:
+                rename_abc[date_col] = 'Data'
+            if desc_col:
+                rename_abc[desc_col] = 'Descrição'
+
+            st.dataframe(df_abc[cols_abc].rename(columns=rename_abc), hide_index=True, width='stretch')
             st.info("[ DICA ] Focar na negociação dos itens da Classe A traz maior impacto na saúde financeira.")

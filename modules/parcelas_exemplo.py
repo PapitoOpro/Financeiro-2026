@@ -55,7 +55,7 @@ class ParcelasManager:
             
             c1, c2, c3 = st.columns(3)
             # Proteção caso não existam contas/categorias cadastradas
-            cnt = c1.selectbox("Cartão", df_contas['nome'] if not df_contas.empty else [""])
+            cnt = c1.selectbox("Cartão/Banco", df_contas['nome'] if not df_contas.empty else [""])
             cat = c2.selectbox("Categoria", df_cats['nome'] if not df_cats.empty else [""])
             dt_ini = c3.date_input("Vencimento da 1ª parcela")
             
@@ -332,6 +332,7 @@ class ParcelasManager:
             
             novos = 0
             duplicados = 0
+            erros = 0
             
             for desc, parc, val in dados:
                 try:
@@ -345,14 +346,16 @@ class ParcelasManager:
                         
                         desc_f = f"[{conta}] {desc} ({num_parc_atual:02d}/{total:02d})"
                         
-                        # TRAVA: Verifica duplicidade (case-insensitive, ignora espaços extras)
+                        # 🔒 TRAVA DE DUPLICIDADE (ignora prefixo [Cartão] via LIKE)
+                        desc_busca = f"%] {desc} ({num_parc_atual:02d}/{total:02d})"
+                        
                         query_check = """
                             SELECT id FROM transacoes 
-                            WHERE lower(trim(descricao)) = lower(trim(?))
-                            AND valor = ? 
+                            WHERE descricao LIKE ?
+                            AND ROUND(valor::numeric, 2) = ROUND(?::numeric, 2)
                             AND data_vencimento = ?
                         """
-                        check = db.buscar_um(query_check, (desc_f, -float(val), venc))
+                        check = db.buscar_um(query_check, (desc_busca, -float(val), venc))
                         
                         if not check:
                             query_ins = """
@@ -360,20 +363,28 @@ class ParcelasManager:
                                 (descricao, valor, data_vencimento, conta_id, categoria_id, tipo_fluxo) 
                                 VALUES (?, ?, ?, ?, ?, 'CARTAO')
                             """
-                            db.executar(query_ins, (desc_f, -float(val), venc, cid, ctid))
-                            novos += 1
+                            resultado = db.executar(query_ins, (desc_f, -float(val), venc, cid, ctid))
+                            if resultado:
+                                novos += 1
+                            else:
+                                erros += 1
                         else:
                             duplicados += 1
                             
                 except Exception as inner_e:
                     st.warning(f"Erro ao processar linha '{desc}': {inner_e}")
+                    erros += 1
                     continue
 
-            # Feedback usando Toast para não sumir no Rerun
+            # Feedback
             if novos > 0:
                 st.toast(f"✅ {novos} parcelas salvas!", icon="🎉")
             if duplicados > 0:
-                st.toast(f"ℹ️ {duplicados} ignoradas (já existiam).", icon="🛡️")
+                st.toast(f"🛡️ {duplicados} ignoradas (já existiam).", icon="🛡️")
+            if erros > 0:
+                st.toast(f"⚠️ {erros} com erro.", icon="⚠️")
+            if novos == 0 and duplicados > 0:
+                st.warning(f"🛡️ Nenhuma parcela nova importada — {duplicados} já existiam no sistema.")
             
             ParcelasManager._resetar_estado_pdf()
             #st.rerun() # Descomente se quiser forçar a recarga imediata, mas o toast pode sumir rápido.
@@ -473,7 +484,14 @@ class ParcelasManager:
         # 4. EXPORTAÇÃO / RELATÓRIO
         st.markdown("**📥 Exportar Relatório**")
         csv_rel = df_p[['id','data_vencimento','descricao','valor_abs','banco','categoria']].copy()
-        csv_rel = csv_rel.rename(columns={'valor_abs':'valor','banco':'cartao'})
+        csv_rel = csv_rel.rename(columns={
+            'id': 'ID',
+            'data_vencimento': 'Data Vencimento',
+            'descricao': 'Descrição',
+            'valor_abs': 'Valor (R$)',
+            'banco': 'Cartão',
+            'categoria': 'Categoria'
+        })
         csv_bytes = csv_rel.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Baixar CSV de Previsão", data=csv_bytes, file_name="previsao_parcelas.csv", mime="text/csv")
 
