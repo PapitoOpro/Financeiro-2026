@@ -11,3 +11,4 @@ pdf2image
 pdfplumber
 numpy<2.0.0  # Evite o numpy 2.0 por enquanto, causa conflito com muitas libs
 opencv-python-headless
+sqlalchemy

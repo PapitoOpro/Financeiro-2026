@@ -11,6 +11,7 @@ from database import db
 import plotly.express as px
 import plotly.graph_objects as go
 from utils import moeda, processar_fatura, get_cor_valor, get_cor_saldo
+from typing import Any, cast
 
 class ParcelasManager:
     """Gerenciador de Projeção de Gastos (Parcelas)."""
@@ -58,7 +59,7 @@ class ParcelasManager:
             cat = c2.selectbox("Categoria", df_cats['nome'] if not df_cats.empty else [""])
             dt_ini = c3.date_input("Vencimento da 1ª parcela")
             
-            if st.form_submit_button("Lançar Parcelas", use_container_width=True):
+            if st.form_submit_button("Lançar Parcelas", width='stretch'):
                 if not desc or v_parcela <= 0:
                     st.error("❌ Preencha descrição e valor!")
                 elif p_atual > p_total:
@@ -104,6 +105,31 @@ class ParcelasManager:
         st.session_state["ocr_banco"] = "GENÉRICO"
         st.session_state["ocr_texto"] = ""
         st.session_state["ocr_dados"] = []
+
+    @staticmethod
+    def _safe_rerun():
+        """Tenta forçar um rerun de forma compatível com várias versões do Streamlit.
+
+        Se a API pública `st.experimental_rerun` existir, usa-a. Caso contrário,
+        tenta elevar a exceção interna `RerunException` em caminhos conhecidos.
+        Se tudo falhar, mostra um aviso pedindo para atualizar a página manualmente.
+        """
+        try:
+            exp_rerun = getattr(st, "experimental_rerun", None)
+            if callable(exp_rerun):
+                try:
+                    exp_rerun()
+                    return
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # Fallback seguro: pare a execução atual e peça reload manual
+        try:
+            st.stop()
+        except Exception:
+            st.warning("Por favor, atualize a página manualmente para aplicar as mudanças.")
     
     @staticmethod
     def _tab_importar_pdf(df_contas, df_cats):
@@ -141,7 +167,7 @@ class ParcelasManager:
             st.markdown(f"### 🏦 Banco Detectado: **{banco_detectado}**")
             
             df_preview = pd.DataFrame(dados_salvos, columns=["Descrição", "Parcela", "Valor"])
-            st.dataframe(df_preview, use_container_width=True) 
+            st.dataframe(df_preview, width='stretch') 
 
             # Formulário para salvar no banco
             with st.form("confirmar_importacao"):
@@ -156,7 +182,7 @@ class ParcelasManager:
                 data_base = col2.date_input("Vencimento da 1ª Parcela do Lote")
                 cat = st.selectbox("Categoria Padrão", lista_cats)
                 
-                if st.form_submit_button("🚀 Salvar no Banco (Aplicar Trava Anti-Duplicidade)", use_container_width=True):
+                if st.form_submit_button("🚀 Salvar no Banco (Aplicar Trava Anti-Duplicidade)", width='stretch'):
                     ParcelasManager._importar_pdf_dados(
                         dados_salvos, banco_detectado, conta, cat, data_base, df_contas, df_cats
                     )
@@ -179,7 +205,7 @@ class ParcelasManager:
                 df_csv = pd.read_csv(file_csv, sep=None, engine='python')
                 
                 st.markdown("**1. Prévia do Arquivo:**")
-                st.dataframe(df_csv.head(3), use_container_width=True)
+                st.dataframe(df_csv.head(3), width='stretch')
 
                 st.markdown("**2. Mapeamento de Colunas:**")
                 c1, c2, c3 = st.columns(3)
@@ -190,7 +216,7 @@ class ParcelasManager:
                 opcoes_parc = ["Nenhuma (Extrair da Descrição)"] + list(df_csv.columns)
                 col_parc = c3.selectbox("Coluna da Parcela? (Opcional)", opcoes_parc)
 
-                if st.button("🔍 Extrair Dados do CSV", use_container_width=True):
+                if st.button("🔍 Extrair Dados do CSV", width='stretch'):
                     with st.spinner("Lendo linhas..."):
                         dados_extraidos = []
                         
@@ -271,7 +297,7 @@ class ParcelasManager:
             st.markdown("### 📋 Conferência e Lançamento (CSV)")
             
             df_preview = pd.DataFrame(dados_salvos, columns=["Descrição", "Parcela", "Valor"])
-            st.dataframe(df_preview, use_container_width=True)
+            st.dataframe(df_preview, width='stretch')
 
             with st.form("confirmar_importacao_csv"):
                 col1, col2 = st.columns(2)
@@ -283,7 +309,7 @@ class ParcelasManager:
                 data_base = col2.date_input("Vencimento da 1ª Parcela do Lote")
                 cat = st.selectbox("Categoria Padrão", lista_cats)
                 
-                if st.form_submit_button("🚀 Salvar no Banco (Aplicar Trava Anti-Duplicidade)", use_container_width=True):
+                if st.form_submit_button("🚀 Salvar no Banco (Aplicar Trava Anti-Duplicidade)", width='stretch'):
                     
                     ParcelasManager._importar_pdf_dados(
                         dados=dados_salvos, 
@@ -389,13 +415,28 @@ class ParcelasManager:
         agrupado_mes['Mes_Ano_Str'] = agrupado_mes['Mes_Ano'].astype(str)
         agrupado_mes = agrupado_mes.sort_values('Mes_Ano')
 
-        mes_mais_pesado = agrupado_mes.loc[agrupado_mes['valor_abs'].idxmax()]
+        if not agrupado_mes.empty:
+            mes_mais_pesado = agrupado_mes.loc[agrupado_mes['valor_abs'].idxmax()]
+        else:
+            mes_mais_pesado = None
 
-        col1, col2 = st.columns(2)
-        col1.metric("💰 Total Parcelado a Pagar", moeda(total_divida))
-        col2.metric("⚠️ Mês Mais Pesado", f"{mes_mais_pesado['Mes_Ano_Str']} - {moeda(mes_mais_pesado['valor_abs'])}")
+        c_met1, c_met2 = st.columns(2)
+        c_met1.markdown(f"""
+            <div style="background:#f1f2f6; color:#333333; padding:15px; border-radius:10px; border-left:5px solid #e74c3c;">
+                <small>Total Parcelado a Pagar (Geral)</small><br><strong style="font-size: 22px; color: #c0392b;">{moeda(total_divida)}</strong>
+            </div>
+        """, unsafe_allow_html=True)
 
-        st.markdown("---")
+        if mes_mais_pesado is not None:
+            c_met2.markdown(f"""
+                <div style="background:#f1f2f6; color:#333333; padding:15px; border-radius:10px; border-left:5px solid #f39c12;">
+                    <small>Mês mais pesado ({mes_mais_pesado['Mes_Ano_Str']})</small><br><strong style="font-size: 22px; color: #d35400;">{moeda(mes_mais_pesado['valor_abs'])}</strong>
+                </div>
+            """, unsafe_allow_html=True)
+        else:
+            c_met2.info("Sem dados por mês para calcular o mês mais pesado.")
+
+        st.write("")
 
         # 2. GRÁFICO DE EVOLUÇÃO (Plotly: barras mensais + linha cumulativa)
         st.markdown("**📈 Evolução do Parcelamento nos Próximos Meses**")
@@ -405,7 +446,7 @@ class ParcelasManager:
         fig.add_trace(go.Scatter(x=agrupado_mes['Mes_Ano_Str'], y=agrupado_mes['cumulativo'], mode='lines+markers', name='Cumulativo', line=dict(color='#1f77b4')))
         fig.update_layout(yaxis_title='Valor (R$)', xaxis_title='Mês/Ano', legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1))
         fig.update_yaxes(tickprefix='R$ ')
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
         st.markdown("---")
 
@@ -414,17 +455,17 @@ class ParcelasManager:
         distrib_cartao = df_p.groupby('banco')['valor_abs'].sum().reset_index().sort_values('valor_abs', ascending=False)
         distrib_categoria = df_p.groupby('categoria')['valor_abs'].sum().reset_index().sort_values('valor_abs', ascending=False)
 
-        c1, c2 = st.columns(2)
-        with c1:
+        d1, d2 = st.columns(2)
+        with d1:
             if not distrib_cartao.empty:
                 fig1 = px.pie(distrib_cartao, values='valor_abs', names='banco', title='Por Cartão', hole=0.4)
-                st.plotly_chart(fig1, use_container_width=True)
+                st.plotly_chart(fig1, width='stretch')
             else:
                 st.info("Sem dados por cartão.")
-        with c2:
+        with d2:
             if not distrib_categoria.empty:
                 fig2 = px.pie(distrib_categoria, values='valor_abs', names='categoria', title='Por Categoria', hole=0.4)
-                st.plotly_chart(fig2, use_container_width=True)
+                st.plotly_chart(fig2, width='stretch')
             else:
                 st.info("Sem dados por categoria.")
 
@@ -454,75 +495,118 @@ class ParcelasManager:
             if not f_mes.empty:
                 total_mes = f_mes['valor_abs'].sum()
 
-                with st.expander(f"📅 **{mes_atual.strftime('%m/%Y')}** — Total: {moeda(total_mes)}", expanded=False):
+                with st.expander(f"📅 {mes_atual.strftime('%m/%Y')} — Total do Mês: {moeda(total_mes)}"):
                     cartoes_no_mes = f_mes['banco'].fillna("Desconhecido").unique()
 
                     for cartao in cartoes_no_mes:
                         f_cartao = f_mes[f_mes['banco'].fillna("Desconhecido") == cartao]
                         subtotal_cartao = f_cartao['valor_abs'].sum()
-
-                        st.markdown(f"**💳 Fatura: {cartao}** — Subtotal: **{moeda(subtotal_cartao)}**")
+                        st.markdown(f"**💳 Fatura: {cartao}** — Subtotal: <span style='color:#c0392b;'>{moeda(subtotal_cartao)}</span>", unsafe_allow_html=True)
 
                         for _, r in f_cartao.iterrows():
-                            c1, c2, c3, c4 = st.columns([6, 2, 1, 1])
-                            desc_limpa = re.sub(r'^\[.*?\]\s*', '', r['descricao'])
+                            # Colunas ajustadas para caber botões de editar/excluir
+                            c1, c2, c3, c4, c5 = st.columns([1.5, 3.5, 2.5, 0.8, 0.8])
+                            clean_desc_row = re.sub(r'^\[.*?\]\s*', '', r['descricao'])
+                            c1.write(pd.to_datetime(r['data_vencimento']).strftime('%d/%m/%Y'))
+                            c2.markdown(f"**{clean_desc_row}**<br><span style='color:gray; font-size:12px;'>{r.get('categoria','')}</span>", unsafe_allow_html=True)
+                            c3.markdown(f"<div style='text-align: right; color:{'#27ae60' if r['valor']>0 else '#c0392b'}; font-weight:bold;'>{moeda(abs(r['valor']))}</div>", unsafe_allow_html=True)
 
-                            c1.write(f"↳ {desc_limpa}")
-                            c2.write(f"**{moeda(r['valor_abs'])}**")
+                            # Edit toggle (most compatible UX): abre um formulário inline abaixo da linha
+                            with c4:
+                                if st.button("✏️", key=f"edit_toggle_{r['id']}"):
+                                    key_ed = f"editing_{r['id']}"
+                                    st.session_state[key_ed] = not st.session_state.get(key_ed, False)
 
-                            # Edit button -> abrir modal
-                            if c3.button("✏️", key=f"edit_parc_{r['id']}", help="Editar parcela"):
-                                st.session_state['edit_id'] = int(r['id'])
-                                st.session_state['edit_desc'] = desc_limpa
-                                st.session_state['edit_val'] = float(r['valor_abs'])
-                                st.session_state['edit_date'] = pd.to_datetime(r['data_vencimento']).date()
-                                st.session_state['edit_cartao'] = cartao if cartao is not None else ""
-                                st.session_state['edit_categoria'] = r.get('categoria', "") if 'categoria' in r else ""
-                                st.experimental_rerun()
+                            # Delete small button alinhado à direita
+                            with c5:
+                                if st.button("🗑️", key=f"del_parc_{r['id']}"):
+                                    st.session_state['del_id'] = int(r['id'])
 
-                            # Delete button -> pede confirmação via modal
-                            if c4.button("🗑️", key=f"del_parc_{r['id']}", help="Deletar parcela"):
-                                st.session_state['del_id'] = int(r['id'])
-                                st.experimental_rerun()
+                            # Se o usuário solicitou edição dessa linha, mostramos um formulário inline
+                            if st.session_state.get(f"editing_{r['id']}"):
+                                with st.form(f"form_edit_{r['id']}"):
+                                    d_desc = st.text_input("Descrição", value=clean_desc_row, key=f"edit_desc_{r['id']}")
+                                    d_val = st.number_input("Valor (R$)", min_value=0.0, value=float(abs(r['valor'])), key=f"edit_val_{r['id']}")
+                                    d_date = st.date_input("Data de Vencimento", value=pd.to_datetime(r['data_vencimento']).date(), key=f"edit_date_{r['id']}")
+                                    conta_op = df_contas['nome'].tolist() if not df_contas.empty else []
+                                    cat_op = df_cats['nome'].tolist() if not df_cats.empty else []
+                                    default_conta_idx = 0
+                                    try:
+                                        default_conta_idx = conta_op.index(cartao) if cartao in conta_op else 0
+                                    except Exception:
+                                        default_conta_idx = 0
+                                    sel_conta = st.selectbox("Cartão", conta_op, index=default_conta_idx, key=f"edit_cnt_{r['id']}")
+                                    default_cat_idx = 0
+                                    try:
+                                        default_cat_idx = cat_op.index(r.get('categoria', '')) if r.get('categoria', '') in cat_op else 0
+                                    except Exception:
+                                        default_cat_idx = 0
+                                    sel_cat = st.selectbox("Categoria", cat_op, index=default_cat_idx, key=f"edit_cat_{r['id']}")
 
-        # Modal de confirmação para exclusão
+                                    save_clicked = st.form_submit_button("Salvar alterações", key=f"save_{r['id']}")
+                                    cancel_clicked = st.form_submit_button("Voltar", key=f"cancel_{r['id']}")
+
+                                    if cancel_clicked:
+                                        st.session_state[f"editing_{r['id']}"] = False
+                                        exp = getattr(st, "experimental_rerun", None)
+                                        if callable(exp):
+                                            try:
+                                                exp()
+                                            except Exception:
+                                                ParcelasManager._safe_rerun()
+                                        else:
+                                            ParcelasManager._safe_rerun()
+
+                                    if save_clicked:
+                                        try:
+                                            cid = int(df_contas[df_contas.nome == sel_conta].id.values[0])
+                                            ctid = int(df_cats[df_cats.nome == sel_cat].id.values[0])
+                                            db.executar("""
+                                                UPDATE transacoes SET descricao=?, valor=?, data_vencimento=?, conta_id=?, categoria_id=? WHERE id=?
+                                            """, (f"[{sel_conta}] {d_desc}", -abs(float(d_val)), d_date, cid, ctid, int(r['id'])))
+                                            st.success("Parcela atualizada com sucesso.")
+                                        except Exception as e:
+                                            st.error(f"Erro ao atualizar parcela: {e}")
+                                        # Fecha o formulário e tenta forçar rerun
+                                        st.session_state[f"editing_{r['id']}"] = False
+                                        exp = getattr(st, "experimental_rerun", None)
+                                        if callable(exp):
+                                            try:
+                                                exp()
+                                            except Exception:
+                                                ParcelasManager._safe_rerun()
+                                        else:
+                                            ParcelasManager._safe_rerun()
+
+        # Modal de confirmação para exclusão (fallback-friendly)
         if st.session_state.get('del_id'):
             del_id = st.session_state.get('del_id')
-            with st.modal("Confirmação de Exclusão"):
-                st.warning("Tem certeza que deseja excluir esta parcela? Esta ação é irreversível.")
-                col_ok, col_cancel = st.columns(2)
-                if col_ok.button("Sim, excluir"):
-                    db.executar("DELETE FROM transacoes WHERE id=?", (del_id,))
-                    st.success("Parcela excluída.")
-                    st.session_state['del_id'] = None
-                    st.experimental_rerun()
-                if col_cancel.button("Cancelar"):
-                    st.session_state['del_id'] = None
-                    st.experimental_rerun()
+            modal_fn = getattr(st, "modal", None)
+            if callable(modal_fn):
+                modal_cm = cast(Any, modal_fn)("Confirmação de Exclusão")
+                with modal_cm:
+                    st.warning("Tem certeza que deseja excluir esta parcela? Esta ação é irreversível.")
+                    col_ok, col_cancel = st.columns(2)
+                    if col_ok.button("Sim, excluir"):
+                        db.executar("DELETE FROM transacoes WHERE id=?", (del_id,))
+                        st.success("Parcela excluída.")
+                        st.session_state['del_id'] = None
+                        ParcelasManager._safe_rerun()
+                    if col_cancel.button("Cancelar"):
+                        st.session_state['del_id'] = None
+                        ParcelasManager._safe_rerun()
+            else:
+                with st.container():
+                    st.markdown("### Confirmação de Exclusão")
+                    st.warning("Tem certeza que deseja excluir esta parcela? Esta ação é irreversível.")
+                    col_ok, col_cancel = st.columns(2)
+                    if col_ok.button("Sim, excluir"):
+                        db.executar("DELETE FROM transacoes WHERE id=?", (del_id,))
+                        st.success("Parcela excluída.")
+                        st.session_state['del_id'] = None
+                        ParcelasManager._safe_rerun()
+                    if col_cancel.button("Cancelar"):
+                        st.session_state['del_id'] = None
+                        ParcelasManager._safe_rerun()
 
-        # Modal de edição
-        if st.session_state.get('edit_id'):
-            edit_id = st.session_state.get('edit_id')
-            with st.modal("Editar Parcela"):
-                with st.form("form_edit_parcela"):
-                    d_desc = st.text_input("Descrição", value=st.session_state.get('edit_desc', ''))
-                    d_val = st.number_input("Valor (R$)", min_value=0.0, value=float(st.session_state.get('edit_val', 0.0)))
-                    d_date = st.date_input("Data de Vencimento", value=st.session_state.get('edit_date', pd.to_datetime('today').date()))
-                    conta_op = df_contas['nome'].tolist() if not df_contas.empty else []
-                    cat_op = df_cats['nome'].tolist() if not df_cats.empty else []
-                    sel_conta = st.selectbox("Cartão", conta_op, index=conta_op.index(st.session_state.get('edit_cartao')) if st.session_state.get('edit_cartao') in conta_op else 0)
-                    sel_cat = st.selectbox("Categoria", cat_op, index=cat_op.index(st.session_state.get('edit_categoria')) if st.session_state.get('edit_categoria') in cat_op else 0)
-
-                    if st.form_submit_button("Salvar alterações"):
-                        try:
-                            cid = int(df_contas[df_contas.nome == sel_conta].id.values[0])
-                            ctid = int(df_cats[df_cats.nome == sel_cat].id.values[0])
-                            # Atualiza: armazenar valor negativo (fluxo de cartão)
-                            db.executar("""
-                                UPDATE transacoes SET descricao=?, valor=?, data_vencimento=?, conta_id=?, categoria_id=? WHERE id=?
-                            """, (f"[{sel_conta}] {d_desc}", -abs(float(d_val)), d_date, cid, ctid, edit_id))
-                            st.success("Parcela atualizada com sucesso.")
-                        except Exception as e:
-                            st.error(f"Erro ao atualizar parcela: {e}")
-                        st.session_state['edit_id'] = None
-                        st.experimental_rerun()
+        # (Edição agora é feita inline por formulário dentro da listagem por parcela)

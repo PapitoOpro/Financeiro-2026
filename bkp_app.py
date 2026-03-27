@@ -214,7 +214,7 @@ if menu == "1- Controle de Caixa":
             conta_r = st.selectbox("Conta/Banco", df_contas['nome'] if not df_contas.empty else [""])
             cat_r = st.selectbox("Categoria", df_cats['nome'] if not df_cats.empty else [""])
             
-            if st.form_submit_button("Lançar no Caixa", use_container_width=True):
+            if st.form_submit_button("Lançar no Caixa", width='stretch'):
                 if not desc_r or val_r <= 0:
                     st.error("Preencha descrição e valor!")
                 else:
@@ -259,7 +259,7 @@ if menu == "1- Controle de Caixa":
                         idx_cat = lista_cats.index(row['Categoria']) if row['Categoria'] in lista_cats else 0
                         n_cat = st.selectbox("Categoria", lista_cats, index=idx_cat, key=f"ec_cat_{row['id']}")
                         
-                        if st.button("Salvar Correção", key=f"ec_save_{row['id']}", use_container_width=True):
+                        if st.button("Salvar Correção", key=f"ec_save_{row['id']}", width='stretch'):
                             cid = int(df_contas[df_contas.nome == n_conta].id.values[0])
                             ctid = int(df_cats[df_cats.nome == n_cat].id.values[0])
                             v_final = -n_val if n_tipo == "Saída" else n_val
@@ -554,7 +554,7 @@ elif menu == "3- Cadastros":
             col_input, col_btn = st.columns([3, 1])
             n_banco = col_input.text_input("Novo Banco/Cartão", label_visibility="collapsed", placeholder="Ex: Nubank, Itaú...")
             
-            if col_btn.form_submit_button("Adicionar", use_container_width=True):
+            if col_btn.form_submit_button("Adicionar", width='stretch'):
                 if n_banco.strip():
                     executar("INSERT INTO contas (nome) VALUES (?)", (n_banco.strip(),))
                     st.rerun()
@@ -575,7 +575,7 @@ elif menu == "3- Cadastros":
                 with st.popover("✏️"):
                     st.markdown("**Renomear Conta**")
                     novo_nome = st.text_input("Nome", value=r['nome'], key=f"edit_c_nome_{r['id']}")
-                    if st.button("Salvar", key=f"save_c_{r['id']}", use_container_width=True):
+                    if st.button("Salvar", key=f"save_c_{r['id']}", width='stretch'):
                         if novo_nome.strip():
                             executar("UPDATE contas SET nome=? WHERE id=?", (novo_nome.strip(), r['id']))
                             st.rerun()
@@ -622,7 +622,7 @@ elif menu == "3- Cadastros":
                 with st.popover("✏️"):
                     st.markdown("**Renomear Categoria**")
                     novo_nome_cat = st.text_input("Nome", value=r['nome'], key=f"edit_cat_nome_{r['id']}")
-                    if st.button("Salvar", key=f"save_cat_{r['id']}", use_container_width=True):
+                    if st.button("Salvar", key=f"save_cat_{r['id']}", width='stretch'):
                         if novo_nome_cat.strip():
                             executar("UPDATE categorias SET nome=? WHERE id=?", (novo_nome_cat.strip(), r['id']))
                             st.rerun()
@@ -685,7 +685,7 @@ elif menu == "4- Relatórios Analíticos":
             
             cols_extrato = ['Data', 'Descricao', 'Banco', 'Categoria', 'valor']
             cols_extrato = [c for c in cols_extrato if c in df_extrato.columns]
-            st.dataframe(df_extrato[cols_extrato], hide_index=True, use_container_width=True)
+            st.dataframe(df_extrato[cols_extrato], hide_index=True, width='stretch')
             
         with t_abc:
             st.markdown("**Curva ABC: Descubra quais despesas (e em quais datas) consomem o maior volume do seu dinheiro.**")
@@ -709,7 +709,7 @@ elif menu == "4- Relatórios Analíticos":
                 df_abc['% Acumulada'] = df_abc['% Acumulada'].apply(lambda x: f"{x:.2f}%")
                 
                 cols_abc = ['Classe', 'Data', 'Descricao', 'Valor Absoluto', '% Acumulada']
-                st.dataframe(df_abc[cols_abc], hide_index=True, use_container_width=True)
+                st.dataframe(df_abc[cols_abc], hide_index=True, width='stretch')
                 
                 st.info("[ DICA ] **Gestão:** Focar em renegociar, adiar ou cortar os itens da **Classe A** traz um impacto muito maior para a sua saúde financeira do que se preocupar com os gastos pulverizados da Classe C!")
             else:
