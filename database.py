@@ -198,5 +198,35 @@ class DatabaseManager:
         except:
             pass
 
+        # ── MIGRAÇÃO: Índice único anti-duplicidade em transacoes ──
+        try:
+            # Verifica se o índice já existe
+            idx_exists = self.buscar_um(
+                "SELECT 1 FROM pg_class WHERE relname = 'ux_transacoes_desc_val_data'"
+            )
+            if not idx_exists:
+                # Remove duplicatas existentes (mantém o registro com menor id)
+                self.executar('''
+                    DELETE FROM transacoes
+                    WHERE id IN (
+                        SELECT id FROM (
+                            SELECT id,
+                                   ROW_NUMBER() OVER (
+                                       PARTITION BY lower(trim(descricao)), valor, data_vencimento
+                                       ORDER BY id
+                                   ) AS rn
+                            FROM transacoes
+                        ) sub
+                        WHERE rn > 1
+                    )
+                ''')
+                # Cria o índice único para impedir futuras duplicatas
+                self.executar('''
+                    CREATE UNIQUE INDEX ux_transacoes_desc_val_data
+                    ON transacoes (lower(trim(descricao)), valor, data_vencimento)
+                ''')
+        except Exception:
+            pass
+
 # Instância global
 db = DatabaseManager()

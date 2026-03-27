@@ -344,16 +344,15 @@ class ParcelasManager:
                         num_parc_atual = i + 1
                         
                         desc_f = f"[{conta}] {desc} ({num_parc_atual:02d}/{total:02d})"
-                        desc_busca = f"%{desc}%({num_parc_atual:02d}/{total:02d})%" 
                         
-                        # TRAVA: Verifica se já existe (Ajuste ? para %s se Supabase/Postgres)
+                        # TRAVA: Verifica duplicidade (case-insensitive, ignora espaços extras)
                         query_check = """
                             SELECT id FROM transacoes 
-                            WHERE (descricao LIKE ? OR descricao = ?)
+                            WHERE lower(trim(descricao)) = lower(trim(?))
                             AND valor = ? 
                             AND data_vencimento = ?
                         """
-                        check = db.buscar_um(query_check, (desc_busca, desc_f, -float(val), venc))
+                        check = db.buscar_um(query_check, (desc_f, -float(val), venc))
                         
                         if not check:
                             query_ins = """
