@@ -71,7 +71,7 @@ def normalizar_texto(texto):
     for errado, certo in correcoes.items():
         texto = texto.replace(errado, certo)
 
-    texto = re.sub(r'\s+', ' ', texto)
+    texto = re.sub(r'[^\S\n]+', ' ', texto)  # Colapsa espaços mas preserva quebras de linha
 
     return texto
 
@@ -87,7 +87,12 @@ def detectar_banco(texto):
         return "MERCADO_PAGO"
     elif "nubank" in t:
         return "NUBANK"
-    elif "passai" in t or "passaí" in t or "assai" in t or "assaí" in t:
+    elif "banco itau" in t or "itau s.a" in t or "financeira itau" in t:
+        return "ITAU"
+    elif "itau" in t and ("passai" in t or "passaí" in t):
+        # Fatura Itaú com compras no Assaí/Passaí — é Itaú
+        return "ITAU"
+    elif "passai" in t or "passaí" in t:
         return "PASSAI"
     elif "itau" in t:
         return "ITAU"
@@ -145,92 +150,169 @@ def parser_generico(texto):
 # 🧠 ORQUESTRADOR PRINCIPAL
 # ==========================================
 
+def _extrair_secao_parceladas(texto):
+    """Extrai apenas a seção de compras parceladas de faturas Itaú/similares.
+    
+    Retorna o texto da seção ou string vazia se não encontrar.
+    """
+    # Busca seções como "Compras parceladas" que indicam parcelas reais
+    padrao_secao = re.search(
+        r'(?:Compras\s+parceladas|Parcelas\s+futuras|proximas\s+faturas).*?'
+        r'((?:.*?\n)*?)'
+        r'(?:Proxima\s+fatura|Total\s+para|Demais\s+faturas|Limites\s+de|$)',
+        texto, re.IGNORECASE | re.DOTALL
+    )
+    if padrao_secao:
+        return padrao_secao.group(0)
+    return ""
+
+
+def _is_data_transacao(valor_str):
+    """Verifica se um valor XX/YY parece ser uma data de transação (DD/MM) e não parcela."""
+    try:
+        dd, mm = map(int, valor_str.split("/"))
+        # Datas: dia 1-31, mês 1-12
+        # Parcelas: geralmente total > 1 e atual <= total
+        # Se mm <= 12 e dd <= 31, provavelmente é data
+        if 1 <= mm <= 12 and 1 <= dd <= 31:
+            return True
+    except (ValueError, AttributeError):
+        pass
+    return False
+
+
+def _is_parcela_valida(parc_str):
+    """Verifica se XX/YY é uma parcela válida (não é data, não é à vista)."""
+    try:
+        atual, total = map(int, parc_str.split("/"))
+        # Compra à vista: atual == total (01/01, 1/1, 03/03, etc.)
+        if atual == total:
+            return False
+        # Parcela válida: total > 1 e atual <= total
+        if total > 1 and 1 <= atual <= total:
+            return True
+        return False
+    except (ValueError, AttributeError):
+        return False
+
+
 def extrair_parcelas(texto):
     import re
     resultados = []
+    chaves_vistas = set()  # (desc_normalizada, parcela) para evitar duplicatas reais
 
     # 1. Limpeza de ruídos comuns de OCR
     texto = texto.replace("R4", "R$").replace("I0F", "IOF")
+
+    def _add_resultado(desc, parc, val):
+        """Adiciona resultado evitando duplicatas reais (mesma desc + mesma parcela)."""
+        # Normaliza a descrição removendo datas iniciais, "Parcela" e espaços extras
+        desc_norm = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', desc.strip()).strip()
+        desc_norm = re.sub(r'\s*Parcela\s*$', '', desc_norm, flags=re.IGNORECASE).strip()
+        desc_upper = desc_norm.upper()
+        
+        # Verifica se já existe uma parcela com mesma numeração e descrição similar
+        for existing_desc, _ in chaves_vistas:
+            if existing_desc in desc_upper or desc_upper in existing_desc:
+                # Mesma parcela, descrição é substring - duplicata
+                if (existing_desc, parc) in chaves_vistas or (desc_upper, parc) in chaves_vistas:
+                    return False
+        
+        chave = (desc_upper, parc)
+        if chave not in chaves_vistas:
+            chaves_vistas.add(chave)
+            resultados.append((desc_norm, parc, val))
+            return True
+        return False
+
+    # ==============================================================
+    # PASSO 1: Tentar extrair da seção "Compras parceladas" (Itaú)
+    # ==============================================================
+    secao_parceladas = _extrair_secao_parceladas(texto)
+    if secao_parceladas:
+        # Dentro da seção parcelada, formato típico:
+        # DD/MM  DESCRICAOXX/YY  VALOR  ou  DD/MM  DESCRICAO XX/YY  VALOR
+        regex_secao = re.findall(
+            r'(\d{1,2}/\d{1,2})\s+(.+?)(\d{1,2}/\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
+            secao_parceladas, re.IGNORECASE
+        )
+        for date_str, desc, parc, valor in regex_secao:
+            try:
+                val_limpo = float(valor.replace(".", "").replace(",", "."))
+                if _is_parcela_valida(parc):
+                    _add_resultado(desc.strip(), parc, val_limpo)
+            except: continue
+
+    # ==============================================================
+    # PASSO 2: Padrões genéricos para outros bancos
+    # ==============================================================
     
     # PADRÃO A: "Descricao Parcela 01 de 10 R$ 100,00" (Mercado Pago / Nubank)
-    # Pega: Nome da Loja + "Parcela" + num + "de" + total + valor
     regex_extenso = re.findall(
         r'(.+?)\s+Parcela\s+(\d{1,2})\s+de\s+(\d{1,2})\s+R\$\s?([\d\.,]+)', 
         texto, re.IGNORECASE
     )
-
-    # PADRÃO B: "Descricao 01/10 R$ 100,00" (Itaú / Santander)
-    # Pega: Nome da Loja + espaco + "01/10" + espaco + valor
-    regex_barra = re.findall(
-        r'(.+?)\s+(\d{1,2}/\d{1,2})\s+R\$\s?([\d\.,]+)', 
-        texto, re.IGNORECASE
-    )
-
-    # Processando Padrão A
     for desc, atual, total, valor in regex_extenso:
         try:
             val_limpo = float(valor.replace(".", "").replace(",", "."))
             parc_formatada = f"{int(atual)}/{int(total)}"
-            resultados.append((desc.strip(), parc_formatada, val_limpo))
+            if _is_parcela_valida(parc_formatada):
+                _add_resultado(desc.strip(), parc_formatada, val_limpo)
         except: continue
 
-    # Processando Padrão B (apenas se não for duplicado)
+    # PADRÃO B: "Descricao 01/10 R$ 100,00" (Itaú / Santander)
+    regex_barra = re.findall(
+        r'(.+?)\s+(\d{1,2}/\d{1,2})\s+R\$\s?([\d\.,]+)', 
+        texto, re.IGNORECASE
+    )
     for desc, parc, valor in regex_barra:
         try:
             val_limpo = float(valor.replace(".", "").replace(",", "."))
-            # Verifica se já não pegamos esse item no regex anterior
-            if not any(desc.strip() in r[0] for r in resultados):
-                resultados.append((desc.strip(), parc, val_limpo))
+            if _is_parcela_valida(parc):
+                _add_resultado(desc.strip(), parc, val_limpo)
         except: continue
 
-    # PADRÃO C: formato '05 de 10 299,08' (sem palavra 'Parcela', p.ex. 'ALLIANZ SEGU*05 de 10 299,08')
+    # PADRÃO C: formato '05 de 10 299,08' (sem palavra 'Parcela')
+    # Também pega quando o número cola na desc: 'ALLIANZ SEGU*05 de 10 299,08'
     regex_de = re.findall(
-        r'(.+?)\s+(\d{1,2})\s+de\s+(\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
+        r'(.+?)\s*(\d{1,2})\s+de\s+(\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
         texto, re.IGNORECASE
     )
-
     for desc, atual, total, valor in regex_de:
         try:
             val_limpo = float(valor.replace(".", "").replace(",", "."))
             parc_formatada = f"{int(atual)}/{int(total)}"
-            if not any(desc.strip() in r[0] for r in resultados):
-                resultados.append((desc.strip(), parc_formatada, val_limpo))
+            if _is_parcela_valida(parc_formatada):
+                _add_resultado(desc.strip(), parc_formatada, val_limpo)
         except: continue
 
-    # PADRÃO D: linhas que começam com uma data e contém depois o parcelamento e valor
+    # PADRÃO D: linhas com data + descrição + parcela + valor
     # Ex: '08/03 VIVO SP LJ N551 12/12 391,74'
+    # Só pega se o segundo XX/YY tem total > 12 (não pode ser mês) OU
+    # se o total > atual (indica parcela, não data)
     regex_lead = re.findall(
         r'^\s*(\d{1,2}/\d{1,2})\s+(.+?)\s+(\d{1,2}/\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
         texto, re.IGNORECASE | re.MULTILINE
     )
-
     for date_str, desc, parc, valor in regex_lead:
         try:
             val_limpo = float(valor.replace(".", "").replace(",", "."))
-            if not any(desc.strip() in r[0] for r in resultados):
-                resultados.append((desc.strip(), parc, val_limpo))
+            if _is_parcela_valida(parc):
+                _add_resultado(desc.strip(), parc, val_limpo)
         except: continue
 
-    # PADRÃO E: formato relaxado onde o 'xx/yy' pode colar ao texto anterior (OCR sem espaços)
-    # Ex: 'AMAZONMKTPLC*FITOW04/05 35,52'
+    # PADRÃO E: formato relaxado onde o 'xx/yy' cola ao texto
+    # Ex: 'AMAZONMKTPLC*FITOW04/05 35,52' ou 'ANUIDADE DIFERENCI05/12 16,65'
     regex_relax = re.findall(
-        r'(.+?)\s*(\d{1,2}/\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
+        r'([A-Za-z*][\w\s.*\-]*?)(\d{1,2}/\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
         texto, re.IGNORECASE
     )
-
     for desc, parc, valor in regex_relax:
         try:
             val_limpo = float(valor.replace(".", "").replace(",", "."))
-            if not any(desc.strip() in r[0] for r in resultados):
-                resultados.append((desc.strip(), parc, val_limpo))
+            if _is_parcela_valida(parc):
+                _add_resultado(desc.strip(), parc, val_limpo)
         except: continue
-
-    # 🔥 FILTRO: Remove compras à vista (01/01) e sem parcela real
-    # Na previsão, só importamos parcelas com futuro (ex: 02/10, 03/12)
-    resultados = [
-        (desc, parc, val) for desc, parc, val in resultados
-        if not _is_compra_avista(parc)
-    ]
 
     return resultados
 
@@ -256,11 +338,14 @@ def processar_fatura(file, senha_pdf=None):
         if not texto or texto.strip() == "":
             return "DESCONHECIDO", "", []
 
-        # 2. Detectar banco
-        banco = detectar_banco(texto)
+        # 2. Normalizar texto (remover acentos para regex funcionar)
+        texto_norm = normalizar_texto(texto)
 
-        # 3. Extrair parcelas
-        dados = extrair_parcelas(texto)
+        # 3. Detectar banco (usa texto normalizado)
+        banco = detectar_banco(texto_norm)
+
+        # 4. Extrair parcelas (usa texto normalizado)
+        dados = extrair_parcelas(texto_norm)
 
         return banco, texto, dados
 

@@ -105,31 +105,28 @@ class ParcelasManager:
         st.session_state["ocr_banco"] = "GENÉRICO"
         st.session_state["ocr_texto"] = ""
         st.session_state["ocr_dados"] = []
+        st.session_state.pop("ocr_dados_editaveis", None)
 
     @staticmethod
     def _safe_rerun():
-        """Tenta forçar um rerun de forma compatível com várias versões do Streamlit.
+        """Tenta forçar um rerun de forma compatível com várias versões do Streamlit."""
+        # Streamlit >= 1.27: st.rerun()
+        rerun_fn = getattr(st, "rerun", None)
+        if callable(rerun_fn):
+            rerun_fn()
+            return
 
-        Se a API pública `st.experimental_rerun` existir, usa-a. Caso contrário,
-        tenta elevar a exceção interna `RerunException` em caminhos conhecidos.
-        Se tudo falhar, mostra um aviso pedindo para atualizar a página manualmente.
-        """
-        try:
-            exp_rerun = getattr(st, "experimental_rerun", None)
-            if callable(exp_rerun):
-                try:
-                    exp_rerun()
-                    return
-                except Exception:
-                    pass
-        except Exception:
-            pass
+        # Streamlit < 1.27: st.experimental_rerun()
+        exp_rerun = getattr(st, "experimental_rerun", None)
+        if callable(exp_rerun):
+            try:
+                exp_rerun()
+                return
+            except Exception:
+                pass
 
-        # Fallback seguro: pare a execução atual e peça reload manual
-        try:
-            st.stop()
-        except Exception:
-            st.warning("Por favor, atualize a página manualmente para aplicar as mudanças.")
+        # Fallback seguro
+        st.warning("Por favor, atualize a página manualmente (F5) para aplicar as mudanças.")
     
     @staticmethod
     def _tab_importar_pdf(df_contas, df_cats):
@@ -156,18 +153,96 @@ class ParcelasManager:
                 
                 if not dados:
                     st.warning("⚠️ Texto extraído, mas nenhuma parcela detectada pelo padrão (Regex).")
+                    st.info("💡 Apenas compras parceladas são importadas (ex: 02/10, 03/12). "
+                            "Compras à vista (01/01) e compras sem parcela são ignoradas para não poluir a previsão.")
                 else:
                     st.success(f"✅ {len(dados)} parcelas encontradas no {banco}!")
 
         # 3. Exibição e Confirmação: Lê os dados do session_state
         dados_salvos = st.session_state.get("ocr_dados", [])
         banco_detectado = st.session_state.get("ocr_banco", "Desconhecido")
+        texto_extraido = st.session_state.get("ocr_texto", "")
+        
+        # Expander para ver o texto extraído (debug)
+        if texto_extraido:
+            with st.expander("🔎 Ver texto extraído do PDF (debug)"):
+                st.text(texto_extraido[:3000])
         
         if dados_salvos:
             st.markdown(f"### 🏦 Banco Detectado: **{banco_detectado}**")
             
-            df_preview = pd.DataFrame(dados_salvos, columns=["Descrição", "Parcela", "Valor"])
-            st.dataframe(df_preview, width='stretch') 
+            # ============================================================
+            # AUDITORIA: Editar, corrigir ou excluir parcelas antes de importar
+            # ============================================================
+            st.markdown("#### 🔍 Auditoria — Revise antes de importar")
+            st.caption("Edite descrições, corrija parcelas ou desmarque itens que não deseja importar.")
+
+            # Inicializa dados editáveis no session_state (só na primeira vez)
+            if "ocr_dados_editaveis" not in st.session_state or len(st.session_state["ocr_dados_editaveis"]) != len(dados_salvos):
+                st.session_state["ocr_dados_editaveis"] = [
+                    {"desc": d[0], "parc": d[1], "valor": d[2], "importar": True}
+                    for d in dados_salvos
+                ]
+
+            dados_editaveis = st.session_state["ocr_dados_editaveis"]
+
+            # Cabeçalho da tabela
+            hdr1, hdr2, hdr3, hdr4, hdr5 = st.columns([0.5, 3.5, 1.5, 1.5, 1])
+            hdr1.markdown("**✓**")
+            hdr2.markdown("**Descrição**")
+            hdr3.markdown("**Parcela**")
+            hdr4.markdown("**Valor (R$)**")
+            hdr5.markdown("**Ação**")
+
+            itens_para_remover = []
+
+            for idx, item in enumerate(dados_editaveis):
+                c_check, c_desc, c_parc, c_val, c_del = st.columns([0.5, 3.5, 1.5, 1.5, 1])
+
+                with c_check:
+                    item["importar"] = st.checkbox(
+                        "Importar", value=item["importar"],
+                        key=f"audit_check_{idx}", label_visibility="collapsed"
+                    )
+                with c_desc:
+                    item["desc"] = st.text_input(
+                        "Desc", value=item["desc"],
+                        key=f"audit_desc_{idx}", label_visibility="collapsed"
+                    )
+                with c_parc:
+                    item["parc"] = st.text_input(
+                        "Parcela", value=item["parc"],
+                        key=f"audit_parc_{idx}", label_visibility="collapsed"
+                    )
+                with c_val:
+                    item["valor"] = st.number_input(
+                        "Valor", value=float(item["valor"]), min_value=0.0,
+                        key=f"audit_val_{idx}", label_visibility="collapsed",
+                        format="%.2f"
+                    )
+                with c_del:
+                    if st.button("🗑️", key=f"audit_del_{idx}"):
+                        itens_para_remover.append(idx)
+
+            # Remover itens excluídos (processa após o loop para não alterar índices durante iteração)
+            if itens_para_remover:
+                for idx in sorted(itens_para_remover, reverse=True):
+                    dados_editaveis.pop(idx)
+                    # Também remove do ocr_dados para manter sincronizado
+                    dados_salvos_list = list(st.session_state.get("ocr_dados", []))
+                    if idx < len(dados_salvos_list):
+                        dados_salvos_list.pop(idx)
+                        st.session_state["ocr_dados"] = dados_salvos_list
+                st.session_state["ocr_dados_editaveis"] = dados_editaveis
+                ParcelasManager._safe_rerun()
+
+            # Resumo
+            selecionados = [d for d in dados_editaveis if d["importar"]]
+            total_sel = sum(d["valor"] for d in selecionados)
+            st.markdown(f"**{len(selecionados)}** de **{len(dados_editaveis)}** parcelas selecionadas "
+                        f"— Total: **{moeda(total_sel)}**")
+
+            st.markdown("---")
 
             # Formulário para salvar no banco
             with st.form("confirmar_importacao"):
@@ -183,9 +258,17 @@ class ParcelasManager:
                 cat = st.selectbox("Categoria Padrão", lista_cats)
                 
                 if st.form_submit_button("🚀 Salvar no Banco (Aplicar Trava Anti-Duplicidade)", width='stretch'):
-                    ParcelasManager._importar_pdf_dados(
-                        dados_salvos, banco_detectado, conta, cat, data_base, df_contas, df_cats
-                    )
+                    # Monta lista final apenas com itens marcados para importar
+                    dados_finais = [
+                        (d["desc"], d["parc"], d["valor"])
+                        for d in dados_editaveis if d["importar"]
+                    ]
+                    if not dados_finais:
+                        st.warning("⚠️ Nenhuma parcela selecionada para importar.")
+                    else:
+                        ParcelasManager._importar_pdf_dados(
+                            dados_finais, banco_detectado, conta, cat, data_base, df_contas, df_cats
+                        )
     @staticmethod
     @staticmethod
     def _tab_importar_csv(df_contas, df_cats):
@@ -548,6 +631,20 @@ class ParcelasManager:
                                 if st.button("🗑️", key=f"del_parc_{r['id']}"):
                                     st.session_state['del_id'] = int(r['id'])
 
+                            # Confirmação de exclusão inline (perto da parcela)
+                            if st.session_state.get('del_id') == int(r['id']):
+                                with st.container():
+                                    st.warning(f"⚠️ Excluir **{clean_desc_row}** ({moeda(abs(r['valor']))})? Esta ação é irreversível.")
+                                    col_ok, col_cancel = st.columns(2)
+                                    if col_ok.button("✅ Sim, excluir", key=f"confirm_del_{r['id']}"):
+                                        db.executar("DELETE FROM transacoes WHERE id=?", (int(r['id']),))
+                                        st.success("Parcela excluída.")
+                                        st.session_state['del_id'] = None
+                                        ParcelasManager._safe_rerun()
+                                    if col_cancel.button("❌ Cancelar", key=f"cancel_del_{r['id']}"):
+                                        st.session_state['del_id'] = None
+                                        ParcelasManager._safe_rerun()
+
                             # Se o usuário solicitou edição dessa linha, mostramos um formulário inline
                             if st.session_state.get(f"editing_{r['id']}"):
                                 with st.form(f"form_edit_{r['id']}"):
@@ -603,36 +700,5 @@ class ParcelasManager:
                                                 ParcelasManager._safe_rerun()
                                         else:
                                             ParcelasManager._safe_rerun()
-
-        # Modal de confirmação para exclusão (fallback-friendly)
-        if st.session_state.get('del_id'):
-            del_id = st.session_state.get('del_id')
-            modal_fn = getattr(st, "modal", None)
-            if callable(modal_fn):
-                modal_cm = cast(Any, modal_fn)("Confirmação de Exclusão")
-                with modal_cm:
-                    st.warning("Tem certeza que deseja excluir esta parcela? Esta ação é irreversível.")
-                    col_ok, col_cancel = st.columns(2)
-                    if col_ok.button("Sim, excluir"):
-                        db.executar("DELETE FROM transacoes WHERE id=?", (del_id,))
-                        st.success("Parcela excluída.")
-                        st.session_state['del_id'] = None
-                        ParcelasManager._safe_rerun()
-                    if col_cancel.button("Cancelar"):
-                        st.session_state['del_id'] = None
-                        ParcelasManager._safe_rerun()
-            else:
-                with st.container():
-                    st.markdown("### Confirmação de Exclusão")
-                    st.warning("Tem certeza que deseja excluir esta parcela? Esta ação é irreversível.")
-                    col_ok, col_cancel = st.columns(2)
-                    if col_ok.button("Sim, excluir"):
-                        db.executar("DELETE FROM transacoes WHERE id=?", (del_id,))
-                        st.success("Parcela excluída.")
-                        st.session_state['del_id'] = None
-                        ParcelasManager._safe_rerun()
-                    if col_cancel.button("Cancelar"):
-                        st.session_state['del_id'] = None
-                        ParcelasManager._safe_rerun()
 
         # (Edição agora é feita inline por formulário dentro da listagem por parcela)
