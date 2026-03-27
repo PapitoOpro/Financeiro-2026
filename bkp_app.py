@@ -601,8 +601,8 @@ elif menu == "3- Cadastros":
             col_input, col_btn = st.columns([3, 1])
             n_cat = col_input.text_input("Nova Categoria", label_visibility="collapsed", placeholder="Ex: Alimentação, Lazer...")
             
-            if col_btn.form_submit_button("Adicionar", use_container_width=True):
-                if n_cat.strip():
+            if col_btn.form_submit_button("Adicionar", width='stretch'):
+                if (n_cat or "").strip():
                     executar("INSERT INTO categorias (nome) VALUES (?)", (n_cat.strip(),))
                     st.rerun()
                 else:

@@ -112,7 +112,7 @@ class CaixaManager:
                 df_cats['nome'] if not df_cats.empty else [""]
             )
             
-            if st.form_submit_button("Lançar no Caixa", use_container_width=True):
+            if st.form_submit_button("Lançar no Caixa", width='stretch'):
                 if not desc_r or val_r <= 0:
                     st.error("❌ Preencha descrição e valor!")
                 else:
@@ -192,14 +192,20 @@ class CaixaManager:
                 index=0 if row['valor'] >= 0 else 1,
                 key=f"ec_tipo_{row['id']}"
             )
+            # Use the dataframe's 'data' column (lowercase) and provide a safe date fallback
+            try:
+                default_date = pd.to_datetime(row['data']).date() if not pd.isnull(row['data']) else datetime.now().date()
+            except Exception:
+                default_date = datetime.now().date()
+
             n_data = st.date_input(
                 "Data",
-                value=pd.to_datetime(row['Data']),
+                value=default_date,
                 key=f"ec_data_{row['id']}"
             )
             
             lista_contas = df_contas['nome'].tolist()
-            idx_conta = lista_contas.index(row['Banco']) if row['Banco'] in lista_contas else 0
+            idx_conta = lista_contas.index(row['banco']) if row.get('banco') in lista_contas else 0
             n_conta = st.selectbox(
                 "Conta/Banco",
                 lista_contas,
@@ -208,7 +214,7 @@ class CaixaManager:
             )
             
             lista_cats = df_cats['nome'].tolist()
-            idx_cat = lista_cats.index(row['Categoria']) if row['Categoria'] in lista_cats else 0
+            idx_cat = lista_cats.index(row['categoria']) if row.get('categoria') in lista_cats else 0
             n_cat = st.selectbox(
                 "Categoria",
                 lista_cats,
@@ -216,7 +222,7 @@ class CaixaManager:
                 key=f"ec_cat_{row['id']}"
             )
             
-            if st.button("Salvar", key=f"ec_save_{row['id']}", use_container_width=True):
+            if st.button("Salvar", key=f"ec_save_{row['id']}", width='stretch'):
                 cid = int(df_contas[df_contas.nome == n_conta].id.values[0])
                 ctid = int(df_cats[df_cats.nome == n_cat].id.values[0])
                 v_final = -n_val if n_tipo == "Saída" else n_val

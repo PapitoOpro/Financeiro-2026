@@ -11,6 +11,7 @@ from modules.caixa import CaixaManager
 from modules.cadastros import CadastrosManager
 from modules.admin import AdminManager
 from modules.parcelas_exemplo import ParcelasManager
+from modules.relatorios import RelatoriosManager
 
 # ==========================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -54,7 +55,7 @@ menu = st.sidebar.radio(
 st.sidebar.markdown("---")
 col_user, col_logout = st.sidebar.columns([1, 0.5])
 col_user.caption(f"👤 {st.session_state.usuario_nome}")
-if col_logout.button("Sair", use_container_width=True):
+if col_logout.button("Sair", width='stretch'):
     AuthManager.fazer_logout()
 
 # ==========================================
@@ -70,8 +71,7 @@ elif menu == "3- Cadastros":
     CadastrosManager.renderizar()
 
 elif menu == "4- Relatórios":
-    st.header("📊 Relatórios Analíticos")
-    st.info("ℹ️ Módulo em desenvolvimento...")
+    RelatoriosManager.renderizar()
 
 elif menu == "5- Admin 🔧":
     AdminManager.renderizar()

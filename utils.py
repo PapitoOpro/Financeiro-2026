@@ -175,6 +175,48 @@ def extrair_parcelas(texto):
                 resultados.append((desc.strip(), parc, val_limpo))
         except: continue
 
+    # PADRÃO C: formato '05 de 10 299,08' (sem palavra 'Parcela', p.ex. 'ALLIANZ SEGU*05 de 10 299,08')
+    regex_de = re.findall(
+        r'(.+?)\s+(\d{1,2})\s+de\s+(\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
+        texto, re.IGNORECASE
+    )
+
+    for desc, atual, total, valor in regex_de:
+        try:
+            val_limpo = float(valor.replace(".", "").replace(",", "."))
+            parc_formatada = f"{int(atual)}/{int(total)}"
+            if not any(desc.strip() in r[0] for r in resultados):
+                resultados.append((desc.strip(), parc_formatada, val_limpo))
+        except: continue
+
+    # PADRÃO D: linhas que começam com uma data e contém depois o parcelamento e valor
+    # Ex: '08/03 VIVO SP LJ N551 12/12 391,74'
+    regex_lead = re.findall(
+        r'^\s*(\d{1,2}/\d{1,2})\s+(.+?)\s+(\d{1,2}/\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
+        texto, re.IGNORECASE | re.MULTILINE
+    )
+
+    for date_str, desc, parc, valor in regex_lead:
+        try:
+            val_limpo = float(valor.replace(".", "").replace(",", "."))
+            if not any(desc.strip() in r[0] for r in resultados):
+                resultados.append((desc.strip(), parc, val_limpo))
+        except: continue
+
+    # PADRÃO E: formato relaxado onde o 'xx/yy' pode colar ao texto anterior (OCR sem espaços)
+    # Ex: 'AMAZONMKTPLC*FITOW04/05 35,52'
+    regex_relax = re.findall(
+        r'(.+?)\s*(\d{1,2}/\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
+        texto, re.IGNORECASE
+    )
+
+    for desc, parc, valor in regex_relax:
+        try:
+            val_limpo = float(valor.replace(".", "").replace(",", "."))
+            if not any(desc.strip() in r[0] for r in resultados):
+                resultados.append((desc.strip(), parc, val_limpo))
+        except: continue
+
     return resultados
 
 # ==========================================

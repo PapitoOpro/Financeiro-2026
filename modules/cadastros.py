@@ -39,8 +39,8 @@ class CadastrosManager:
                 placeholder="Ex: Nubank, Itaú..."
             )
             
-            if col_btn.form_submit_button("Adicionar", use_container_width=True):
-                if n_banco.strip():
+            if col_btn.form_submit_button("Adicionar", width='stretch'):
+                if (n_banco or "").strip():
                     if db.executar(
                         "INSERT INTO contas (nome) VALUES (?)",
                         (n_banco.strip(),)
@@ -74,7 +74,8 @@ class CadastrosManager:
                             value=r['nome'],
                             key=f"input_conta_{r['id']}"
                         )
-                        if st.button("Salvar", key=f"save_conta_{r['id']}", use_container_width=True):
+                        novo_nome = novo_nome or ""
+                        if st.button("Salvar", key=f"save_conta_{r['id']}", width='stretch'):
                             if novo_nome.strip():
                                 db.executar(
                                     "UPDATE contas SET nome=? WHERE id=?",
@@ -104,8 +105,8 @@ class CadastrosManager:
                 placeholder="Ex: Alimentação, Lazer..."
             )
             
-            if col_btn.form_submit_button("Adicionar", use_container_width=True):
-                if n_cat.strip():
+            if col_btn.form_submit_button("Adicionar", width='stretch'):
+                if (n_cat or "").strip():
                     if db.executar(
                         "INSERT INTO categorias (nome) VALUES (?)",
                         (n_cat.strip(),)
@@ -139,7 +140,8 @@ class CadastrosManager:
                             value=r['nome'],
                             key=f"input_cat_{r['id']}"
                         )
-                        if st.button("Salvar", key=f"save_cat_{r['id']}", use_container_width=True):
+                        novo_nome = novo_nome or ""
+                        if st.button("Salvar", key=f"save_cat_{r['id']}", width='stretch'):
                             if novo_nome.strip():
                                 db.executar(
                                     "UPDATE categorias SET nome=? WHERE id=?",

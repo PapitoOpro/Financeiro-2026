@@ -101,40 +101,58 @@ class AuthManager:
         if st.session_state.logado:
             return True
         
-        # CSS customizado para melhor aparência
+        # CSS customizado para melhor aparência (campos menores, topo mais leve)
         st.markdown("""
             <style>
             .login-container {
-                max-width: 500px;
-                margin: 0 auto;
+                max-width: 420px;
+                margin: 10px auto 0;
+                padding: 8px 10px;
             }
             .login-header {
                 text-align: center;
-                font-size: 2.5em;
-                font-weight: bold;
-                margin-bottom: 10px;
-                background: linear-gradient(120deg, #667eea 0%, #764ba2 100%);
+                font-size: 1.8rem;
+                font-weight: 700;
+                margin-bottom: 6px;
+                background: linear-gradient(120deg, #06b6d4 0%, #059669 100%);
                 -webkit-background-clip: text;
                 -webkit-text-fill-color: transparent;
                 background-clip: text;
             }
+            .login-welcome {
+                text-align: center;
+                font-size: 1rem;
+                color: #444;
+                margin-bottom: 12px;
+            }
             .login-subtitle {
                 text-align: center;
-                font-size: 0.9em;
+                font-size: 0.9rem;
                 color: #666;
-                margin-bottom: 30px;
+                margin-bottom: 18px;
+            }
+            /* Restringe largura dos inputs dentro do container e reduz altura visual */ 
+            .login-container input[type="text"], .login-container input[type="password"], .login-container .stTextInput>div>input {
+                height: 36px !important;
+                font-size: 0.95rem !important;
+                padding: 6px 10px !important;
+            }
+            .login-container .stButton>button {
+                padding: 8px 12px !important;
+                font-size: 0.95rem !important;
             }
             </style>
         """, unsafe_allow_html=True)
         
-        # Container centralizado
+        # Container centralizado e mais compacto (campos menores, alinhamento para o topo)
         col1, col2, col3 = st.columns([1, 2, 1])
-        
+
         with col2:
-            st.markdown('<div class="login-header">💰 Sistema 2026</div>', unsafe_allow_html=True)
-            st.markdown('<div class="login-subtitle">Gerenciador Financeiro Pessoal</div>', unsafe_allow_html=True)
-            st.markdown("---")
-            
+            st.markdown('<div class="login-container">', unsafe_allow_html=True)
+            st.markdown('<div class="login-header">📈 Finanças Pro 2026</div>', unsafe_allow_html=True)
+            st.markdown('<div class="login-welcome">Seja bem-vindo.</div>', unsafe_allow_html=True)
+            st.markdown('---')
+
             tab1, tab2 = st.tabs(["🔑 Login", "📝 Cadastro"])
             
             with tab1:
@@ -151,7 +169,7 @@ class AuthManager:
                         placeholder="Digite sua senha"
                     )
                     
-                    if st.form_submit_button("🔓 Entrar", use_container_width=True):
+                    if st.form_submit_button("🔓 Entrar", width='stretch'):
                         if username and senha:
                             sucesso, status = AuthManager.fazer_login(username, senha)
                             
@@ -210,7 +228,7 @@ class AuthManager:
                         "do administrador antes de poder fazer login."
                     )
                     
-                    if st.form_submit_button("📝 Cadastrar", use_container_width=True):
+                    if st.form_submit_button("📝 Cadastrar", width='stretch'):
                         if nome and username and senha and confirm_senha:
                             if len(username) < 3:
                                 st.error("❌ Username deve ter pelo menos 3 caracteres.")
@@ -228,5 +246,6 @@ class AuthManager:
                 "</div>",
                 unsafe_allow_html=True
             )
+            st.markdown('</div>', unsafe_allow_html=True)
         
         st.stop()

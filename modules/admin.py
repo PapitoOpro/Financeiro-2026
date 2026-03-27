@@ -116,7 +116,7 @@ class AdminManager:
         if st.button(
             "🗑️ Deletar Todos os Dados",
             key="btn_delete_dados",
-            use_container_width=True
+            width='stretch'
         ):
             with st.spinner("Deletando dados..."):
                 AdminManager._deletar_dados()
@@ -133,7 +133,7 @@ class AdminManager:
         if st.button(
             "💣 Deletar Tudo e Recriar",
             key="btn_nuclear",
-            use_container_width=True
+            width='stretch'
         ):
             with st.spinner("Recriando banco..."):
                 AdminManager._recriar_banco()
@@ -167,12 +167,12 @@ class AdminManager:
                     col1.markdown(f"**{row['nome']}** (`{row['username']}`)")
                     col2.caption(f"📅 {row['data_criacao']}")
                     
-                    if col3.button("✅ Aprovar", key=f"aprova_{row['id']}", use_container_width=True):
+                    if col3.button("✅ Aprovar", key=f"aprova_{row['id']}", width='stretch'):
                         db.executar("UPDATE usuarios SET aprovado = TRUE WHERE id = ?", (row['id'],))
                         st.success(f"✅ Usuário '{row['username']}' aprovado!")
                         st.rerun()
                     
-                    if col4.button("❌ Rejeitar", key=f"rejeita_{row['id']}", use_container_width=True):
+                    if col4.button("❌ Rejeitar", key=f"rejeita_{row['id']}", width='stretch'):
                         db.executar("DELETE FROM usuarios WHERE id = ?", (row['id'],))
                         st.success(f"❌ Usuário '{row['username']}' rejeitado e deletado!")
                         st.rerun()
@@ -192,7 +192,7 @@ class AdminManager:
             if df_aprovados.empty:
                 st.info("Nenhum usuário aprovado ainda")
             else:
-                st.dataframe(df_aprovados, use_container_width=True, hide_index=True)
+                st.dataframe(df_aprovados, width='stretch', hide_index=True)
                 
                 st.markdown("---")
                 st.markdown("### Deletar Usuário Aprovado")
@@ -203,7 +203,7 @@ class AdminManager:
                     key="delete_user_select"
                 )
                 
-                if st.button("🗑️ Deletar Usuário", use_container_width=True):
+                if st.button("🗑️ Deletar Usuário", width='stretch'):
                     db.executar("DELETE FROM usuarios WHERE username = ?", (username,))
                     st.success(f"✅ Usuário '{username}' deletado!")
                     st.rerun()
