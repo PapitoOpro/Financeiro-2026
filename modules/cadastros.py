@@ -59,36 +59,52 @@ class CadastrosManager:
             return
         
         for _, r in df_contas.iterrows():
+            edit_flag = f"editing_conta_{r['id']}"
+            input_key = f"input_conta_{r['id']}"
+            save_key = f"save_conta_{r['id']}"
+            cancel_key = f"cancel_conta_{r['id']}"
+
+            if edit_flag not in st.session_state:
+                st.session_state[edit_flag] = False
+
             col_nome, col_edit, col_del = st.columns([4, 1, 1])
-            col_nome.markdown(
-                f"<div style='padding-top: 5px; font-weight: 500;'>{r['nome']}</div>",
-                unsafe_allow_html=True
-            )
-            
-            # Botão editar
-            with col_edit:
-                if st.button("✏️", key=f"edit_conta_{r['id']}", help="Editar"):
-                    with st.popover("Renomear"):
-                        novo_nome = st.text_input(
-                            "Nome",
-                            value=r['nome'],
-                            key=f"input_conta_{r['id']}"
-                        )
-                        novo_nome = novo_nome or ""
-                        if st.button("Salvar", key=f"save_conta_{r['id']}", width='stretch'):
-                            if novo_nome.strip():
-                                db.executar(
-                                    "UPDATE contas SET nome=? WHERE id=?",
-                                    (novo_nome.strip(), r['id'])
-                                )
+
+            # If in edit mode, show inline input + save/cancel
+            if st.session_state[edit_flag]:
+                with col_nome:
+                    novo_nome = st.text_input("Nome", value=r['nome'], key=input_key)
+                with col_edit:
+                    if st.button("Salvar", key=save_key, width='stretch'):
+                        novo_val = (st.session_state.get(input_key) or "").strip()
+                        if novo_val:
+                            if db.executar(
+                                "UPDATE contas SET nome=? WHERE id=?",
+                                (novo_val, r['id'])
+                            ):
+                                st.session_state[edit_flag] = False
                                 st.rerun()
-            
-            # Botão deletar
-            with col_del:
-                if st.button("🗑️", key=f"del_conta_{r['id']}", help="Excluir"):
-                    db.executar("DELETE FROM contas WHERE id=?", (r['id'],))
-                    st.rerun()
-            
+                            else:
+                                st.error("Erro ao salvar.")
+                    if st.button("Cancelar", key=cancel_key, width='stretch'):
+                        st.session_state[edit_flag] = False
+                        st.rerun()
+            else:
+                col_nome.markdown(
+                    f"<div style='padding-top: 5px; font-weight: 500;'>{r['nome']}</div>",
+                    unsafe_allow_html=True
+                )
+                # Botão editar ativa o modo de edição
+                with col_edit:
+                    if st.button("✏️", key=f"edit_conta_{r['id']}", help="Editar"):
+                        st.session_state[edit_flag] = True
+                        st.rerun()
+
+                # Botão deletar
+                with col_del:
+                    if st.button("🗑️", key=f"del_conta_{r['id']}", help="Excluir"):
+                        db.executar("DELETE FROM contas WHERE id=?", (r['id'],))
+                        st.rerun()
+
             st.markdown("<hr style='margin: 0px 0px 5px 0px;'>", unsafe_allow_html=True)
     
     @staticmethod
@@ -125,34 +141,48 @@ class CadastrosManager:
             return
         
         for _, r in df_cats.iterrows():
+            edit_flag = f"editing_cat_{r['id']}"
+            input_key = f"input_cat_{r['id']}"
+            save_key = f"save_cat_{r['id']}"
+            cancel_key = f"cancel_cat_{r['id']}"
+
+            if edit_flag not in st.session_state:
+                st.session_state[edit_flag] = False
+
             col_nome, col_edit, col_del = st.columns([4, 1, 1])
-            col_nome.markdown(
-                f"<div style='padding-top: 5px; font-weight: 500;'>{r['nome']}</div>",
-                unsafe_allow_html=True
-            )
-            
-            # Botão editar
-            with col_edit:
-                if st.button("✏️", key=f"edit_cat_{r['id']}", help="Editar"):
-                    with st.popover("Renomear"):
-                        novo_nome = st.text_input(
-                            "Nome",
-                            value=r['nome'],
-                            key=f"input_cat_{r['id']}"
-                        )
-                        novo_nome = novo_nome or ""
-                        if st.button("Salvar", key=f"save_cat_{r['id']}", width='stretch'):
-                            if novo_nome.strip():
-                                db.executar(
-                                    "UPDATE categorias SET nome=? WHERE id=?",
-                                    (novo_nome.strip(), r['id'])
-                                )
+
+            if st.session_state[edit_flag]:
+                with col_nome:
+                    novo_nome = st.text_input("Nome", value=r['nome'], key=input_key)
+                with col_edit:
+                    if st.button("Salvar", key=save_key, width='stretch'):
+                        novo_val = (st.session_state.get(input_key) or "").strip()
+                        if novo_val:
+                            if db.executar(
+                                "UPDATE categorias SET nome=? WHERE id=?",
+                                (novo_val, r['id'])
+                            ):
+                                st.session_state[edit_flag] = False
                                 st.rerun()
-            
-            # Botão deletar
-            with col_del:
-                if st.button("🗑️", key=f"del_cat_{r['id']}", help="Excluir"):
-                    db.executar("DELETE FROM categorias WHERE id=?", (r['id'],))
-                    st.rerun()
-            
+                            else:
+                                st.error("Erro ao salvar.")
+                    if st.button("Cancelar", key=cancel_key, width='stretch'):
+                        st.session_state[edit_flag] = False
+                        st.rerun()
+            else:
+                col_nome.markdown(
+                    f"<div style='padding-top: 5px; font-weight: 500;'>{r['nome']}</div>",
+                    unsafe_allow_html=True
+                )
+                with col_edit:
+                    if st.button("✏️", key=f"edit_cat_{r['id']}", help="Editar"):
+                        st.session_state[edit_flag] = True
+                        st.rerun()
+
+                # Botão deletar
+                with col_del:
+                    if st.button("🗑️", key=f"del_cat_{r['id']}", help="Excluir"):
+                        db.executar("DELETE FROM categorias WHERE id=?", (r['id'],))
+                        st.rerun()
+
             st.markdown("<hr style='margin: 0px 0px 5px 0px;'>", unsafe_allow_html=True)
