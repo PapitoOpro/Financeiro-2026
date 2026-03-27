@@ -1,5 +1,8 @@
-streamlit>=1.30.0
-pandas>=2.0.0
+# Target Python: 3.11
+# Pin major/minor ranges to reduce unexpected breaking upgrades on the cloud
+streamlit>=1.30.0,<2.0.0
+pandas>=2.0.0,<3.0.0
+numpy<2.0.0  # Evite o numpy 2.0 por enquanto, causa conflito com muitas libs
 psycopg2-binary
 bcrypt
 plotly
@@ -9,6 +12,5 @@ pytesseract
 Pillow
 pdf2image
 pdfplumber
-numpy<2.0.0  # Evite o numpy 2.0 por enquanto, causa conflito com muitas libs
 opencv-python-headless
 sqlalchemy
