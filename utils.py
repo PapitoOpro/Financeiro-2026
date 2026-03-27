@@ -18,7 +18,10 @@ def extrair_texto_pdf(file, senha=None):
     # 🥇 TENTAR EXTRAÇÃO DIRETA (RÁPIDO E PRECISO)
     try:
         file.seek(0)
-        with pdfplumber.open(file) as pdf:
+        open_kwargs = {}
+        if senha:
+            open_kwargs["password"] = senha
+        with pdfplumber.open(file, **open_kwargs) as pdf:
             for pagina in pdf.pages:
                 t = pagina.extract_text()
                 if t:
@@ -30,7 +33,10 @@ def extrair_texto_pdf(file, senha=None):
     if len(texto) < 1000:
         try:
             file.seek(0)
-            images = convert_from_bytes(file.read(), dpi=300)
+            pdf2image_kwargs = {}
+            if senha:
+                pdf2image_kwargs["userpw"] = senha
+            images = convert_from_bytes(file.read(), dpi=300, **pdf2image_kwargs)
 
             for img in images:
                 img_np = np.array(img)
@@ -81,6 +87,8 @@ def detectar_banco(texto):
         return "MERCADO_PAGO"
     elif "nubank" in t:
         return "NUBANK"
+    elif "passai" in t or "passaí" in t or "assai" in t or "assaí" in t:
+        return "PASSAI"
     elif "itau" in t:
         return "ITAU"
     elif "bradesco" in t:
@@ -217,7 +225,24 @@ def extrair_parcelas(texto):
                 resultados.append((desc.strip(), parc, val_limpo))
         except: continue
 
+    # 🔥 FILTRO: Remove compras à vista (01/01) e sem parcela real
+    # Na previsão, só importamos parcelas com futuro (ex: 02/10, 03/12)
+    resultados = [
+        (desc, parc, val) for desc, parc, val in resultados
+        if not _is_compra_avista(parc)
+    ]
+
     return resultados
+
+
+def _is_compra_avista(parc):
+    """Retorna True se a parcela indica compra à vista (01/01, 1/1, etc.)."""
+    try:
+        atual, total = map(int, parc.split("/"))
+        return atual == total  # 01/01, 1/1, 03/03, etc.
+    except (ValueError, AttributeError):
+        return True  # Se não conseguiu parsear, considera à vista
+
 
 # ==========================================
 # 🚀 FUNÇÃO FINAL (USO SIMPLES)

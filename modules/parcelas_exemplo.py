@@ -278,6 +278,15 @@ class ParcelasManager:
                                         parc_formatada = f"{int(parc_match.group(1))}/{int(parc_match.group(2))}"
                                         desc_limpa = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', '', desc_original).strip()
                                 
+                                # FILTRO: Ignora compras à vista (01/01, 1/1, etc.)
+                                # Na previsão só importamos parcelas com futuro
+                                try:
+                                    p_atual, p_total = map(int, parc_formatada.split("/"))
+                                    if p_atual == p_total:
+                                        continue
+                                except (ValueError, AttributeError):
+                                    continue
+                                
                                 dados_extraidos.append((desc_limpa, parc_formatada, abs(val)))
                                     
                             except Exception:
