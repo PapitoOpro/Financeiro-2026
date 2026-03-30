@@ -42,8 +42,8 @@ class CadastrosManager:
             if col_btn.form_submit_button("Adicionar", width='stretch'):
                 if (n_banco or "").strip():
                     if db.executar(
-                        "INSERT INTO contas (nome) VALUES (?)",
-                        (n_banco.strip(),)
+                        "INSERT INTO contas (nome, user_id) VALUES (?, ?)",
+                        (n_banco.strip(), db.get_user_id())
                     ):
                         st.success("✅ Banco adicionado!")
                         st.rerun()
@@ -52,7 +52,7 @@ class CadastrosManager:
         
         st.markdown("**Cadastrados:**")
         
-        df_contas = db.buscar("SELECT * FROM contas ORDER BY nome")
+        df_contas = db.buscar(f"SELECT * FROM contas WHERE user_id = {db.get_user_id()} ORDER BY nome")
         
         if df_contas.empty:
             st.info("ℹ️ Nenhuma conta cadastrada.")
@@ -78,8 +78,8 @@ class CadastrosManager:
                         novo_val = (st.session_state.get(input_key) or "").strip()
                         if novo_val:
                             if db.executar(
-                                "UPDATE contas SET nome=? WHERE id=?",
-                                (novo_val, r['id'])
+                                "UPDATE contas SET nome=? WHERE id=? AND user_id=?",
+                                (novo_val, r['id'], db.get_user_id())
                             ):
                                 st.session_state[edit_flag] = False
                                 st.rerun()
@@ -102,7 +102,7 @@ class CadastrosManager:
                 # Botão deletar
                 with col_del:
                     if st.button("🗑️", key=f"del_conta_{r['id']}", help="Excluir"):
-                        db.executar("DELETE FROM contas WHERE id=?", (r['id'],))
+                        db.executar("DELETE FROM contas WHERE id=? AND user_id=?", (r['id'], db.get_user_id()))
                         st.rerun()
 
             st.markdown("<hr style='margin: 0px 0px 5px 0px;'>", unsafe_allow_html=True)
@@ -124,8 +124,8 @@ class CadastrosManager:
             if col_btn.form_submit_button("Adicionar", width='stretch'):
                 if (n_cat or "").strip():
                     if db.executar(
-                        "INSERT INTO categorias (nome) VALUES (?)",
-                        (n_cat.strip(),)
+                        "INSERT INTO categorias (nome, user_id) VALUES (?, ?)",
+                        (n_cat.strip(), db.get_user_id())
                     ):
                         st.success("✅ Categoria adicionada!")
                         st.rerun()
@@ -134,7 +134,7 @@ class CadastrosManager:
         
         st.markdown("**Cadastradas:**")
         
-        df_cats = db.buscar("SELECT * FROM categorias ORDER BY nome")
+        df_cats = db.buscar(f"SELECT * FROM categorias WHERE user_id = {db.get_user_id()} ORDER BY nome")
         
         if df_cats.empty:
             st.info("ℹ️ Nenhuma categoria cadastrada.")
@@ -159,8 +159,8 @@ class CadastrosManager:
                         novo_val = (st.session_state.get(input_key) or "").strip()
                         if novo_val:
                             if db.executar(
-                                "UPDATE categorias SET nome=? WHERE id=?",
-                                (novo_val, r['id'])
+                                "UPDATE categorias SET nome=? WHERE id=? AND user_id=?",
+                                (novo_val, r['id'], db.get_user_id())
                             ):
                                 st.session_state[edit_flag] = False
                                 st.rerun()
@@ -182,7 +182,7 @@ class CadastrosManager:
                 # Botão deletar
                 with col_del:
                     if st.button("🗑️", key=f"del_cat_{r['id']}", help="Excluir"):
-                        db.executar("DELETE FROM categorias WHERE id=?", (r['id'],))
+                        db.executar("DELETE FROM categorias WHERE id=? AND user_id=?", (r['id'], db.get_user_id()))
                         st.rerun()
 
             st.markdown("<hr style='margin: 0px 0px 5px 0px;'>", unsafe_allow_html=True)

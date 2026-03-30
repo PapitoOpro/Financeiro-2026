@@ -33,6 +33,10 @@ db.inicializar_banco()
 # Inicializa autenticação
 AuthManager.tela_login()
 
+# Inicializa dados do usuário logado (limites padrão, etc.)
+if st.session_state.get('logado'):
+    db.inicializar_dados_usuario(st.session_state.get('usuario_id'))
+
 # ==========================================
 # INTERFACE PRINCIPAL
 # ==========================================

@@ -24,6 +24,11 @@ class DatabaseManager:
         self.conn = None
         self.engine = None
     
+    @staticmethod
+    def get_user_id():
+        """Retorna o ID do usuário logado."""
+        return st.session_state.get('usuario_id')
+    
     def conectar(self):
         """Cria uma conexão com o banco de dados (não cacheada).
 
@@ -165,8 +170,15 @@ class DatabaseManager:
     
     def inicializar_banco(self):
         """Cria as tabelas se não existirem e aplica migrações."""
-        self.executar('CREATE TABLE IF NOT EXISTS contas (id SERIAL PRIMARY KEY, nome TEXT UNIQUE)')
-        self.executar('CREATE TABLE IF NOT EXISTS categorias (id SERIAL PRIMARY KEY, nome TEXT UNIQUE)')
+        # Usuarios primeiro (referenciado por outras tabelas)
+        self.executar('''CREATE TABLE IF NOT EXISTS usuarios (
+            id SERIAL PRIMARY KEY, 
+            nome TEXT, 
+            username TEXT UNIQUE, 
+            senha TEXT)''')
+
+        self.executar('CREATE TABLE IF NOT EXISTS contas (id SERIAL PRIMARY KEY, nome TEXT, user_id INTEGER REFERENCES usuarios(id))')
+        self.executar('CREATE TABLE IF NOT EXISTS categorias (id SERIAL PRIMARY KEY, nome TEXT, user_id INTEGER REFERENCES usuarios(id))')
         self.executar('''CREATE TABLE IF NOT EXISTS transacoes (
             id SERIAL PRIMARY KEY, 
             descricao TEXT, 
@@ -174,70 +186,128 @@ class DatabaseManager:
             data_vencimento DATE, 
             conta_id INTEGER REFERENCES contas(id),
             categoria_id INTEGER REFERENCES categorias(id),
-            tipo_fluxo TEXT)''')
-        self.executar('''CREATE TABLE IF NOT EXISTS usuarios (
-            id SERIAL PRIMARY KEY, 
-            nome TEXT, 
-            username TEXT UNIQUE, 
-            senha TEXT)''')
+            tipo_fluxo TEXT,
+            user_id INTEGER REFERENCES usuarios(id))''')
 
         # Tabela de configuração de limites do consultor financeiro
         self.executar('''CREATE TABLE IF NOT EXISTS limites_financeiros (
             id SERIAL PRIMARY KEY,
-            chave TEXT UNIQUE NOT NULL,
+            chave TEXT NOT NULL,
             valor NUMERIC NOT NULL,
-            descricao TEXT)''')
+            descricao TEXT,
+            user_id INTEGER REFERENCES usuarios(id))''')
 
-        # Insere limites padrão se não existirem
-        self._inserir_limites_padrao()
-        
         # MIGRAÇÕES - Adiciona colunas se não existirem
         try:
-            # Adiciona coluna 'aprovado' se não existir
             self.executar(
                 "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS aprovado BOOLEAN DEFAULT FALSE"
             )
-        except:
+        except Exception:
             pass
         
         try:
-            # Adiciona coluna 'data_criacao' se não existir
             self.executar(
                 "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
             )
-        except:
+        except Exception:
             pass
 
-        # Adiciona coluna 'compensado' na tabela transacoes
         try:
             self.executar(
                 "ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS compensado BOOLEAN DEFAULT FALSE"
             )
-        except:
+        except Exception:
             pass
 
         try:
             self.executar(
                 "ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS data_compensacao DATE"
             )
-        except:
+        except Exception:
             pass
 
-        # ── MIGRAÇÃO: Índice único anti-duplicidade em transacoes ──
+        # ── MIGRAÇÃO MULTI-TENANT: Adicionar user_id às tabelas existentes ──
+        for tabela in ['contas', 'categorias', 'transacoes', 'limites_financeiros']:
+            try:
+                self.executar(
+                    f"ALTER TABLE {tabela} ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES usuarios(id)"
+                )
+            except Exception:
+                pass
+
+        # Popula user_id para dados existentes (atribui ao primeiro usuário)
         try:
-            # Verifica se o índice já existe
-            idx_exists = self.buscar_um(
-                "SELECT 1 FROM pg_class WHERE relname = 'ux_transacoes_desc_val_data'"
+            primeiro_usuario = self.buscar_um("SELECT id FROM usuarios ORDER BY id LIMIT 1")
+            if primeiro_usuario:
+                uid = primeiro_usuario[0]
+                for tabela in ['contas', 'categorias', 'transacoes', 'limites_financeiros']:
+                    self.executar(f"UPDATE {tabela} SET user_id = %s WHERE user_id IS NULL", (uid,))
+        except Exception:
+            pass
+
+        # ── MIGRAÇÃO: Remover duplicatas antes de criar índices únicos ──
+        # Primeiro, reatribuir FKs de transacoes para o registro sobrevivente (menor id)
+        for fk_col, tabela, coluna in [('conta_id', 'contas', 'nome'), ('categoria_id', 'categorias', 'nome')]:
+            try:
+                self.executar(f"""
+                    UPDATE transacoes t
+                    SET {fk_col} = sub.min_id
+                    FROM (
+                        SELECT id AS dup_id, MIN(id) OVER (PARTITION BY {coluna}, user_id) AS min_id
+                        FROM {tabela}
+                    ) sub
+                    WHERE t.{fk_col} = sub.dup_id AND sub.dup_id != sub.min_id
+                """)
+            except Exception:
+                pass
+
+        for tabela, coluna in [('contas', 'nome'), ('categorias', 'nome'), ('limites_financeiros', 'chave')]:
+            try:
+                self.executar(f"""
+                    DELETE FROM {tabela}
+                    WHERE id NOT IN (
+                        SELECT MIN(id) FROM {tabela} GROUP BY {coluna}, user_id
+                    )
+                """)
+            except Exception:
+                pass
+
+        # ── MIGRAÇÃO: Atualizar constraints únicas para multi-tenant ──
+        try:
+            self.executar("ALTER TABLE contas DROP CONSTRAINT IF EXISTS contas_nome_key")
+            self.executar("CREATE UNIQUE INDEX IF NOT EXISTS ux_contas_nome_user ON contas(nome, user_id)")
+        except Exception:
+            pass
+
+        try:
+            self.executar("ALTER TABLE categorias DROP CONSTRAINT IF EXISTS categorias_nome_key")
+            self.executar("CREATE UNIQUE INDEX IF NOT EXISTS ux_categorias_nome_user ON categorias(nome, user_id)")
+        except Exception:
+            pass
+
+        try:
+            self.executar("ALTER TABLE limites_financeiros DROP CONSTRAINT IF EXISTS limites_financeiros_chave_key")
+            self.executar("CREATE UNIQUE INDEX IF NOT EXISTS ux_limites_chave_user ON limites_financeiros(chave, user_id)")
+        except Exception:
+            pass
+
+        # ── MIGRAÇÃO: Índice único anti-duplicidade em transacoes (multi-tenant) ──
+        try:
+            idx_check = self.buscar_um(
+                "SELECT indexdef FROM pg_indexes WHERE indexname = 'ux_transacoes_desc_val_data'"
             )
-            if not idx_exists:
-                # Remove duplicatas existentes (mantém o registro com menor id)
+            needs_rebuild = not idx_check or 'user_id' not in str(idx_check[0])
+
+            if needs_rebuild:
+                self.executar("DROP INDEX IF EXISTS ux_transacoes_desc_val_data")
+                # Remove duplicatas existentes por usuário
                 self.executar('''
                     DELETE FROM transacoes
                     WHERE id IN (
                         SELECT id FROM (
                             SELECT id,
                                    ROW_NUMBER() OVER (
-                                       PARTITION BY lower(trim(descricao)), valor, data_vencimento
+                                       PARTITION BY user_id, lower(trim(descricao)), valor, data_vencimento
                                        ORDER BY id
                                    ) AS rn
                             FROM transacoes
@@ -245,17 +315,21 @@ class DatabaseManager:
                         WHERE rn > 1
                     )
                 ''')
-                # Cria o índice único para impedir futuras duplicatas
                 self.executar('''
                     CREATE UNIQUE INDEX ux_transacoes_desc_val_data
-                    ON transacoes (lower(trim(descricao)), valor, data_vencimento)
+                    ON transacoes (user_id, lower(trim(descricao)), valor, data_vencimento)
                 ''')
         except Exception:
             pass
 
-    def _inserir_limites_padrao(self):
-        """Insere limites padrão caso a tabela esteja vazia."""
-        existe = self.buscar_um("SELECT 1 FROM limites_financeiros LIMIT 1")
+    def inicializar_dados_usuario(self, user_id):
+        """Insere limites padrão para um usuário se ainda não existirem."""
+        if not user_id:
+            return
+        existe = self.buscar_um(
+            "SELECT 1 FROM limites_financeiros WHERE user_id = %s LIMIT 1",
+            (user_id,)
+        )
         if existe:
             return
         defaults = [
@@ -270,8 +344,9 @@ class DatabaseManager:
         ]
         for chave, valor, desc in defaults:
             self.executar(
-                "INSERT INTO limites_financeiros (chave, valor, descricao) VALUES (%s, %s, %s) ON CONFLICT (chave) DO NOTHING",
-                (chave, valor, desc)
+                "INSERT INTO limites_financeiros (chave, valor, descricao, user_id) "
+                "VALUES (%s, %s, %s, %s) ON CONFLICT (chave, user_id) DO NOTHING",
+                (chave, valor, desc, user_id)
             )
 
 # Instância global

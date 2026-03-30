@@ -219,9 +219,10 @@ class AdminManager:
         """Deleta todos os dados."""
         try:
             db.executar("DELETE FROM transacoes")
-            db.executar("DELETE FROM usuarios")
-            db.executar("DELETE FROM categorias")
+            db.executar("DELETE FROM limites_financeiros")
             db.executar("DELETE FROM contas")
+            db.executar("DELETE FROM categorias")
+            db.executar("DELETE FROM usuarios")
             
             st.success("✅ Todos os dados foram deletados!")
             st.info("👉 As tabelas foram mantidas. Você pode começar a adicionar novos dados.")
@@ -234,9 +235,10 @@ class AdminManager:
         """Recria o banco do zero."""
         try:
             db.executar("DROP TABLE IF EXISTS transacoes")
-            db.executar("DROP TABLE IF EXISTS usuarios")
-            db.executar("DROP TABLE IF EXISTS categorias")
+            db.executar("DROP TABLE IF EXISTS limites_financeiros")
             db.executar("DROP TABLE IF EXISTS contas")
+            db.executar("DROP TABLE IF EXISTS categorias")
+            db.executar("DROP TABLE IF EXISTS usuarios")
             
             db.inicializar_banco()
             

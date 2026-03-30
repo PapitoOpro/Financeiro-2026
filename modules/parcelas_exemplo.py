@@ -35,8 +35,9 @@ def _confirmar_exclusao_dialog():
     col1, col2 = st.columns(2)
     with col1:
         if st.button("✅ Sim, excluir", use_container_width=True, type="primary"):
+            user_id = db.get_user_id()
             for rid in ids:
-                db.executar("DELETE FROM transacoes WHERE id=?", (rid,))
+                db.executar("DELETE FROM transacoes WHERE id=? AND user_id=?", (rid, user_id))
             st.session_state['parcela_msg_sucesso'] = f"✅ {len(ids)} parcela(s) excluída(s) com sucesso!"
             st.session_state.pop('ids_para_excluir', None)
             st.session_state.pop('descs_para_excluir', None)
@@ -61,8 +62,9 @@ class ParcelasManager:
         """Renderiza a página de projeção de gastos."""
         st.header("📉 Projeção de Gastos (Cartão/Parcelas)")
         
-        df_contas = db.buscar("SELECT * FROM contas ORDER BY nome")
-        df_cats = db.buscar("SELECT * FROM categorias ORDER BY nome")
+        user_id = db.get_user_id()
+        df_contas = db.buscar(f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome")
+        df_cats = db.buscar(f"SELECT * FROM categorias WHERE user_id = {user_id} ORDER BY nome")
         
         # 👇 Adicionamos a tab "Importar CSV" aqui
         tab1, tab2, tab3, tab4 = st.tabs(["Manual", "Importar PDF", "Importar CSV", "Previsão"])
@@ -125,10 +127,10 @@ class ParcelasManager:
                 # Se usar PostgreSQL (Supabase), mude ? para %s
                 query = """
                     INSERT INTO transacoes 
-                    (descricao, valor, data_vencimento, conta_id, categoria_id, tipo_fluxo) 
-                    VALUES (?, ?, ?, ?, ?, 'CARTAO')
+                    (descricao, valor, data_vencimento, conta_id, categoria_id, tipo_fluxo, user_id) 
+                    VALUES (?, ?, ?, ?, ?, 'CARTAO', ?)
                 """
-                db.executar(query, (d_final, -float(val), venc, cid, ctid))
+                db.executar(query, (d_final, -float(val), venc, cid, ctid, db.get_user_id()))
             
             st.success(f"✅ {parcelas_lancar} parcelas lançadas com sucesso!")
             ParcelasManager._resetar_estado_pdf()
@@ -485,16 +487,17 @@ class ParcelasManager:
                             WHERE descricao LIKE ?
                             AND ROUND(valor::numeric, 2) = ROUND(?::numeric, 2)
                             AND data_vencimento = ?
+                            AND user_id = ?
                         """
-                        check = db.buscar_um(query_check, (desc_busca, -float(val), venc))
+                        check = db.buscar_um(query_check, (desc_busca, -float(val), venc, db.get_user_id()))
                         
                         if not check:
                             query_ins = """
                                 INSERT INTO transacoes 
-                                (descricao, valor, data_vencimento, conta_id, categoria_id, tipo_fluxo) 
-                                VALUES (?, ?, ?, ?, ?, 'CARTAO')
+                                (descricao, valor, data_vencimento, conta_id, categoria_id, tipo_fluxo, user_id) 
+                                VALUES (?, ?, ?, ?, ?, 'CARTAO', ?)
                             """
-                            resultado = db.executar(query_ins, (desc_f, -float(val), venc, cid, ctid))
+                            resultado = db.executar(query_ins, (desc_f, -float(val), venc, cid, ctid, db.get_user_id()))
                             if resultado:
                                 novos += 1
                             else:
@@ -529,15 +532,17 @@ class ParcelasManager:
         st.subheader("📅 Dashboard de Previsão de Gastos")
 
         # Carrega contas e categorias (necessário para edição)
-        df_contas = db.buscar("SELECT * FROM contas ORDER BY nome")
-        df_cats = db.buscar("SELECT * FROM categorias ORDER BY nome")
+        user_id = db.get_user_id()
+        df_contas = db.buscar(f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome")
+        df_cats = db.buscar(f"SELECT * FROM categorias WHERE user_id = {user_id} ORDER BY nome")
 
-        df_p = db.buscar("""
+        df_p = db.buscar(f"""
             SELECT t.id, t.data_vencimento, t.descricao, t.valor, c.nome as banco, cat.nome as categoria
             FROM transacoes t
             LEFT JOIN contas c ON t.conta_id = c.id
             LEFT JOIN categorias cat ON t.categoria_id = cat.id
-            WHERE t.tipo_fluxo='CARTAO'
+            WHERE t.user_id = {user_id}
+            AND t.tipo_fluxo='CARTAO'
             ORDER BY t.data_vencimento ASC
         """)
 
@@ -734,8 +739,8 @@ class ParcelasManager:
                                             cid = int(df_contas[df_contas.nome == sel_conta].id.values[0])
                                             ctid = int(df_cats[df_cats.nome == sel_cat].id.values[0])
                                             db.executar("""
-                                                UPDATE transacoes SET descricao=?, valor=?, data_vencimento=?, conta_id=?, categoria_id=? WHERE id=?
-                                            """, (f"[{sel_conta}] {d_desc}", -abs(float(d_val)), d_date, cid, ctid, int(r['id'])))
+                                                UPDATE transacoes SET descricao=?, valor=?, data_vencimento=?, conta_id=?, categoria_id=? WHERE id=? AND user_id=?
+                                            """, (f"[{sel_conta}] {d_desc}", -abs(float(d_val)), d_date, cid, ctid, int(r['id']), db.get_user_id()))
                                             st.success("Parcela atualizada com sucesso.")
                                         except Exception as e:
                                             st.error(f"Erro ao atualizar parcela: {e}")

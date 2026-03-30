@@ -46,6 +46,7 @@ class AuthManager:
         st.session_state.logado = True
         st.session_state.usuario_nome = nome
         st.session_state.usuario_id = usuario_id
+        db.inicializar_dados_usuario(usuario_id)
         return True, "ok"
     
     @staticmethod

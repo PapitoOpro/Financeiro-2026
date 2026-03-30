@@ -52,7 +52,8 @@ class ConsultorEngine:
     @staticmethod
     def carregar_limites():
         """Carrega limites configurados do banco."""
-        df = db.buscar("SELECT chave, valor FROM limites_financeiros")
+        user_id = db.get_user_id()
+        df = db.buscar(f"SELECT chave, valor FROM limites_financeiros WHERE user_id = {user_id}")
         if df.empty:
             return {}
         return dict(zip(df['chave'], df['valor'].astype(float)))
@@ -60,6 +61,7 @@ class ConsultorEngine:
     @staticmethod
     def dados_mes(ano, mes):
         """Carrega transações do caixa para um mês específico."""
+        user_id = db.get_user_id()
         data_inicio = f"{ano}-{mes:02d}-01"
         data_fim = (
             datetime(ano, mes, 1) + relativedelta(months=1) - relativedelta(days=1)
@@ -71,7 +73,8 @@ class ConsultorEngine:
             FROM transacoes t
             LEFT JOIN categorias cat ON t.categoria_id = cat.id
             LEFT JOIN contas c ON t.conta_id = c.id
-            WHERE (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL)
+            WHERE t.user_id = {user_id}
+            AND (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL)
             AND t.data_vencimento BETWEEN '{data_inicio}' AND '{data_fim}'
             ORDER BY t.data_vencimento
         """)
@@ -80,6 +83,7 @@ class ConsultorEngine:
     @staticmethod
     def dados_ultimos_meses(n_meses=3):
         """Carrega transações dos últimos N meses."""
+        user_id = db.get_user_id()
         hoje = datetime.now()
         data_inicio = (hoje - relativedelta(months=n_meses)).replace(day=1).strftime('%Y-%m-%d')
         data_fim = hoje.strftime('%Y-%m-%d')
@@ -90,7 +94,8 @@ class ConsultorEngine:
             FROM transacoes t
             LEFT JOIN categorias cat ON t.categoria_id = cat.id
             LEFT JOIN contas c ON t.conta_id = c.id
-            WHERE (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL)
+            WHERE t.user_id = {user_id}
+            AND (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL)
             AND t.data_vencimento BETWEEN '{data_inicio}' AND '{data_fim}'
             ORDER BY t.data_vencimento
         """)
@@ -99,10 +104,12 @@ class ConsultorEngine:
     @staticmethod
     def saldo_acumulado():
         """Calcula saldo acumulado de todas as transações do caixa (ledger contínuo)."""
-        df = db.buscar("""
+        user_id = db.get_user_id()
+        df = db.buscar(f"""
             SELECT COALESCE(SUM(valor), 0) as saldo
             FROM transacoes
-            WHERE tipo_fluxo = 'CAIXA' OR tipo_fluxo IS NULL
+            WHERE user_id = {user_id}
+            AND (tipo_fluxo = 'CAIXA' OR tipo_fluxo IS NULL)
         """)
         if df.empty:
             return 0.0
@@ -647,7 +654,8 @@ class ConsultorManager:
                        "O consultor alerta quando uma categoria ultrapassar esse limite.")
 
             # Carrega categorias do banco (deduplica por nome normalizado)
-            df_cats = db.buscar("SELECT DISTINCT nome FROM categorias ORDER BY nome")
+            user_id = db.get_user_id()
+            df_cats = db.buscar(f"SELECT DISTINCT nome FROM categorias WHERE user_id = {user_id} ORDER BY nome")
             cats_vistos = set()
             cats = []
             for nome in (df_cats['nome'].tolist() if not df_cats.empty else []):
@@ -680,10 +688,10 @@ class ConsultorManager:
 
                 for chave, valor in updates.items():
                     db.executar(
-                        "INSERT INTO limites_financeiros (chave, valor, descricao) "
-                        "VALUES (%s, %s, %s) "
-                        "ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor",
-                        (chave, valor, '')
+                        "INSERT INTO limites_financeiros (chave, valor, descricao, user_id) "
+                        "VALUES (%s, %s, %s, %s) "
+                        "ON CONFLICT (chave, user_id) DO UPDATE SET valor = EXCLUDED.valor",
+                        (chave, valor, '', db.get_user_id())
                     )
 
                 st.success("✅ Limites atualizados com sucesso!")

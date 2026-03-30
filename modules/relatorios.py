@@ -30,12 +30,14 @@ class RelatoriosManager:
             return
 
         # Query base (ajustada para diferentes drivers)
+        user_id = db.get_user_id()
         q = f"""
             SELECT t.data_vencimento, t.descricao, t.valor, cat.nome AS categoria, c.nome AS banco
             FROM transacoes t
             LEFT JOIN categorias cat ON t.categoria_id = cat.id
             LEFT JOIN contas c ON t.conta_id = c.id
-            WHERE (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL)
+            WHERE t.user_id = {user_id}
+            AND (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL)
             AND t.data_vencimento BETWEEN '{d_ini}' AND '{d_fim}'
         """
 

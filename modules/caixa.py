@@ -39,8 +39,9 @@ class CaixaManager:
         ).strftime('%Y-%m-%d')
         
         # Carrega dados
-        df_contas = db.buscar("SELECT * FROM contas ORDER BY nome")
-        df_cats = db.buscar("SELECT * FROM categorias ORDER BY nome")
+        user_id = db.get_user_id()
+        df_contas = db.buscar(f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome")
+        df_cats = db.buscar(f"SELECT * FROM categorias WHERE user_id = {user_id} ORDER BY nome")
         
         df_caixa = db.buscar(f"""
             SELECT t.id, t.data_vencimento as data, t.descricao, t.valor,
@@ -50,7 +51,8 @@ class CaixaManager:
             FROM transacoes t 
             LEFT JOIN categorias cat ON t.categoria_id = cat.id 
             LEFT JOIN contas c ON t.conta_id = c.id
-            WHERE (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL) 
+            WHERE t.user_id = {user_id}
+            AND (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL) 
             AND t.data_vencimento BETWEEN '{data_inicio}' AND '{data_fim}' 
             ORDER BY t.data_vencimento DESC
         """)
@@ -142,10 +144,11 @@ class CaixaManager:
                     ctid = int(df_cats[df_cats.nome == cat_r].id.values[0])
                     valor_final = -val_r if "Saída" in tipo else val_r
                     data_comp = data_pg if compensado_r else None
+                    user_id = db.get_user_id()
                     
                     db.executar(
-                        "INSERT INTO transacoes (descricao, valor, data_vencimento, conta_id, categoria_id, tipo_fluxo, compensado, data_compensacao) VALUES (?,?,?,?,?,'CAIXA',?,?)",
-                        (desc_r, valor_final, data_pg, cid, ctid, compensado_r, data_comp)
+                        "INSERT INTO transacoes (descricao, valor, data_vencimento, conta_id, categoria_id, tipo_fluxo, compensado, data_compensacao, user_id) VALUES (?,?,?,?,?,'CAIXA',?,?,?)",
+                        (desc_r, valor_final, data_pg, cid, ctid, compensado_r, data_comp, user_id)
                     )
                     st.rerun()
     
@@ -191,10 +194,11 @@ class CaixaManager:
             with col_btn:
                 if st.button("✅ Compensar selecionados", type="primary", use_container_width=True, key="btn_comp_bulk"):
                     hoje = datetime.now().date()
+                    user_id = db.get_user_id()
                     for sid in selected_comp_ids:
                         db.executar(
-                            "UPDATE transacoes SET compensado=TRUE, data_compensacao=? WHERE id=?",
-                            (hoje, sid)
+                            "UPDATE transacoes SET compensado=TRUE, data_compensacao=? WHERE id=? AND user_id=?",
+                            (hoje, sid, user_id)
                         )
                     # Limpa checkboxes
                     for k in list(st.session_state.keys()):
@@ -243,15 +247,15 @@ class CaixaManager:
                     if not is_compensado:
                         if st.button("✅", key=f"comp_caixa_{rid}", help="Compensar"):
                             db.executar(
-                                "UPDATE transacoes SET compensado=TRUE, data_compensacao=? WHERE id=?",
-                                (datetime.now().date(), rid)
+                                "UPDATE transacoes SET compensado=TRUE, data_compensacao=? WHERE id=? AND user_id=?",
+                                (datetime.now().date(), rid, db.get_user_id())
                             )
                             st.rerun()
                     else:
                         if st.button("↩️", key=f"uncomp_caixa_{rid}", help="Descompensar"):
                             db.executar(
-                                "UPDATE transacoes SET compensado=FALSE, data_compensacao=NULL WHERE id=?",
-                                (rid,)
+                                "UPDATE transacoes SET compensado=FALSE, data_compensacao=NULL WHERE id=? AND user_id=?",
+                                (rid, db.get_user_id())
                             )
                             st.rerun()
                 
@@ -270,7 +274,7 @@ class CaixaManager:
                     st.warning(f"Excluir **{row['descricao']}**?")
                     cc1, cc2 = st.columns(2)
                     if cc1.button("✅ Sim", key=f"yes_del_{rid}"):
-                        db.executar("DELETE FROM transacoes WHERE id=?", (rid,))
+                        db.executar("DELETE FROM transacoes WHERE id=? AND user_id=?", (rid, db.get_user_id()))
                         st.session_state.pop(f"confirm_del_caixa_{rid}", None)
                         st.rerun()
                     if cc2.button("❌ Não", key=f"no_del_{rid}"):
@@ -312,8 +316,8 @@ class CaixaManager:
                     data_comp = datetime.now().date() if n_compensado and not is_compensado else (row.get('data_compensacao') if n_compensado else None)
                     
                     db.executar(
-                        "UPDATE transacoes SET descricao=?, valor=?, data_vencimento=?, conta_id=?, categoria_id=?, compensado=?, data_compensacao=? WHERE id=?",
-                        (n_desc, v_final, n_data, cid, ctid, n_compensado, data_comp, rid)
+                        "UPDATE transacoes SET descricao=?, valor=?, data_vencimento=?, conta_id=?, categoria_id=?, compensado=?, data_compensacao=? WHERE id=? AND user_id=?",
+                        (n_desc, v_final, n_data, cid, ctid, n_compensado, data_comp, rid, db.get_user_id())
                     )
                     st.session_state.pop(editing_key, None)
                     st.rerun()
