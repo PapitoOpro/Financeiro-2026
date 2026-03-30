@@ -42,7 +42,7 @@ def _confirmar_exclusao_dialog():
             st.session_state.pop('descs_para_excluir', None)
             # Limpa checkboxes selecionados
             for k in list(st.session_state.keys()):
-                if k.startswith('sel_parc_'):
+                if isinstance(k, str) and k.startswith('sel_parc_'):
                     del st.session_state[k]
             st.rerun()
     with col2:
@@ -644,7 +644,7 @@ class ParcelasManager:
         selected_ids = [
             int(k.replace('sel_parc_', ''))
             for k in st.session_state
-            if k.startswith('sel_parc_') and st.session_state[k]
+            if isinstance(k, str) and k.startswith('sel_parc_') and st.session_state[k]
             and int(k.replace('sel_parc_', '')) in all_parc_ids
         ]
 

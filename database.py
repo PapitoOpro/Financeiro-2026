@@ -208,6 +208,21 @@ class DatabaseManager:
         except:
             pass
 
+        # Adiciona coluna 'compensado' na tabela transacoes
+        try:
+            self.executar(
+                "ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS compensado BOOLEAN DEFAULT FALSE"
+            )
+        except:
+            pass
+
+        try:
+            self.executar(
+                "ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS data_compensacao DATE"
+            )
+        except:
+            pass
+
         # ── MIGRAÇÃO: Índice único anti-duplicidade em transacoes ──
         try:
             # Verifica se o índice já existe

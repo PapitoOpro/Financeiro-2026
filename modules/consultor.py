@@ -170,7 +170,8 @@ class ConsultorEngine:
 
                 for cat, total_cat in por_cat.items():
                     pct_cat = (total_cat / entradas) * 100
-                    chave_limite = f'pct_cat_{cat.lower().replace(" ", "_")}' if cat else None
+                    cat_str = str(cat)
+                    chave_limite = f'pct_cat_{cat_str.lower().replace(" ", "_")}' if cat else None
 
                     limite_cat = limites.get(chave_limite, 30) if chave_limite else 30
 
@@ -523,7 +524,8 @@ class ConsultorManager:
                 cat = row['categoria']
                 val = row['valor_abs']
                 pct = row['pct']
-                chave = f'pct_cat_{cat.lower().replace(" ", "_")}' if cat else None
+                cat_str = str(cat)
+                chave = f'pct_cat_{cat_str.lower().replace(" ", "_")}' if cat else None
                 limite = limites.get(chave, None) if chave else None
 
                 barra_cor = '#2ecc71'
