@@ -197,6 +197,12 @@ class DatabaseManager:
             descricao TEXT,
             user_id INTEGER REFERENCES usuarios(id))''')
 
+        # MIGRAÇÕES - Aumenta timeout para operações pesadas
+        try:
+            self.executar("SET statement_timeout = '600s'")
+        except Exception:
+            pass
+
         # MIGRAÇÕES - Adiciona colunas se não existirem
         try:
             self.executar(
@@ -319,6 +325,12 @@ class DatabaseManager:
                     CREATE UNIQUE INDEX ux_transacoes_desc_val_data
                     ON transacoes (user_id, lower(trim(descricao)), valor, data_vencimento)
                 ''')
+        except Exception:
+            pass
+
+        # Restaura timeout padrão após migrações
+        try:
+            self.executar("SET statement_timeout = '0'")
         except Exception:
             pass
 
