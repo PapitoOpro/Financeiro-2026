@@ -13,6 +13,45 @@ import plotly.graph_objects as go
 from utils import moeda, processar_fatura, get_cor_valor, get_cor_saldo
 from typing import Any, cast
 
+
+@st.dialog("Confirmar Exclusão")
+def _confirmar_exclusao_dialog():
+    """Modal de confirmação de exclusão de parcelas."""
+    ids = st.session_state.get('ids_para_excluir', [])
+    descs = st.session_state.get('descs_para_excluir', [])
+
+    if not ids:
+        st.rerun()
+        return
+
+    if len(ids) == 1:
+        st.warning(f"⚠️ Excluir **{descs[0]}**?\n\nEsta ação é irreversível.")
+    else:
+        st.warning(f"⚠️ Excluir **{len(ids)} parcela(s)**? Esta ação é irreversível.")
+        for desc in descs:
+            st.markdown(f"- {desc}")
+
+    st.markdown("")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("✅ Sim, excluir", use_container_width=True, type="primary"):
+            for rid in ids:
+                db.executar("DELETE FROM transacoes WHERE id=?", (rid,))
+            st.session_state['parcela_msg_sucesso'] = f"✅ {len(ids)} parcela(s) excluída(s) com sucesso!"
+            st.session_state.pop('ids_para_excluir', None)
+            st.session_state.pop('descs_para_excluir', None)
+            # Limpa checkboxes selecionados
+            for k in list(st.session_state.keys()):
+                if k.startswith('sel_parc_'):
+                    del st.session_state[k]
+            st.rerun()
+    with col2:
+        if st.button("❌ Cancelar", use_container_width=True):
+            st.session_state.pop('ids_para_excluir', None)
+            st.session_state.pop('descs_para_excluir', None)
+            st.rerun()
+
+
 class ParcelasManager:
     """Gerenciador de Projeção de Gastos (Parcelas)."""
     
@@ -591,8 +630,39 @@ class ParcelasManager:
 
         # 5. LISTAGEM CASCATA COM EDIÇÃO/EXCLUSÃO
         st.markdown("**📋 Detalhamento por Mês**")
+
+        # Mensagem de sucesso após exclusão
+        msg_sucesso = st.session_state.pop('parcela_msg_sucesso', None)
+        if msg_sucesso:
+            st.toast(msg_sucesso)
+
         meses_previsao = st.slider("Ver previsão detalhada para quantos meses?", 1, 24, 6)
         primeiro_mes = df_p['data_vencimento'].min().replace(day=1)
+
+        # Coletar IDs selecionados via checkboxes para exclusão em massa
+        all_parc_ids = df_p['id'].tolist()
+        selected_ids = [
+            int(k.replace('sel_parc_', ''))
+            for k in st.session_state
+            if k.startswith('sel_parc_') and st.session_state[k]
+            and int(k.replace('sel_parc_', '')) in all_parc_ids
+        ]
+
+        if selected_ids:
+            col_bulk_info, col_bulk_btn = st.columns([3, 1])
+            with col_bulk_info:
+                st.info(f"📌 **{len(selected_ids)}** parcela(s) selecionada(s)")
+            with col_bulk_btn:
+                if st.button(f"🗑️ Excluir selecionados", type="primary", use_container_width=True):
+                    descs = []
+                    for sid in selected_ids:
+                        row_match = df_p[df_p['id'] == sid]
+                        if not row_match.empty:
+                            desc = re.sub(r'^\[.*?\]\s*', '', row_match.iloc[0]['descricao'])
+                            descs.append(f"{desc} ({moeda(abs(row_match.iloc[0]['valor']))})")
+                    st.session_state['ids_para_excluir'] = selected_ids
+                    st.session_state['descs_para_excluir'] = descs
+                    _confirmar_exclusao_dialog()
 
         for i in range(meses_previsao):
             mes_atual = primeiro_mes + relativedelta(months=i)
@@ -613,37 +683,29 @@ class ParcelasManager:
                         st.markdown(f"**💳 Fatura: {cartao}** — Subtotal: <span style='color:#c0392b;'>{moeda(subtotal_cartao)}</span>", unsafe_allow_html=True)
 
                         for _, r in f_cartao.iterrows():
-                            # Colunas ajustadas para caber botões de editar/excluir
-                            c1, c2, c3, c4, c5 = st.columns([1.5, 3.5, 2.5, 0.8, 0.8])
+                            # Colunas: checkbox, data, descrição, valor, editar, excluir
+                            c_sel, c1, c2, c3, c4, c5 = st.columns([0.4, 1.3, 3.0, 2.3, 0.7, 0.7])
                             clean_desc_row = re.sub(r'^\[.*?\]\s*', '', r['descricao'])
+
+                            with c_sel:
+                                st.checkbox("", key=f"sel_parc_{r['id']}", label_visibility="collapsed")
+
                             c1.write(pd.to_datetime(r['data_vencimento']).strftime('%d/%m/%Y'))
                             c2.markdown(f"**{clean_desc_row}**<br><span style='color:gray; font-size:12px;'>{r.get('categoria','')}</span>", unsafe_allow_html=True)
                             c3.markdown(f"<div style='text-align: right; color:{'#27ae60' if r['valor']>0 else '#c0392b'}; font-weight:bold;'>{moeda(abs(r['valor']))}</div>", unsafe_allow_html=True)
 
-                            # Edit toggle (most compatible UX): abre um formulário inline abaixo da linha
+                            # Edit toggle: abre um formulário inline abaixo da linha
                             with c4:
                                 if st.button("✏️", key=f"edit_toggle_{r['id']}"):
                                     key_ed = f"editing_{r['id']}"
                                     st.session_state[key_ed] = not st.session_state.get(key_ed, False)
 
-                            # Delete small button alinhado à direita
+                            # Delete button: abre dialog modal de confirmação
                             with c5:
                                 if st.button("🗑️", key=f"del_parc_{r['id']}"):
-                                    st.session_state['del_id'] = int(r['id'])
-
-                            # Confirmação de exclusão inline (perto da parcela)
-                            if st.session_state.get('del_id') == int(r['id']):
-                                with st.container():
-                                    st.warning(f"⚠️ Excluir **{clean_desc_row}** ({moeda(abs(r['valor']))})? Esta ação é irreversível.")
-                                    col_ok, col_cancel = st.columns(2)
-                                    if col_ok.button("✅ Sim, excluir", key=f"confirm_del_{r['id']}"):
-                                        db.executar("DELETE FROM transacoes WHERE id=?", (int(r['id']),))
-                                        st.success("Parcela excluída.")
-                                        st.session_state['del_id'] = None
-                                        ParcelasManager._safe_rerun()
-                                    if col_cancel.button("❌ Cancelar", key=f"cancel_del_{r['id']}"):
-                                        st.session_state['del_id'] = None
-                                        ParcelasManager._safe_rerun()
+                                    st.session_state['ids_para_excluir'] = [int(r['id'])]
+                                    st.session_state['descs_para_excluir'] = [f"{clean_desc_row} ({moeda(abs(r['valor']))})"]
+                                    _confirmar_exclusao_dialog()
 
                             # Se o usuário solicitou edição dessa linha, mostramos um formulário inline
                             if st.session_state.get(f"editing_{r['id']}"):
