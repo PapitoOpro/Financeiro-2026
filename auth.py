@@ -282,11 +282,6 @@ class AuthManager:
                             placeholder="Digite novamente"
                         )
 
-                    st.info(
-                        "ℹ️ Após cadastro, sua conta será **aguardando aprovação** "
-                        "do administrador antes de poder fazer login."
-                    )
-
                     if st.form_submit_button("📝 Cadastrar", width='stretch'):
                         if nome and email and senha and confirm_senha:
                             if '@' not in email or '.' not in email:
