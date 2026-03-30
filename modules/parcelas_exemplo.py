@@ -648,22 +648,6 @@ class ParcelasManager:
             and int(k.replace('sel_parc_', '')) in all_parc_ids
         ]
 
-        if selected_ids:
-            col_bulk_info, col_bulk_btn = st.columns([3, 1])
-            with col_bulk_info:
-                st.info(f"📌 **{len(selected_ids)}** parcela(s) selecionada(s)")
-            with col_bulk_btn:
-                if st.button(f"🗑️ Excluir selecionados", type="primary", use_container_width=True):
-                    descs = []
-                    for sid in selected_ids:
-                        row_match = df_p[df_p['id'] == sid]
-                        if not row_match.empty:
-                            desc = re.sub(r'^\[.*?\]\s*', '', row_match.iloc[0]['descricao'])
-                            descs.append(f"{desc} ({moeda(abs(row_match.iloc[0]['valor']))})")
-                    st.session_state['ids_para_excluir'] = selected_ids
-                    st.session_state['descs_para_excluir'] = descs
-                    _confirmar_exclusao_dialog()
-
         for i in range(meses_previsao):
             mes_atual = primeiro_mes + relativedelta(months=i)
             f_mes = df_p[
@@ -673,8 +657,11 @@ class ParcelasManager:
 
             if not f_mes.empty:
                 total_mes = f_mes['valor_abs'].sum()
+                # Manter expander aberto se tiver itens selecionados dentro dele
+                ids_no_mes = set(f_mes['id'].tolist())
+                tem_selecionados = bool(ids_no_mes & set(selected_ids))
 
-                with st.expander(f"📅 {mes_atual.strftime('%m/%Y')} — Total do Mês: {moeda(total_mes)}"):
+                with st.expander(f"📅 {mes_atual.strftime('%m/%Y')} — Total do Mês: {moeda(total_mes)}", expanded=tem_selecionados):
                     cartoes_no_mes = f_mes['banco'].fillna("Desconhecido").unique()
 
                     for cartao in cartoes_no_mes:
@@ -763,4 +750,20 @@ class ParcelasManager:
                                         else:
                                             ParcelasManager._safe_rerun()
 
-        # (Edição agora é feita inline por formulário dentro da listagem por parcela)
+        # Barra de exclusão em massa (abaixo dos expanders para não atrapalhar a seleção)
+        if selected_ids:
+            st.markdown("---")
+            col_bulk_info, col_bulk_btn = st.columns([3, 1])
+            with col_bulk_info:
+                st.info(f"📌 **{len(selected_ids)}** parcela(s) selecionada(s)")
+            with col_bulk_btn:
+                if st.button("🗑️ Excluir selecionados", type="primary", use_container_width=True):
+                    descs = []
+                    for sid in selected_ids:
+                        row_match = df_p[df_p['id'] == sid]
+                        if not row_match.empty:
+                            desc = re.sub(r'^\[.*?\]\s*', '', row_match.iloc[0]['descricao'])
+                            descs.append(f"{desc} ({moeda(abs(row_match.iloc[0]['valor']))})")
+                    st.session_state['ids_para_excluir'] = selected_ids
+                    st.session_state['descs_para_excluir'] = descs
+                    _confirmar_exclusao_dialog()
