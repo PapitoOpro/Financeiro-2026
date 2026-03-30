@@ -52,6 +52,8 @@ class DatabaseManager:
         """Retorna a conexão atual, reconectando se necessário."""
         try:
             if self.conn is not None and getattr(self.conn, "closed", 1) == 0:
+                # Atualiza variável de sessão RLS com usuário atual
+                self._set_rls_user(self.conn)
                 return self.conn
         except Exception:
             # Qualquer problema ao checar a conexão força reconexão
@@ -59,7 +61,20 @@ class DatabaseManager:
 
         # Tenta (re)criar a conexão
         self.conn = self.conectar()
+        if self.conn is not None:
+            self._set_rls_user(self.conn)
         return self.conn
+
+    def _set_rls_user(self, conn):
+        """Define app.current_user_id na sessão do PostgreSQL para RLS."""
+        uid = self.get_user_id()
+        if uid is not None:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT set_config('app.current_user_id', %s, false)", (str(uid),))
+                conn.commit()
+            except Exception:
+                pass
 
     def get_engine(self):
         """Retorna um SQLAlchemy Engine criado a partir de `st.secrets`.
