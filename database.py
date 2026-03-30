@@ -6,6 +6,7 @@ import streamlit as st
 import pandas as pd
 import psycopg2
 from contextlib import contextmanager
+from supabase import create_client
 
 # Optional SQLAlchemy import for pandas.read_sql engine-backed execution
 try:
@@ -23,6 +24,19 @@ class DatabaseManager:
     def __init__(self):
         self.conn = None
         self.engine = None
+        self._supabase = None
+    
+    def get_supabase(self):
+        """Retorna o cliente Supabase (lazy init)."""
+        if self._supabase is None:
+            try:
+                url = st.secrets["SUPABASE_URL"]
+                key = st.secrets["SUPABASE_KEY"]
+                self._supabase = create_client(url, key)
+            except Exception as e:
+                st.error(f"❌ Erro ao criar cliente Supabase: {e}")
+                return None
+        return self._supabase
     
     @staticmethod
     def get_user_id():
@@ -189,8 +203,8 @@ class DatabaseManager:
         self.executar('''CREATE TABLE IF NOT EXISTS usuarios (
             id SERIAL PRIMARY KEY, 
             nome TEXT, 
-            username TEXT UNIQUE, 
-            senha TEXT)''')
+            email TEXT,
+            auth_id UUID UNIQUE)''')
 
         self.executar('CREATE TABLE IF NOT EXISTS contas (id SERIAL PRIMARY KEY, nome TEXT, user_id INTEGER REFERENCES usuarios(id))')
         self.executar('CREATE TABLE IF NOT EXISTS categorias (id SERIAL PRIMARY KEY, nome TEXT, user_id INTEGER REFERENCES usuarios(id))')
@@ -229,6 +243,21 @@ class DatabaseManager:
         try:
             self.executar(
                 "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            )
+        except Exception:
+            pass
+
+        try:
+            self.executar(
+                "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email TEXT"
+            )
+        except Exception:
+            pass
+
+        # Migração Supabase Auth: coluna auth_id para vincular ao Supabase Auth
+        try:
+            self.executar(
+                "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS auth_id UUID UNIQUE"
             )
         except Exception:
             pass

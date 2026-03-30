@@ -47,8 +47,8 @@ DROP TABLE IF EXISTS usuarios CASCADE;
 CREATE TABLE usuarios (
     id SERIAL PRIMARY KEY,
     nome TEXT,
-    username TEXT UNIQUE,
-    senha TEXT,
+    email TEXT,
+    auth_id UUID UNIQUE,
     aprovado BOOLEAN DEFAULT FALSE,
     data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

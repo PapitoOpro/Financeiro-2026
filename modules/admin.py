@@ -150,7 +150,7 @@ class AdminManager:
             st.markdown("### Usuários Aguardando Aprovação")
             
             df_pendentes = db.buscar("""
-                SELECT id, nome, username, data_criacao 
+                SELECT id, nome, email, data_criacao 
                 FROM usuarios 
                 WHERE aprovado = FALSE 
                 ORDER BY data_criacao DESC
@@ -164,7 +164,8 @@ class AdminManager:
                 for idx, row in df_pendentes.iterrows():
                     col1, col2, col3, col4 = st.columns([2, 1.5, 1, 1])
                     
-                    col1.markdown(f"**{row['nome']}** (`{row['username']}`)")
+                    email_info = f" | 📧 {row['email']}" if row.get('email') else ""
+                    col1.markdown(f"**{row['nome']}**{email_info}")
                     col2.caption(f"📅 {row['data_criacao']}")
                     
                     if col3.button("✅ Aprovar", key=f"aprova_{row['id']}", width='stretch'):
@@ -183,7 +184,7 @@ class AdminManager:
             st.markdown("### Usuários Aprovados")
             
             df_aprovados = db.buscar("""
-                SELECT id, nome, username, data_criacao 
+                SELECT id, nome, email, data_criacao 
                 FROM usuarios 
                 WHERE aprovado = TRUE 
                 ORDER BY nome
@@ -195,7 +196,7 @@ class AdminManager:
                 df_exibir = df_aprovados.rename(columns={
                     'id': 'ID',
                     'nome': 'Nome',
-                    'username': 'Usuário',
+                    'email': 'E-mail',
                     'data_criacao': 'Data de Criação'
                 })
                 st.dataframe(df_exibir, width='stretch', hide_index=True)
@@ -203,15 +204,22 @@ class AdminManager:
                 st.markdown("---")
                 st.markdown("### Deletar Usuário Aprovado")
                 
-                username = st.selectbox(
+                opcoes = df_aprovados.apply(
+                    lambda r: f"{r['nome']} ({r['email']})", axis=1
+                ).tolist()
+                ids = df_aprovados['id'].tolist()
+                
+                sel = st.selectbox(
                     "Selecione usuário para deletar",
-                    df_aprovados['username'].tolist(),
+                    range(len(opcoes)),
+                    format_func=lambda i: opcoes[i],
                     key="delete_user_select"
                 )
                 
                 if st.button("🗑️ Deletar Usuário", width='stretch'):
-                    db.executar("DELETE FROM usuarios WHERE username = ?", (username,))
-                    st.success(f"✅ Usuário '{username}' deletado!")
+                    uid_del = ids[sel]
+                    db.executar("DELETE FROM usuarios WHERE id = ?", (uid_del,))
+                    st.success(f"✅ Usuário deletado!")
                     st.rerun()
     
     @staticmethod

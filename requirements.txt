@@ -4,7 +4,7 @@ streamlit>=1.30.0,<2.0.0
 pandas>=2.0.0,<3.0.0
 numpy<2.0.0  # Evite o numpy 2.0 por enquanto, causa conflito com muitas libs
 psycopg2-binary
-bcrypt
+supabase
 plotly
 python-dateutil
 PyPDF2

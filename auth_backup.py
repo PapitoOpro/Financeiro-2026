@@ -1,16 +1,16 @@
 # ==========================================
-# SISTEMA DE AUTENTICAÇÃO (Supabase Auth)
+# SISTEMA DE AUTENTICAÇÃO
 # ==========================================
 
 import streamlit as st
+import bcrypt
 import base64
 import os
 from database import db
 
-
 class AuthManager:
-    """Gerenciador de autenticação via Supabase Auth."""
-
+    """Gerenciador de autenticação do sistema."""
+    
     @staticmethod
     def inicializar_sessao():
         """Inicializa as variáveis de sessão."""
@@ -20,135 +20,91 @@ class AuthManager:
             st.session_state.usuario_nome = None
         if 'usuario_id' not in st.session_state:
             st.session_state.usuario_id = None
-
+    
     @staticmethod
-    def fazer_login(email, senha):
-        """Autentica via Supabase Auth e verifica aprovação no perfil local."""
-        supa = db.get_supabase()
-        if not supa:
-            return False, "Erro de conexão com Supabase"
-
-        try:
-            res = supa.auth.sign_in_with_password({"email": email, "password": senha})
-        except Exception as e:
-            msg = str(e)
-            if "Invalid login" in msg or "invalid" in msg.lower():
-                return False, "E-mail ou senha incorretos"
-            if "Email not confirmed" in msg:
-                return False, "confirmar_email"
-            return False, f"Erro: {msg}"
-
-        if not res.user:
-            return False, "Erro de autenticação"
-
-        auth_uid = res.user.id
-
-        # Busca perfil local na tabela usuarios
-        perfil = db.buscar_um(
-            "SELECT id, nome, aprovado FROM usuarios WHERE auth_id = %s",
-            (auth_uid,)
+    def fazer_login(username, senha):
+        """Autentica um usuário com verificação de aprovação."""
+        res = db.buscar_um(
+            "SELECT id, nome, senha, aprovado FROM usuarios WHERE username = ?", 
+            (username,)
         )
-
-        if not perfil:
-            return False, "Perfil não encontrado. Contacte o administrador."
-
-        usuario_id, nome, aprovado = perfil
-
+        
+        if not res:
+            return False, "Usuário não encontrado"
+        
+        usuario_id, nome, senha_hash, aprovado = res
+        
+        # Valida a senha
+        if not bcrypt.checkpw(senha.encode('utf-8'), senha_hash.encode('utf-8')):
+            return False, "Senha incorreta"
+        
+        # Verifica se está aprovado
         if not aprovado:
-            try:
-                supa.auth.sign_out()
-            except Exception:
-                pass
             return False, "pendente"
-
+        
         # Login bem-sucedido
         st.session_state.logado = True
         st.session_state.usuario_nome = nome
         st.session_state.usuario_id = usuario_id
         db.inicializar_dados_usuario(usuario_id)
         return True, "ok"
-
+    
     @staticmethod
-    def registrar_usuario(nome, email, senha):
-        """Registra via Supabase Auth e cria perfil local."""
+    def registrar_usuario(nome, username, email, senha):
+        """Registra um novo usuário com status 'não aprovado' (ou aprovado se for o primeiro)."""
         if len(senha) < 6:
             st.error("❌ Senha deve ter pelo menos 6 caracteres.")
             return False
-
-        supa = db.get_supabase()
-        if not supa:
-            st.error("❌ Erro de conexão com Supabase.")
-            return False
-
-        # 1. Cria usuário no Supabase Auth
-        try:
-            res = supa.auth.sign_up({"email": email, "password": senha})
-        except Exception as e:
-            msg = str(e)
-            if "already registered" in msg.lower() or "already been registered" in msg.lower():
-                st.error("❌ Este e-mail já está cadastrado. Tente fazer login.")
-            else:
-                st.error(f"❌ Erro no cadastro: {msg}")
-            return False
-
-        if not res.user:
-            st.error("❌ Erro ao criar conta. Tente novamente.")
-            return False
-
-        auth_uid = res.user.id
-
-        # 2. Verifica se é o primeiro usuário (auto-aprova)
+        
+        hash_senha = bcrypt.hashpw(senha.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        # Verifica se é o primeiro usuário
         count_usuarios = db.buscar_um("SELECT COUNT(*) FROM usuarios")
-        eh_primeiro = (count_usuarios[0] == 0) if count_usuarios else True
+        eh_primeiro = count_usuarios[0] == 0
+        
+        # Auto-aprova o primeiro usuário
         aprovado = eh_primeiro
-
-        # 3. Cria perfil local na tabela usuarios
+        
         sucesso = db.executar(
-            "INSERT INTO usuarios (nome, email, auth_id, aprovado) VALUES (%s, %s, %s, %s)",
-            (nome, email, auth_uid, aprovado)
+            "INSERT INTO usuarios (nome, username, email, senha, aprovado) VALUES (?, ?, ?, ?, ?)",
+            (nome, username, email, hash_senha, aprovado)
         )
-
+        
         if sucesso:
             if eh_primeiro:
                 st.success(
                     "✅ Primeiro usuário registrado com sucesso!\n\n"
                     "🎉 Você foi **automaticamente aprovado** como administrador.\n"
-                    "Faça login agora com seu e-mail e senha."
+                    "Faça login agora com suas credenciais."
                 )
             else:
                 st.success(
                     "✅ Cadastro realizado com sucesso!\n\n"
                     "⏳ Seu usuário está **aguardando aprovação** do administrador.\n"
-                    "Você receberá acesso em breve."
+                    "Você receberá notificação quando for aprovado."
                 )
         else:
-            st.error("❌ Erro ao criar perfil. E-mail pode estar duplicado.")
-
+            st.error("❌ Erro ao registrar. Username pode estar duplicado.")
+        
         return sucesso
-
+    
     @staticmethod
     def fazer_logout():
-        """Faz logout do Supabase Auth e limpa sessão."""
-        try:
-            supa = db.get_supabase()
-            if supa:
-                supa.auth.sign_out()
-        except Exception:
-            pass
+        """Faz logout do usuário."""
         st.session_state.logado = False
         st.session_state.usuario_nome = None
         st.session_state.usuario_id = None
         st.rerun()
-
+    
     @staticmethod
     def tela_login():
-        """Renderiza a tela de login/registro."""
+        """Renderiza a tela de login/registro com design melhorado."""
         AuthManager.inicializar_sessao()
-
+        
         if st.session_state.logado:
             return True
-
-        # CSS customizado
+        
+        # CSS customizado para melhor aparência (campos menores, topo mais leve)
         st.markdown("""
             <style>
             .login-container {
@@ -172,6 +128,13 @@ class AuthManager:
                 color: #444;
                 margin-bottom: 12px;
             }
+            .login-subtitle {
+                text-align: center;
+                font-size: 0.9rem;
+                color: #666;
+                margin-bottom: 18px;
+            }
+            /* Restringe largura dos inputs dentro do container e reduz altura visual */ 
             .login-container input[type="text"], .login-container input[type="password"], .login-container .stTextInput>div>input {
                 height: 36px !important;
                 font-size: 0.95rem !important;
@@ -183,13 +146,14 @@ class AuthManager:
             }
             </style>
         """, unsafe_allow_html=True)
-
+        
+        # Container centralizado e mais compacto (campos menores, alinhamento para o topo)
         col1, col2, col3 = st.columns([1, 2, 1])
 
         with col2:
             st.markdown('<div class="login-container">', unsafe_allow_html=True)
 
-            # Logo
+            # Logo centralizada
             logo_path = os.path.join(os.path.dirname(__file__), "assets", "logo.png")
             if os.path.exists(logo_path):
                 with open(logo_path, "rb") as f:
@@ -207,25 +171,25 @@ class AuthManager:
             st.markdown('---')
 
             tab1, tab2 = st.tabs(["🔑 Login", "📝 Cadastro"])
-
+            
             with tab1:
                 st.subheader("Faça seu Login")
-
+                
                 with st.form("login_form"):
-                    email = st.text_input(
-                        "📧 E-mail",
-                        placeholder="Digite seu e-mail"
+                    username = st.text_input(
+                        "👤 Usuário",
+                        placeholder="Digite seu usuário"
                     )
                     senha = st.text_input(
                         "🔐 Senha",
                         type="password",
                         placeholder="Digite sua senha"
                     )
-
+                    
                     if st.form_submit_button("🔓 Entrar", width='stretch'):
-                        if email and senha:
-                            sucesso, status = AuthManager.fazer_login(email, senha)
-
+                        if username and senha:
+                            sucesso, status = AuthManager.fazer_login(username, senha)
+                            
                             if sucesso:
                                 st.success("✅ Login realizado com sucesso!")
                                 st.rerun()
@@ -236,17 +200,11 @@ class AuthManager:
                                     "aguardando aprovação do administrador. Em breve você "
                                     "receberá acesso ao sistema."
                                 )
-                            elif status == "confirmar_email":
-                                st.warning(
-                                    "📧 **Confirme seu e-mail**\n\n"
-                                    "Verifique sua caixa de entrada e clique no link de "
-                                    "confirmação enviado pelo Supabase."
-                                )
                             else:
                                 st.error(f"❌ {status}")
                         else:
                             st.error("❌ Preencha todos os campos.")
-
+                
                 st.markdown("---")
                 st.markdown(
                     "<div style='text-align: center; font-size: 0.9em; color: #666;'>"
@@ -254,20 +212,24 @@ class AuthManager:
                     "</div>",
                     unsafe_allow_html=True
                 )
-
+            
             with tab2:
                 st.subheader("Criar Nova Conta")
-
+                
                 with st.form("registro_form"):
                     nome = st.text_input(
                         "👤 Nome Completo",
                         placeholder="Seu nome completo"
                     )
+                    username = st.text_input(
+                        "🆔 Username",
+                        placeholder="Escolha um usuário único (sem espaços)"
+                    )
                     email = st.text_input(
                         "📧 E-mail",
                         placeholder="seu@email.com"
                     )
-
+                    
                     col_pwd1, col_pwd2 = st.columns(2)
                     with col_pwd1:
                         senha = st.text_input(
@@ -281,23 +243,25 @@ class AuthManager:
                             type="password",
                             placeholder="Digite novamente"
                         )
-
+                    
                     st.info(
                         "ℹ️ Após cadastro, sua conta será **aguardando aprovação** "
                         "do administrador antes de poder fazer login."
                     )
-
+                    
                     if st.form_submit_button("📝 Cadastrar", width='stretch'):
-                        if nome and email and senha and confirm_senha:
-                            if '@' not in email or '.' not in email:
+                        if nome and username and email and senha and confirm_senha:
+                            if len(username) < 3:
+                                st.error("❌ Username deve ter pelo menos 3 caracteres.")
+                            elif '@' not in email or '.' not in email:
                                 st.error("❌ E-mail inválido.")
                             elif senha != confirm_senha:
                                 st.error("❌ As senhas não conferem.")
                             else:
-                                AuthManager.registrar_usuario(nome, email, senha)
+                                AuthManager.registrar_usuario(nome, username, email, senha)
                         else:
                             st.error("❌ Preencha todos os campos.")
-
+            
             st.markdown("---")
             st.markdown(
                 "<div style='text-align: center; font-size: 0.85em; color: #999;'>"
@@ -306,5 +270,5 @@ class AuthManager:
                 unsafe_allow_html=True
             )
             st.markdown('</div>', unsafe_allow_html=True)
-
+        
         st.stop()
