@@ -12,6 +12,7 @@ from modules.cadastros import CadastrosManager
 from modules.admin import AdminManager
 from modules.parcelas_exemplo import ParcelasManager
 from modules.relatorios import RelatoriosManager
+from modules.consultor import ConsultorManager
 
 # ==========================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -46,7 +47,8 @@ menu = st.sidebar.radio(
         "2- Projeção de Gastos",
         "3- Cadastros",
         "4- Relatórios",
-        "5- Admin 🔧",
+        "5- Consultor Financeiro",
+        "6- Admin 🔧",
     ],
     key="main_menu"
 )
@@ -73,7 +75,10 @@ elif menu == "3- Cadastros":
 elif menu == "4- Relatórios":
     RelatoriosManager.renderizar()
 
-elif menu == "5- Admin 🔧":
+elif menu == "5- Consultor Financeiro":
+    ConsultorManager.renderizar()
+
+elif menu == "6- Admin 🔧":
     AdminManager.renderizar()
 
 # ==========================================

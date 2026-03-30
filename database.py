@@ -180,6 +180,16 @@ class DatabaseManager:
             nome TEXT, 
             username TEXT UNIQUE, 
             senha TEXT)''')
+
+        # Tabela de configuração de limites do consultor financeiro
+        self.executar('''CREATE TABLE IF NOT EXISTS limites_financeiros (
+            id SERIAL PRIMARY KEY,
+            chave TEXT UNIQUE NOT NULL,
+            valor NUMERIC NOT NULL,
+            descricao TEXT)''')
+
+        # Insere limites padrão se não existirem
+        self._inserir_limites_padrao()
         
         # MIGRAÇÕES - Adiciona colunas se não existirem
         try:
@@ -227,6 +237,27 @@ class DatabaseManager:
                 ''')
         except Exception:
             pass
+
+    def _inserir_limites_padrao(self):
+        """Insere limites padrão caso a tabela esteja vazia."""
+        existe = self.buscar_um("SELECT 1 FROM limites_financeiros LIMIT 1")
+        if existe:
+            return
+        defaults = [
+            ('pct_gasto_maximo', 80, 'Percentual máximo de gastos sobre a renda (%)'),
+            ('pct_alerta_critico', 90, 'Percentual de gasto que dispara alerta crítico (%)'),
+            ('pct_alerta_preventivo', 70, 'Percentual de gasto que dispara alerta preventivo (%)'),
+            ('saldo_minimo', 500, 'Saldo mínimo recomendado (R$)'),
+            ('pct_cat_alimentacao', 30, 'Limite % para categoria Alimentação'),
+            ('pct_cat_lazer', 15, 'Limite % para categoria Lazer'),
+            ('pct_cat_transporte', 15, 'Limite % para categoria Transporte'),
+            ('pct_sugestao_guardar', 30, 'Sugestão de % a guardar de dinheiro extra'),
+        ]
+        for chave, valor, desc in defaults:
+            self.executar(
+                "INSERT INTO limites_financeiros (chave, valor, descricao) VALUES (%s, %s, %s) ON CONFLICT (chave) DO NOTHING",
+                (chave, valor, desc)
+            )
 
 # Instância global
 db = DatabaseManager()

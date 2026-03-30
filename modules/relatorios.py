@@ -9,6 +9,7 @@ from dateutil.relativedelta import relativedelta
 from database import db
 from config import MESES_LISTA
 from utils import moeda
+from modules.consultor import ConsultorManager, ConsultorEngine
 
 
 class RelatoriosManager:
@@ -105,7 +106,11 @@ class RelatoriosManager:
         ''', unsafe_allow_html=True)
 
         # Abas
-        t_extrato, t_abc = st.tabs(["[+] Extrato do Período", "[>] Curva ABC (Data e Valor)"])
+        t_extrato, t_abc, t_consultor = st.tabs([
+            "[+] Extrato do Período",
+            "[>] Curva ABC (Data e Valor)",
+            "[🧠] Consultor Financeiro",
+        ])
 
         with t_extrato:
             df_extrato = df_an.copy()
@@ -177,3 +182,13 @@ class RelatoriosManager:
 
             st.dataframe(df_abc[cols_abc].rename(columns=rename_abc), hide_index=True, width='stretch')
             st.info("[ DICA ] Focar na negociação dos itens da Classe A traz maior impacto na saúde financeira.")
+
+        with t_consultor:
+            # Usa o mês do filtro de data início para o diagnóstico
+            mes_consultor = d_ini.month
+            ano_consultor = d_ini.year
+            diag = ConsultorEngine.diagnostico_completo(ano_consultor, mes_consultor)
+            ConsultorManager._renderizar_status_geral(diag)
+            ConsultorManager._renderizar_alertas(diag['alertas'])
+            st.markdown("---")
+            ConsultorManager._renderizar_diagnostico(diag)

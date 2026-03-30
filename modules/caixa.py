@@ -9,6 +9,7 @@ from dateutil.relativedelta import relativedelta
 from config import MESES_LISTA, COL_EXTRATO, COL_ESPACO, COL_FORM, CORES
 from database import db
 from utils import moeda, get_cor_saldo, get_cor_valor
+from modules.consultor import ConsultorManager
 
 class CaixaManager:
     """Gerenciador do Controle de Caixa."""
@@ -59,6 +60,9 @@ class CaixaManager:
         
         # 2. CARDS DE RESUMO
         CaixaManager._renderizar_cards(ent, sai, bal)
+        
+        # ALERTAS DO CONSULTOR
+        ConsultorManager.widget_alertas(ano_sel, mes_num)
         
         # 3. DIVISÃO: EXTRATO | FORMULÁRIO
         col_extrato, col_espaco, col_form = st.columns([COL_EXTRATO, COL_ESPACO, COL_FORM])
