@@ -20,12 +20,14 @@ class CaixaManager:
         st.header("[ $ ] Controle de Caixa Real")
         
         # 1. FILTROS NO TOPO
-        col_m1, col_m2 = st.columns([1, 1])
-        mes_nome = col_m1.selectbox(
+        mes_nome = st.segmented_control(
             "Mês:", MESES_LISTA,
-            index=datetime.now().month - 1
+            default=MESES_LISTA[datetime.now().month - 1]
         )
-        ano_sel = col_m2.number_input(
+        if mes_nome is None:
+            mes_nome = MESES_LISTA[datetime.now().month - 1]
+        col_ano, _ = st.columns([1, 5])
+        ano_sel = col_ano.number_input(
             "Ano:", min_value=2025, max_value=2030, value=2026
         )
         

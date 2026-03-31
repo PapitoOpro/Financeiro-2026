@@ -168,8 +168,8 @@ class AuthManager:
             }
             .login-welcome {
                 text-align: center;
-                font-size: 1rem;
-                color: #444;
+                font-size: 1.3rem;
+                color: #ffffff;
                 margin-bottom: 12px;
             }
             .login-container input[type="text"], .login-container input[type="password"], .login-container .stTextInput>div>input {
@@ -184,7 +184,7 @@ class AuthManager:
             </style>
         """, unsafe_allow_html=True)
 
-        col1, col2, col3 = st.columns([1, 2, 1])
+        col1, col2, col3 = st.columns([1.5, 1, 1.5])
 
         with col2:
             st.markdown('<div class="login-container">', unsafe_allow_html=True)
@@ -205,6 +205,12 @@ class AuthManager:
 
             st.markdown('<div class="login-welcome">Seja bem-vindo.</div>', unsafe_allow_html=True)
             st.markdown('---')
+            st.markdown(
+                    "<div style='text-align: center; font-size: 1.1em; color: #ffffff;'>"
+                    "Primeira vez aqui? Faça seu cadastro na aba ao lado!"
+                    "</div>",
+                    unsafe_allow_html=True
+                )
 
             tab1, tab2 = st.tabs(["🔑 Login", "📝 Cadastro"])
 
@@ -248,12 +254,7 @@ class AuthManager:
                             st.error("❌ Preencha todos os campos.")
 
                 st.markdown("---")
-                st.markdown(
-                    "<div style='text-align: center; font-size: 0.9em; color: #666;'>"
-                    "Primeira vez aqui? Faça seu cadastro na aba ao lado →"
-                    "</div>",
-                    unsafe_allow_html=True
-                )
+                
 
             with tab2:
                 st.subheader("Criar Nova Conta")
