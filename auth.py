@@ -54,12 +54,9 @@ class AuthManager:
 
         usuario_id, nome, aprovado = perfil
 
+        # Auto-aprova se ainda não estava aprovado
         if not aprovado:
-            try:
-                supa.auth.sign_out()
-            except Exception:
-                pass
-            return False, "pendente"
+            db.executar("UPDATE usuarios SET aprovado = TRUE WHERE id = %s", (usuario_id,))
 
         # Login bem-sucedido
         st.session_state.logado = True
@@ -97,30 +94,17 @@ class AuthManager:
 
         auth_uid = res.user.id
 
-        # 2. Verifica se é o primeiro usuário (auto-aprova)
-        count_usuarios = db.buscar_um("SELECT COUNT(*) FROM usuarios")
-        eh_primeiro = (count_usuarios[0] == 0) if count_usuarios else True
-        aprovado = eh_primeiro
-
-        # 3. Cria perfil local na tabela usuarios
+        # 2. Cria perfil local na tabela usuarios (auto-aprovado)
         sucesso = db.executar(
             "INSERT INTO usuarios (nome, email, auth_id, aprovado) VALUES (%s, %s, %s, %s)",
-            (nome, email, auth_uid, aprovado)
+            (nome, email, auth_uid, True)
         )
 
         if sucesso:
-            if eh_primeiro:
-                st.success(
-                    "✅ Primeiro usuário registrado com sucesso!\n\n"
-                    "🎉 Você foi **automaticamente aprovado** como administrador.\n"
-                    "Faça login agora com seu e-mail e senha."
-                )
-            else:
-                st.success(
-                    "✅ Cadastro realizado com sucesso!\n\n"
-                    "⏳ Seu usuário está **aguardando aprovação** do administrador.\n"
-                    "Você receberá acesso em breve."
-                )
+            st.success(
+                "✅ Cadastro realizado com sucesso!\n\n"
+                "🎉 Faça login agora com seu e-mail e senha."
+            )
         else:
             st.error("❌ Erro ao criar perfil. E-mail pode estar duplicado.")
 
