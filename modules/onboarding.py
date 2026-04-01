@@ -157,8 +157,17 @@ class OnboardingManager:
                 st.rerun()
             return
 
-        # Calcula total atual
-        total_pct = sum(cat.get('pct', 0) for cat in categorias)
+        # Sincroniza valores dos widgets com a lista de categorias
+        for i, cat in enumerate(categorias):
+            pct_key = f"ob_cat_pct_{i}"
+            nome_key = f"ob_cat_nome_{i}"
+            if pct_key in st.session_state:
+                categorias[i]['pct'] = int(round(st.session_state[pct_key]))
+            if nome_key in st.session_state:
+                categorias[i]['nome'] = st.session_state[nome_key]
+
+        # Calcula total atual (já sincronizado)
+        total_pct = sum(int(round(cat.get('pct', 0))) for cat in categorias)
 
         # Barra global de 100%
         barra_cor = "#2ecc71" if total_pct == 100 else ("#f39c12" if total_pct < 100 else "#e74c3c")
@@ -188,16 +197,14 @@ class OnboardingManager:
                             unsafe_allow_html=True)
 
             with col_nome:
-                novo_nome = st.text_input("Categoria", value=cat['nome'], key=f"ob_cat_nome_{i}",
+                st.text_input("Categoria", value=cat['nome'], key=f"ob_cat_nome_{i}",
                                           label_visibility="collapsed")
-                categorias[i]['nome'] = novo_nome
 
             with col_pct:
-                novo_pct = st.number_input(
-                    "%", min_value=0, max_value=100, value=int(cat.get('pct', 0)),
-                    key=f"ob_cat_pct_{i}", label_visibility="collapsed"
+                st.number_input(
+                    "%", min_value=0, max_value=100, value=int(round(cat.get('pct', 0))),
+                    step=1, key=f"ob_cat_pct_{i}", label_visibility="collapsed"
                 )
-                categorias[i]['pct'] = novo_pct
 
             with col_del:
                 if st.button("🗑️", key=f"ob_del_{i}"):
@@ -213,7 +220,7 @@ class OnboardingManager:
                                      key="ob_nova_cat", label_visibility="collapsed")
         with col_add_pct:
             nova_pct = st.number_input("% Nova", min_value=0, max_value=100, value=0,
-                                       key="ob_nova_pct", label_visibility="collapsed")
+                                       step=1, key="ob_nova_pct", label_visibility="collapsed")
         with col_add_btn:
             if st.button("➕", key="ob_add_cat"):
                 if nova_cat.strip():

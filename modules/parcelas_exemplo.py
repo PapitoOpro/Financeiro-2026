@@ -460,8 +460,19 @@ class ParcelasManager:
     def _importar_pdf_dados(dados, banco, conta, cat, data_base, df_contas, df_cats):
         """Importa dados do PDF para o BD com trava de duplicidade."""
         try:
-            cid = int(df_contas[df_contas.nome == conta].id.values[0])
-            ctid = int(df_cats[df_cats.nome == cat].id.values[0])
+            # Busca IDs da conta e categoria selecionadas
+            contas_match = df_contas[df_contas.nome == conta]
+            cats_match = df_cats[df_cats.nome == cat]
+
+            if contas_match.empty:
+                st.error("❌ Conta/Cartão não encontrado. Cadastre um cartão em **Cadastros** antes de importar.")
+                return
+            if cats_match.empty:
+                st.error("❌ Categoria não encontrada. Cadastre uma categoria em **Cadastros** antes de importar.")
+                return
+
+            cid = int(contas_match.id.values[0])
+            ctid = int(cats_match.id.values[0])
             
             novos = 0
             duplicados = 0
