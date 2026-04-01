@@ -9,13 +9,13 @@ import numpy as np
 import cv2
 
 # ==========================================
-# 🔥 EXTRAÇÃO INTELIGENTE (PDF → TEXTO)
+# EXTRAÇÃO INTELIGENTE (PDF → TEXTO)
 # ==========================================
 
 def extrair_texto_pdf(file, senha=None):
     texto = ""
 
-    # 🥇 TENTAR EXTRAÇÃO DIRETA (RÁPIDO E PRECISO)
+    # TENTAR EXTRAÇÃO DIRETA (RÁPIDO E PRECISO)
     try:
         file.seek(0)
         open_kwargs = {}
@@ -29,7 +29,7 @@ def extrair_texto_pdf(file, senha=None):
     except:
         pass
 
-    # 🥈 FALLBACK OCR (SE TEXTO VEIO RUIM)
+    # FALLBACK OCR (SE TEXTO VEIO RUIM)
     if len(texto) < 1000:
         try:
             file.seek(0)
@@ -54,7 +54,7 @@ def extrair_texto_pdf(file, senha=None):
 
 
 # ==========================================
-# 🧼 NORMALIZAÇÃO (ANTI-OCR BUG)
+# NORMALIZAÇÃO (ANTI-OCR BUG)
 # ==========================================
 
 def normalizar_texto(texto):
@@ -71,13 +71,13 @@ def normalizar_texto(texto):
     for errado, certo in correcoes.items():
         texto = texto.replace(errado, certo)
 
-    texto = re.sub(r'[^\S\n]+', ' ', texto)  # Colapsa espaços mas preserva quebras de linha
+    texto = re.sub(r'[^\S\n]+', ' ', texto) # Colapsa espaços mas preserva quebras de linha
 
     return texto
 
 
 # ==========================================
-# 🏦 DETECTOR DE BANCO
+# DETECTOR DE BANCO
 # ==========================================
 
 def detectar_banco(texto):
@@ -103,7 +103,7 @@ def detectar_banco(texto):
 
 
 # ==========================================
-# 💳 PARSER - MERCADO PAGO (SEU CASO)
+# PARSER - MERCADO PAGO (SEU CASO)
 # ==========================================
 
 def parser_mercado_pago(texto):
@@ -125,7 +125,7 @@ def parser_mercado_pago(texto):
 
 
 # ==========================================
-# 🌍 PARSER GENÉRICO (OUTROS BANCOS)
+# PARSER GENÉRICO (OUTROS BANCOS)
 # ==========================================
 
 def parser_generico(texto):
@@ -147,7 +147,7 @@ def parser_generico(texto):
 
 
 # ==========================================
-# 🧠 ORQUESTRADOR PRINCIPAL
+# ORQUESTRADOR PRINCIPAL
 # ==========================================
 
 def _extrair_secao_parceladas(texto):
@@ -199,7 +199,7 @@ def _is_parcela_valida(parc_str):
 def extrair_parcelas(texto):
     import re
     resultados = []
-    chaves_vistas = set()  # (desc_normalizada, parcela) para evitar duplicatas reais
+    chaves_vistas = set() # (desc_normalizada, parcela) para evitar duplicatas reais
 
     # 1. Limpeza de ruídos comuns de OCR
     texto = texto.replace("R4", "R$").replace("I0F", "IOF")
@@ -231,7 +231,7 @@ def extrair_parcelas(texto):
     secao_parceladas = _extrair_secao_parceladas(texto)
     if secao_parceladas:
         # Dentro da seção parcelada, formato típico:
-        # DD/MM  DESCRICAOXX/YY  VALOR  ou  DD/MM  DESCRICAO XX/YY  VALOR
+        # DD/MM DESCRICAOXX/YY VALOR ou DD/MM DESCRICAO XX/YY VALOR
         regex_secao = re.findall(
             r'(\d{1,2}/\d{1,2})\s+(.+?)(\d{1,2}/\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
             secao_parceladas, re.IGNORECASE
@@ -321,13 +321,13 @@ def _is_compra_avista(parc):
     """Retorna True se a parcela indica compra à vista (01/01, 1/1, etc.)."""
     try:
         atual, total = map(int, parc.split("/"))
-        return atual == total  # 01/01, 1/1, 03/03, etc.
+        return atual == total # 01/01, 1/1, 03/03, etc.
     except (ValueError, AttributeError):
-        return True  # Se não conseguiu parsear, considera à vista
+        return True # Se não conseguiu parsear, considera à vista
 
 
 # ==========================================
-# 🚀 FUNÇÃO FINAL (USO SIMPLES)
+# FUNÇÃO FINAL (USO SIMPLES)
 # ==========================================
 
 def processar_fatura(file, senha_pdf=None):
@@ -355,7 +355,7 @@ def processar_fatura(file, senha_pdf=None):
 
 
 # ==========================================
-# 💰 FUNÇÕES UTILITÁRIAS - FORMATAÇÃO
+# FUNÇÕES UTILITÁRIAS - FORMATAÇÃO
 # ==========================================
 
 def moeda(valor):
@@ -367,13 +367,13 @@ def moeda(valor):
 def get_cor_saldo(saldo):
     """Retorna cor baseada no saldo (positivo=verde, negativo=vermelho)."""
     if saldo >= 0:
-        return "#10B981"  # Verde
+        return "#10B981" # Verde
     else:
-        return "#EF4444"  # Vermelho
+        return "#EF4444" # Vermelho
 
 def get_cor_valor(valor):
     """Retorna cor baseada no valor (positivo=verde, negativo=vermelho)."""
     if valor >= 0:
-        return "#10B981"  # Verde
+        return "#10B981" # Verde
     else:
-        return "#EF4444"  # Vermelho
+        return "#EF4444" # Vermelho

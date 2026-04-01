@@ -69,12 +69,12 @@ class AuthManager:
     def registrar_usuario(nome, email, senha):
         """Registra via Supabase Auth e cria perfil local."""
         if len(senha) < 6:
-            st.error("❌ Senha deve ter pelo menos 6 caracteres.")
+            st.error(" Senha deve ter pelo menos 6 caracteres.")
             return False
 
         supa = db.get_supabase()
         if not supa:
-            st.error("❌ Erro de conexão com Supabase.")
+            st.error(" Erro de conexão com Supabase.")
             return False
 
         # 1. Cria usuário no Supabase Auth
@@ -83,13 +83,13 @@ class AuthManager:
         except Exception as e:
             msg = str(e)
             if "already registered" in msg.lower() or "already been registered" in msg.lower():
-                st.error("❌ Este e-mail já está cadastrado. Tente fazer login.")
+                st.error(" Este e-mail já está cadastrado. Tente fazer login.")
             else:
-                st.error(f"❌ Erro no cadastro: {msg}")
+                st.error(f" Erro no cadastro: {msg}")
             return False
 
         if not res.user:
-            st.error("❌ Erro ao criar conta. Tente novamente.")
+            st.error(" Erro ao criar conta. Tente novamente.")
             return False
 
         auth_uid = res.user.id
@@ -102,11 +102,11 @@ class AuthManager:
 
         if sucesso:
             st.success(
-                "✅ Cadastro realizado com sucesso!\n\n"
-                "🎉 Faça login agora com seu e-mail e senha."
+                " Cadastro realizado com sucesso!\n\n"
+                " Faça login agora com seu e-mail e senha."
             )
         else:
-            st.error("❌ Erro ao criar perfil. E-mail pode estar duplicado.")
+            st.error(" Erro ao criar perfil. E-mail pode estar duplicado.")
 
         return sucesso
 
@@ -185,7 +185,7 @@ class AuthManager:
                     unsafe_allow_html=True
                 )
             else:
-                st.markdown('<div class="login-header">📈 Finanças Pro 2026</div>', unsafe_allow_html=True)
+                st.markdown('<div class="login-header"> Finanças Pro 2026</div>', unsafe_allow_html=True)
 
             st.markdown('<div class="login-welcome">Seja bem-vindo.</div>', unsafe_allow_html=True)
             st.markdown('---')
@@ -196,46 +196,46 @@ class AuthManager:
                     unsafe_allow_html=True
                 )
 
-            tab1, tab2 = st.tabs(["🔑 Login", "📝 Cadastro"])
+            tab1, tab2 = st.tabs([" Login", " Cadastro"])
 
             with tab1:
                 st.subheader("Faça seu Login")
 
                 with st.form("login_form"):
                     email = st.text_input(
-                        "📧 E-mail",
+                        " E-mail",
                         placeholder="Digite seu e-mail"
                     )
                     senha = st.text_input(
-                        "🔐 Senha",
+                        " Senha",
                         type="password",
                         placeholder="Digite sua senha"
                     )
 
-                    if st.form_submit_button("🔓 Entrar", width='stretch'):
+                    if st.form_submit_button(" Entrar", width='stretch'):
                         if email and senha:
                             sucesso, status = AuthManager.fazer_login(email, senha)
 
                             if sucesso:
-                                st.success("✅ Login realizado com sucesso!")
+                                st.success(" Login realizado com sucesso!")
                                 st.rerun()
                             elif status == "pendente":
                                 st.warning(
-                                    "⏳ **Usuário Aguardando Aprovação**\n\n"
+                                    " **Usuário Aguardando Aprovação**\n\n"
                                     "Seu cadastro foi recebido com sucesso, mas ainda está "
                                     "aguardando aprovação do administrador. Em breve você "
                                     "receberá acesso ao sistema."
                                 )
                             elif status == "confirmar_email":
                                 st.warning(
-                                    "📧 **Confirme seu e-mail**\n\n"
+                                    " **Confirme seu e-mail**\n\n"
                                     "Verifique sua caixa de entrada e clique no link de "
                                     "confirmação enviado pelo Supabase."
                                 )
                             else:
-                                st.error(f"❌ {status}")
+                                st.error(f" {status}")
                         else:
-                            st.error("❌ Preencha todos os campos.")
+                            st.error(" Preencha todos os campos.")
 
                 st.markdown("---")
                 
@@ -245,38 +245,38 @@ class AuthManager:
 
                 with st.form("registro_form"):
                     nome = st.text_input(
-                        "👤 Nome Completo",
+                        " Nome Completo",
                         placeholder="Seu nome completo"
                     )
                     email = st.text_input(
-                        "📧 E-mail",
+                        " E-mail",
                         placeholder="seu@email.com"
                     )
 
                     col_pwd1, col_pwd2 = st.columns(2)
                     with col_pwd1:
                         senha = st.text_input(
-                            "🔐 Senha",
+                            " Senha",
                             type="password",
                             placeholder="Min. 6 caracteres"
                         )
                     with col_pwd2:
                         confirm_senha = st.text_input(
-                            "🔒 Confirmar",
+                            " Confirmar",
                             type="password",
                             placeholder="Digite novamente"
                         )
 
-                    if st.form_submit_button("📝 Cadastrar", width='stretch'):
+                    if st.form_submit_button(" Cadastrar", width='stretch'):
                         if nome and email and senha and confirm_senha:
                             if '@' not in email or '.' not in email:
-                                st.error("❌ E-mail inválido.")
+                                st.error(" E-mail inválido.")
                             elif senha != confirm_senha:
-                                st.error("❌ As senhas não conferem.")
+                                st.error(" As senhas não conferem.")
                             else:
                                 AuthManager.registrar_usuario(nome, email, senha)
                         else:
-                            st.error("❌ Preencha todos os campos.")
+                            st.error(" Preencha todos os campos.")
 
             st.markdown("---")
             st.markdown(

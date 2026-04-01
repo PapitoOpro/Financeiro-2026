@@ -25,16 +25,16 @@ def _confirmar_exclusao_dialog():
         return
 
     if len(ids) == 1:
-        st.warning(f"⚠️ Excluir **{descs[0]}**?\n\nEsta ação é irreversível.")
+        st.warning(f" Excluir **{descs[0]}**?\n\nEsta ação é irreversível.")
     else:
-        st.warning(f"⚠️ Excluir **{len(ids)} item(ns)**? Esta ação é irreversível.")
+        st.warning(f" Excluir **{len(ids)} item(ns)**? Esta ação é irreversível.")
         for desc in descs:
             st.markdown(f"- {desc}")
 
     st.markdown("")
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("✅ Sim, excluir", use_container_width=True, type="primary"):
+        if st.button(" Sim, excluir", use_container_width=True, type="primary"):
             user_id = db.get_user_id()
             tipo = st.session_state.get('excluir_tipo', 'item_fatura')
             fatura_ids_afetadas = set()
@@ -53,7 +53,7 @@ def _confirmar_exclusao_dialog():
             for fid in fatura_ids_afetadas:
                 db.atualizar_total_fatura(fid)
 
-            st.session_state['parcela_msg_sucesso'] = f"✅ {len(ids)} item(ns) excluído(s) com sucesso!"
+            st.session_state['parcela_msg_sucesso'] = f" {len(ids)} item(ns) excluído(s) com sucesso!"
             st.session_state.pop('ids_para_excluir', None)
             st.session_state.pop('descs_para_excluir', None)
             st.session_state.pop('excluir_tipo', None)
@@ -62,7 +62,7 @@ def _confirmar_exclusao_dialog():
                     del st.session_state[k]
             st.rerun()
     with col2:
-        if st.button("❌ Cancelar", use_container_width=True):
+        if st.button(" Cancelar", use_container_width=True):
             st.session_state.pop('ids_para_excluir', None)
             st.session_state.pop('descs_para_excluir', None)
             st.rerun()
@@ -75,13 +75,13 @@ class ParcelasManager:
     @staticmethod
     def renderizar():
         """Renderiza a página de projeção de gastos."""
-        st.header("📉 Projeção de Gastos (Cartão/Parcelas)")
+        st.header(" Projeção de Gastos (Cartão/Parcelas)")
         
         user_id = db.get_user_id()
         df_contas = db.buscar(f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome")
         df_cats = db.buscar(f"SELECT * FROM categorias WHERE user_id = {user_id} ORDER BY nome")
         
-        # 👇 Adicionamos a tab "Importar CSV" aqui
+        # Adicionamos a tab "Importar CSV" aqui
         tab1, tab2, tab3, tab4 = st.tabs(["Manual", "Importar PDF", "Importar CSV", "Previsão"])
         
         with tab1:
@@ -90,7 +90,7 @@ class ParcelasManager:
         with tab2:
             ParcelasManager._tab_importar_pdf(df_contas, df_cats)
             
-        with tab3: # 👇 Nova aba
+        with tab3: # Nova aba
             ParcelasManager._tab_importar_csv(df_contas, df_cats)
         
         with tab4:
@@ -117,9 +117,9 @@ class ParcelasManager:
             
             if st.form_submit_button("Lançar Parcelas", width='stretch'):
                 if not desc or v_parcela <= 0:
-                    st.error("❌ Preencha descrição e valor!")
+                    st.error(" Preencha descrição e valor!")
                 elif p_atual > p_total:
-                    st.error("❌ Parcela atual não pode ser maior que total!")
+                    st.error(" Parcela atual não pode ser maior que total!")
                 else:
                     ParcelasManager._lancar_parcelas(
                         desc, v_parcela, p_atual, p_total, cnt, cat, dt_ini,
@@ -148,7 +148,7 @@ class ParcelasManager:
                 db.atualizar_total_fatura(fatura_id)
                 db.sincronizar_transacao_fatura(fatura_id, user_id)
 
-            st.success(f"✅ {parcelas_lancar} parcelas lançadas com sucesso!")
+            st.success(f" {parcelas_lancar} parcelas lançadas com sucesso!")
             ParcelasManager._resetar_estado_pdf()
 
         except Exception as e:
@@ -187,7 +187,7 @@ class ParcelasManager:
     @staticmethod
     def _tab_importar_pdf(df_contas, df_cats):
         """Aba para importar faturas PDF via OCR."""
-        st.subheader("📄 Importador de Faturas via OCR")
+        st.subheader(" Importador de Faturas via OCR")
         
         senha_pdf = st.text_input("Senha do PDF (Se houver)", type="password")
         file = st.file_uploader("Envie a fatura PDF", type="pdf")
@@ -198,7 +198,7 @@ class ParcelasManager:
             st.session_state["ocr_file_name"] = file.name
 
         # 2. Botão de Processamento: Apenas extrai e salva no session_state
-        if file and st.button("🔍 Analisar Fatura"):
+        if file and st.button(" Analisar Fatura"):
             with st.spinner("Extraindo dados do PDF..."):
                 banco, texto, dados = processar_fatura(file, senha_pdf)
                 
@@ -208,11 +208,11 @@ class ParcelasManager:
                 st.session_state["ocr_dados"] = dados
                 
                 if not dados:
-                    st.warning("⚠️ Texto extraído, mas nenhuma parcela detectada pelo padrão (Regex).")
-                    st.info("💡 Apenas compras parceladas são importadas (ex: 02/10, 03/12). "
+                    st.warning(" Texto extraído, mas nenhuma parcela detectada pelo padrão (Regex).")
+                    st.info(" Apenas compras parceladas são importadas (ex: 02/10, 03/12). "
                             "Compras à vista (01/01) e compras sem parcela são ignoradas para não poluir a previsão.")
                 else:
-                    st.success(f"✅ {len(dados)} parcelas encontradas no {banco}!")
+                    st.success(f" {len(dados)} parcelas encontradas no {banco}!")
 
         # 3. Exibição e Confirmação: Lê os dados do session_state
         dados_salvos = st.session_state.get("ocr_dados", [])
@@ -221,16 +221,16 @@ class ParcelasManager:
         
         # Expander para ver o texto extraído (debug)
         if texto_extraido:
-            with st.expander("🔎 Ver texto extraído do PDF (debug)"):
+            with st.expander(" Ver texto extraído do PDF (debug)"):
                 st.text(texto_extraido[:3000])
         
         if dados_salvos:
-            st.markdown(f"### 🏦 Banco Detectado: **{banco_detectado}**")
+            st.markdown(f"### Banco Detectado: **{banco_detectado}**")
             
             # ============================================================
             # AUDITORIA: Editar, corrigir ou excluir parcelas antes de importar
             # ============================================================
-            st.markdown("#### 🔍 Auditoria — Revise antes de importar")
+            st.markdown("#### Auditoria — Revise antes de importar")
             st.caption("Edite descrições, corrija parcelas ou desmarque itens que não deseja importar.")
 
             # Inicializa dados editáveis no session_state (só na primeira vez)
@@ -244,7 +244,7 @@ class ParcelasManager:
 
             # Cabeçalho da tabela
             hdr1, hdr2, hdr3, hdr4, hdr5 = st.columns([0.5, 3.5, 1.5, 1.5, 1])
-            hdr1.markdown("**✓**")
+            hdr1.markdown("****")
             hdr2.markdown("**Descrição**")
             hdr3.markdown("**Parcela**")
             hdr4.markdown("**Valor (R$)**")
@@ -277,7 +277,7 @@ class ParcelasManager:
                         format="%.2f"
                     )
                 with c_del:
-                    if st.button("🗑️", key=f"audit_del_{idx}"):
+                    if st.button("", key=f"audit_del_{idx}"):
                         itens_para_remover.append(idx)
 
             # Remover itens excluídos (processa após o loop para não alterar índices durante iteração)
@@ -313,14 +313,14 @@ class ParcelasManager:
                 data_base = col2.date_input("Vencimento da 1ª Parcela do Lote")
                 cat = st.selectbox("Categoria Padrão", lista_cats)
                 
-                if st.form_submit_button("🚀 Salvar no Banco (Aplicar Trava Anti-Duplicidade)", width='stretch'):
+                if st.form_submit_button(" Salvar no Banco (Aplicar Trava Anti-Duplicidade)", width='stretch'):
                     # Monta lista final apenas com itens marcados para importar
                     dados_finais = [
                         (d["desc"], d["parc"], d["valor"])
                         for d in dados_editaveis if d["importar"]
                     ]
                     if not dados_finais:
-                        st.warning("⚠️ Nenhuma parcela selecionada para importar.")
+                        st.warning(" Nenhuma parcela selecionada para importar.")
                     else:
                         ParcelasManager._importar_pdf_dados(
                             dados_finais, banco_detectado, conta, cat, data_base, df_contas, df_cats
@@ -328,7 +328,7 @@ class ParcelasManager:
     @staticmethod
     def _tab_importar_csv(df_contas, df_cats):
         """Aba para importar faturas via arquivo CSV (Otimizada e com Conversor de Moeda)."""
-        st.subheader("📊 Importador de Faturas via CSV")
+        st.subheader(" Importador de Faturas via CSV")
         
         file_csv = st.file_uploader("Envie a fatura em formato CSV", type=["csv"])
 
@@ -354,7 +354,7 @@ class ParcelasManager:
                 opcoes_parc = ["Nenhuma (Extrair da Descrição)"] + list(df_csv.columns)
                 col_parc = c3.selectbox("Coluna da Parcela? (Opcional)", opcoes_parc)
 
-                if st.button("🔍 Extrair Dados do CSV", width='stretch'):
+                if st.button(" Extrair Dados do CSV", width='stretch'):
                     with st.spinner("Lendo linhas..."):
                         dados_extraidos = []
                         
@@ -431,7 +431,7 @@ class ParcelasManager:
                                 continue # Pula linhas inválidas
                                 
                         st.session_state["csv_dados"] = dados_extraidos
-                        st.success(f"✅ {len(dados_extraidos)} registros processados com sucesso!")
+                        st.success(f" {len(dados_extraidos)} registros processados com sucesso!")
 
             except Exception as e:
                 st.error(f"Erro ao ler o CSV. O arquivo pode estar corrompido: {e}")
@@ -441,7 +441,7 @@ class ParcelasManager:
         
         if dados_salvos:
             st.markdown("---")
-            st.markdown("### 📋 Conferência e Lançamento (CSV)")
+            st.markdown("### Conferência e Lançamento (CSV)")
             
             df_preview = pd.DataFrame(dados_salvos, columns=["Descrição", "Parcela", "Valor"])
             st.dataframe(df_preview, width='stretch')
@@ -456,7 +456,7 @@ class ParcelasManager:
                 data_base = col2.date_input("Vencimento da 1ª Parcela do Lote")
                 cat = st.selectbox("Categoria Padrão", lista_cats)
                 
-                if st.form_submit_button("🚀 Salvar no Banco (Aplicar Trava Anti-Duplicidade)", width='stretch'):
+                if st.form_submit_button(" Salvar no Banco (Aplicar Trava Anti-Duplicidade)", width='stretch'):
                     
                     ParcelasManager._importar_pdf_dados(
                         dados=dados_salvos, 
@@ -468,7 +468,7 @@ class ParcelasManager:
                         df_cats=df_cats
                     )
                     
-                    st.session_state["csv_dados"] = []               
+                    st.session_state["csv_dados"] = [] 
 
     @staticmethod
     def _importar_pdf_dados(dados, banco, conta, cat, data_base, df_contas, df_cats):
@@ -478,10 +478,10 @@ class ParcelasManager:
             cats_match = df_cats[df_cats.nome == cat]
 
             if contas_match.empty:
-                st.error("❌ Conta/Cartão não encontrado. Cadastre um cartão em **Cadastros** antes de importar.")
+                st.error(" Conta/Cartão não encontrado. Cadastre um cartão em **Cadastros** antes de importar.")
                 return
             if cats_match.empty:
-                st.error("❌ Categoria não encontrada. Cadastre uma categoria em **Cadastros** antes de importar.")
+                st.error(" Categoria não encontrada. Cadastre uma categoria em **Cadastros** antes de importar.")
                 return
 
             cid = int(contas_match.id.values[0])
@@ -529,13 +529,13 @@ class ParcelasManager:
                     continue
 
             if novos > 0:
-                st.toast(f"✅ {novos} parcelas salvas!", icon="🎉")
+                st.toast(f" {novos} parcelas salvas!", icon="")
             if duplicados > 0:
-                st.toast(f"🛡️ {duplicados} ignoradas (já existiam).", icon="🛡️")
+                st.toast(f" {duplicados} ignoradas (já existiam).", icon="")
             if erros > 0:
-                st.toast(f"⚠️ {erros} com erro.", icon="⚠️")
+                st.toast(f" {erros} com erro.", icon="")
             if novos == 0 and duplicados > 0:
-                st.warning(f"🛡️ Nenhuma parcela nova importada — {duplicados} já existiam no sistema.")
+                st.warning(f" Nenhuma parcela nova importada — {duplicados} já existiam no sistema.")
 
             ParcelasManager._resetar_estado_pdf()
 
@@ -545,7 +545,7 @@ class ParcelasManager:
     @staticmethod
     def _tab_previsao():
         """Aba com previsão de gastos - Dashboard completo (lê de faturas + itens)."""
-        st.subheader("📅 Dashboard de Previsão de Gastos")
+        st.subheader(" Dashboard de Previsão de Gastos")
 
         user_id = db.get_user_id()
         df_contas = db.buscar(f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome")
@@ -577,7 +577,7 @@ class ParcelasManager:
         """)
 
         if df_itens.empty:
-            st.info("ℹ️ Nenhuma parcela lançada no cartão ainda.")
+            st.info("ℹ Nenhuma parcela lançada no cartão ainda.")
             return
 
         df_itens['data_vencimento'] = pd.to_datetime(df_itens['data_vencimento'])
@@ -615,7 +615,7 @@ class ParcelasManager:
         st.write("")
 
         # 2. GRÁFICO DE EVOLUÇÃO
-        st.markdown("**📈 Evolução do Parcelamento nos Próximos Meses**")
+        st.markdown("** Evolução do Parcelamento nos Próximos Meses**")
         agrupado_mes['cumulativo'] = agrupado_mes['valor_abs'].cumsum()
         fig = go.Figure()
         fig.add_bar(x=agrupado_mes['Mes_Ano_Str'], y=agrupado_mes['valor_abs'], name='Mensal', marker_color='#e74c3c')
@@ -627,7 +627,7 @@ class ParcelasManager:
         st.markdown("---")
 
         # 3. DISTRIBUIÇÃO POR CARTÃO / CATEGORIA
-        st.markdown("**🧭 Distribuição por Cartão / Categoria (Próximos Meses)**")
+        st.markdown("** Distribuição por Cartão / Categoria (Próximos Meses)**")
         distrib_cartao = df_itens.groupby('banco')['valor_abs'].sum().reset_index().sort_values('valor_abs', ascending=False)
         distrib_categoria = df_itens.groupby('categoria')['valor_abs'].sum().reset_index().sort_values('valor_abs', ascending=False)
 
@@ -648,7 +648,7 @@ class ParcelasManager:
         st.markdown("---")
 
         # 4. EXPORTAÇÃO / RELATÓRIO
-        st.markdown("**📥 Exportar Relatório**")
+        st.markdown("** Exportar Relatório**")
         csv_rel = df_itens[['id','data_vencimento','descricao','valor_abs','banco','categoria','parcela_atual','parcela_total']].copy()
         csv_rel = csv_rel.rename(columns={
             'id': 'ID',
@@ -661,12 +661,12 @@ class ParcelasManager:
             'parcela_total': 'Total Parcelas'
         })
         csv_bytes = csv_rel.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Baixar CSV de Previsão", data=csv_bytes, file_name="previsao_parcelas.csv", mime="text/csv")
+        st.download_button(" Baixar CSV de Previsão", data=csv_bytes, file_name="previsao_parcelas.csv", mime="text/csv")
 
         st.markdown("---")
 
         # 5. LISTAGEM POR FATURA (grouped by month → card → items)
-        st.markdown("**📋 Detalhamento por Mês**")
+        st.markdown("** Detalhamento por Mês**")
 
         msg_sucesso = st.session_state.pop('parcela_msg_sucesso', None)
         if msg_sucesso:
@@ -696,7 +696,7 @@ class ParcelasManager:
                 ids_no_mes = set(f_mes['id'].tolist())
                 tem_selecionados = bool(ids_no_mes & set(selected_ids))
 
-                with st.expander(f"📅 {mes_atual.strftime('%m/%Y')} — Total do Mês: {moeda(total_mes)}", expanded=tem_selecionados):
+                with st.expander(f" {mes_atual.strftime('%m/%Y')} — Total do Mês: {moeda(total_mes)}", expanded=tem_selecionados):
                     cartoes_no_mes = f_mes['banco'].fillna("Desconhecido").unique()
 
                     for cartao in cartoes_no_mes:
@@ -705,10 +705,10 @@ class ParcelasManager:
 
                         # Status da fatura (aberta/paga)
                         status_fatura = f_cartao['status'].iloc[0] if 'status' in f_cartao.columns else 'aberta'
-                        badge = "🟢 Paga" if status_fatura == 'paga' else "🔴 Aberta"
+                        badge = " Paga" if status_fatura == 'paga' else " Aberta"
 
                         st.markdown(
-                            f"**💳 Fatura: {cartao}** — Subtotal: "
+                            f"** Fatura: {cartao}** — Subtotal: "
                             f"<span style='color:#c0392b;'>{moeda(subtotal_cartao)}</span> "
                             f"<small>({badge})</small>",
                             unsafe_allow_html=True
@@ -717,14 +717,14 @@ class ParcelasManager:
                         # Botão pagar fatura
                         fatura_id_val = f_cartao['fatura_id'].iloc[0] if 'fatura_id' in f_cartao.columns else None
                         if fatura_id_val and status_fatura == 'aberta':
-                            if st.button(f"💰 Pagar Fatura {cartao} {mes_atual.strftime('%m/%Y')}", key=f"pagar_{fatura_id_val}"):
+                            if st.button(f" Pagar Fatura {cartao} {mes_atual.strftime('%m/%Y')}", key=f"pagar_{fatura_id_val}"):
                                 db.pagar_fatura(fatura_id_val, user_id)
-                                st.toast(f"✅ Fatura {cartao} {mes_atual.strftime('%m/%Y')} paga!")
+                                st.toast(f" Fatura {cartao} {mes_atual.strftime('%m/%Y')} paga!")
                                 st.rerun()
                         elif fatura_id_val and status_fatura == 'paga':
-                            if st.button(f"↩️ Reabrir Fatura {cartao} {mes_atual.strftime('%m/%Y')}", key=f"reabrir_{fatura_id_val}"):
+                            if st.button(f"↩ Reabrir Fatura {cartao} {mes_atual.strftime('%m/%Y')}", key=f"reabrir_{fatura_id_val}"):
                                 db.reabrir_fatura(fatura_id_val, user_id)
-                                st.toast(f"↩️ Fatura reaberta!")
+                                st.toast(f"↩ Fatura reaberta!")
                                 st.rerun()
 
                         for _, r in f_cartao.iterrows():
@@ -748,12 +748,12 @@ class ParcelasManager:
                             )
 
                             with c4:
-                                if st.button("✏️", key=f"edit_item_{r['id']}"):
+                                if st.button("", key=f"edit_item_{r['id']}"):
                                     key_ed = f"editing_item_{r['id']}"
                                     st.session_state[key_ed] = not st.session_state.get(key_ed, False)
 
                             with c5:
-                                if st.button("🗑️", key=f"del_item_{r['id']}"):
+                                if st.button("", key=f"del_item_{r['id']}"):
                                     st.session_state['ids_para_excluir'] = [int(r['id'])]
                                     st.session_state['descs_para_excluir'] = [f"{r['descricao']} {parc_label} ({moeda(abs(r['valor']))})"]
                                     st.session_state['excluir_tipo'] = 'item_fatura'
@@ -799,9 +799,9 @@ class ParcelasManager:
             st.markdown("---")
             col_bulk_info, col_bulk_btn = st.columns([3, 1])
             with col_bulk_info:
-                st.info(f"📌 **{len(selected_ids)}** item(ns) selecionado(s)")
+                st.info(f" **{len(selected_ids)}** item(ns) selecionado(s)")
             with col_bulk_btn:
-                if st.button("🗑️ Excluir selecionados", type="primary", use_container_width=True):
+                if st.button(" Excluir selecionados", type="primary", use_container_width=True):
                     descs = []
                     for sid in selected_ids:
                         row_match = df_itens[df_itens['id'] == sid]

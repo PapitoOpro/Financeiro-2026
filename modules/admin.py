@@ -8,7 +8,7 @@ from database import db
 class AdminManager:
     """Gerenciador de funções administrativas."""
     
-    SENHA_ADMIN = "05072019"  # ⚠️ MUDE ISSO em produção!
+    SENHA_ADMIN = "05072019" # MUDE ISSO em produção!
     
     @staticmethod
     def autenticar_admin():
@@ -17,17 +17,17 @@ class AdminManager:
             st.session_state.admin_autenticado = False
         
         if not st.session_state.admin_autenticado:
-            st.warning("🔐 Acesso restrito a administrador")
+            st.warning(" Acesso restrito a administrador")
             
             senha = st.text_input("Senha de Administrador", type="password", placeholder="Digite a senha")
             
             if st.button("Acessar Painel Admin"):
                 if senha == AdminManager.SENHA_ADMIN:
                     st.session_state.admin_autenticado = True
-                    st.success("✅ Acesso concedido!")
+                    st.success(" Acesso concedido!")
                     st.rerun()
                 else:
-                    st.error("❌ Senha incorreta!")
+                    st.error(" Senha incorreta!")
             
             st.stop()
     
@@ -36,11 +36,11 @@ class AdminManager:
         """Renderiza o painel administrativo."""
         AdminManager.autenticar_admin()
         
-        st.header("[ 🛡️ ] Painel Administrativo")
+        st.header("[ ] Painel Administrativo")
         st.markdown("---")
         
         # Botão para sair do admin
-        if st.button("🚪 Sair do Painel Admin"):
+        if st.button(" Sair do Painel Admin"):
             st.session_state.admin_autenticado = False
             st.rerun()
         
@@ -61,7 +61,7 @@ class AdminManager:
     @staticmethod
     def _tab_estatisticas():
         """Mostra estatísticas do banco."""
-        st.subheader("📊 Estatísticas do Banco")
+        st.subheader(" Estatísticas do Banco")
         
         # Contar registros
         usuarios = db.buscar("SELECT COUNT(*) as total FROM usuarios")
@@ -70,10 +70,10 @@ class AdminManager:
         transacoes = db.buscar("SELECT COUNT(*) as total FROM transacoes")
         
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("👤 Usuários", usuarios['total'].values[0])
-        col2.metric("💳 Contas", contas['total'].values[0])
-        col3.metric("🏷️ Categorias", categorias['total'].values[0])
-        col4.metric("📝 Transações", transacoes['total'].values[0])
+        col1.metric(" Usuários", usuarios['total'].values[0])
+        col2.metric(" Contas", contas['total'].values[0])
+        col3.metric(" Categorias", categorias['total'].values[0])
+        col4.metric(" Transações", transacoes['total'].values[0])
         
         st.markdown("---")
         
@@ -89,17 +89,17 @@ class AdminManager:
         sai = df_valores['saidas'].values[0] or 0
         
         col1, col2, col3 = st.columns(3)
-        col1.metric("📈 Entradas", f"R$ {ent:,.2f}")
-        col2.metric("📉 Saídas", f"R$ {sai:,.2f}")
-        col3.metric("⚖️ Balanço", f"R$ {ent - sai:,.2f}")
+        col1.metric(" Entradas", f"R$ {ent:,.2f}")
+        col2.metric(" Saídas", f"R$ {sai:,.2f}")
+        col3.metric(" Balanço", f"R$ {ent - sai:,.2f}")
     
     @staticmethod
     def _tab_resetar():
         """Opções para resetar o banco."""
-        st.subheader("⚠️ Resetar Dados")
+        st.subheader(" Resetar Dados")
         
         st.warning(
-            "🚨 CUIDADO!\n\n"
+            " CUIDADO!\n\n"
             "Estas operações NÃO podem ser desfeitas. "
             "Faça backup antes de prosseguir!"
         )
@@ -114,7 +114,7 @@ class AdminManager:
         )
         
         if st.button(
-            "🗑️ Deletar Todos os Dados",
+            " Deletar Todos os Dados",
             key="btn_delete_dados",
             width='stretch'
         ):
@@ -131,7 +131,7 @@ class AdminManager:
         )
         
         if st.button(
-            "💣 Deletar Tudo e Recriar",
+            " Deletar Tudo e Recriar",
             key="btn_nuclear",
             width='stretch'
         ):
@@ -141,10 +141,10 @@ class AdminManager:
     @staticmethod
     def _tab_usuarios():
         """Gerenciar usuários com aprovação."""
-        st.subheader("👥 Gerenciar Usuários")
+        st.subheader(" Gerenciar Usuários")
         
         # Subabas para usuários pendentes e aprovados
-        subTab1, subTab2 = st.tabs(["⏳ Pendentes de Aprovação", "✅ Usuários Aprovados"])
+        subTab1, subTab2 = st.tabs([" Pendentes de Aprovação", " Usuários Aprovados"])
         
         with subTab1:
             st.markdown("### Usuários Aguardando Aprovação")
@@ -157,25 +157,25 @@ class AdminManager:
             """)
             
             if df_pendentes.empty:
-                st.info("✅ Nenhum usuário aguardando aprovação")
+                st.info(" Nenhum usuário aguardando aprovação")
             else:
-                st.warning(f"⏳ {len(df_pendentes)} usuário(s) aguardando sua aprovação")
+                st.warning(f" {len(df_pendentes)} usuário(s) aguardando sua aprovação")
                 
                 for idx, row in df_pendentes.iterrows():
                     col1, col2, col3, col4 = st.columns([2, 1.5, 1, 1])
                     
-                    email_info = f" | 📧 {row['email']}" if row.get('email') else ""
+                    email_info = f" | {row['email']}" if row.get('email') else ""
                     col1.markdown(f"**{row['nome']}**{email_info}")
-                    col2.caption(f"📅 {row['data_criacao']}")
+                    col2.caption(f" {row['data_criacao']}")
                     
-                    if col3.button("✅ Aprovar", key=f"aprova_{row['id']}", width='stretch'):
+                    if col3.button(" Aprovar", key=f"aprova_{row['id']}", width='stretch'):
                         db.executar("UPDATE usuarios SET aprovado = TRUE WHERE id = ?", (row['id'],))
-                        st.success(f"✅ Usuário '{row['username']}' aprovado!")
+                        st.success(f" Usuário '{row['username']}' aprovado!")
                         st.rerun()
                     
-                    if col4.button("❌ Rejeitar", key=f"rejeita_{row['id']}", width='stretch'):
+                    if col4.button(" Rejeitar", key=f"rejeita_{row['id']}", width='stretch'):
                         db.executar("DELETE FROM usuarios WHERE id = ?", (row['id'],))
-                        st.success(f"❌ Usuário '{row['username']}' rejeitado e deletado!")
+                        st.success(f" Usuário '{row['username']}' rejeitado e deletado!")
                         st.rerun()
                     
                     st.divider()
@@ -216,10 +216,10 @@ class AdminManager:
                     key="delete_user_select"
                 )
                 
-                if st.button("🗑️ Deletar Usuário", width='stretch'):
+                if st.button(" Deletar Usuário", width='stretch'):
                     uid_del = ids[sel]
                     db.executar("DELETE FROM usuarios WHERE id = ?", (uid_del,))
-                    st.success(f"✅ Usuário deletado!")
+                    st.success(f" Usuário deletado!")
                     st.rerun()
     
     @staticmethod
@@ -232,11 +232,11 @@ class AdminManager:
             db.executar("DELETE FROM categorias")
             db.executar("DELETE FROM usuarios")
             
-            st.success("✅ Todos os dados foram deletados!")
-            st.info("👉 As tabelas foram mantidas. Você pode começar a adicionar novos dados.")
+            st.success(" Todos os dados foram deletados!")
+            st.info(" As tabelas foram mantidas. Você pode começar a adicionar novos dados.")
             
         except Exception as e:
-            st.error(f"❌ Erro ao deletar: {e}")
+            st.error(f" Erro ao deletar: {e}")
     
     @staticmethod
     def _recriar_banco():
@@ -250,8 +250,8 @@ class AdminManager:
             
             db.inicializar_banco()
             
-            st.success("✅ Banco de dados foi completamente recriado!")
+            st.success(" Banco de dados foi completamente recriado!")
             st.balloons()
             
         except Exception as e:
-            st.error(f"❌ Erro ao recriar: {e}")
+            st.error(f" Erro ao recriar: {e}")

@@ -17,7 +17,7 @@ class AcompanhamentoManager:
     @staticmethod
     def renderizar():
         """Página de acompanhamento: Orçado vs Realizado por categoria."""
-        st.header("📊 Acompanhamento Diário")
+        st.header(" Acompanhamento Diário")
         st.caption("Visualize o progresso dos seus gastos por categoria com barras intuitivas.")
 
         # Filtros
@@ -48,7 +48,7 @@ class AcompanhamentoManager:
         )
 
         if df_cats.empty:
-            st.info("ℹ️ Nenhuma categoria cadastrada. Acesse Cadastros para configurar.")
+            st.info("ℹ Nenhuma categoria cadastrada. Acesse Cadastros para configurar.")
             return
 
         # Carrega entradas do mês para calcular orçado em R$
@@ -83,7 +83,7 @@ class AcompanhamentoManager:
             if df_gastos.empty:
                 df_gastos = df_gastos_cartao
             else:
-                df_combined = pd.concat([df_gastos, df_gastos_cartao.dropna(how='all', axis=1)], ignore_index=True)
+                df_combined = pd.concat([df_gastos, df_gastos_cartao.dropna(how='all')], ignore_index=True)
                 df_gastos = df_combined.groupby(['categoria_id', 'categoria', 'icone', 'percentual_meta'], as_index=False).agg({'gasto_real': 'sum'})
 
         # Carrega gastos por subcategoria (CAIXA + cartão)
@@ -114,7 +114,7 @@ class AcompanhamentoManager:
             ORDER BY gasto_sub DESC
         """)
         if not df_sub_cartao.empty and not df_sub_cartao.isna().all(axis=None) and not df_gastos_sub.empty:
-            df_gastos_sub = pd.concat([df_gastos_sub, df_sub_cartao.dropna(how='all', axis=1)], ignore_index=True)
+            df_gastos_sub = pd.concat([df_gastos_sub, df_sub_cartao.dropna(how='all')], ignore_index=True)
             df_gastos_sub = df_gastos_sub.groupby(['categoria_id', 'subcategoria'], as_index=False).agg({'gasto_sub': 'sum'})
         elif not df_sub_cartao.empty:
             df_gastos_sub = df_sub_cartao
@@ -124,7 +124,7 @@ class AcompanhamentoManager:
         if hoje.month == mes_num and hoje.year == ano_sel:
             dia_atual = hoje.day
         else:
-            dia_atual = None  # Mês diferente do atual, sem marcador
+            dia_atual = None # Mês diferente do atual, sem marcador
 
         ultimo_dia = (datetime(ano_sel, mes_num, 1) + relativedelta(months=1) - relativedelta(days=1)).day
 
@@ -137,11 +137,11 @@ class AcompanhamentoManager:
 
         st.markdown("---")
 
-        # ── Cards de Categorias ──
+        # Cards de Categorias 
         for _, cat in df_cats.iterrows():
             cat_id = int(cat['id'])
             nome = cat['nome']
-            icone = cat.get('icone', '📁') or '📁'
+            icone = cat.get('icone', '') or ''
             pct_meta = float(cat.get('percentual_meta', 0) or 0)
             orcado = renda_mes * (pct_meta / 100) if renda_mes > 0 else 0
 
@@ -236,7 +236,7 @@ class AcompanhamentoManager:
                                   f"<strong>{moeda(s['gasto_sub'])}</strong></span>")
             subs_html = (
                 f"<div style='font-size:11px; margin-top:6px; color:#888;'>"
-                f"{'  •  '.join(subs_items)}</div>"
+                f"{' • '.join(subs_items)}</div>"
             )
 
         st.markdown(f"""

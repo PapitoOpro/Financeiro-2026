@@ -10,58 +10,58 @@ PERFIS_ORCAMENTO = {
     "50/30/20 (Clássico)": {
         "descricao": "50% Necessidades, 30% Desejos, 20% Poupança. Regra clássica e equilibrada.",
         "categorias": [
-            {"nome": "Moradia", "pct": 30, "icone": "🏠", "subs": ["Aluguel", "Condomínio", "IPTU", "Manutenção"]},
-            {"nome": "Alimentação", "pct": 15, "icone": "🍽️", "subs": ["Supermercado", "Padaria", "Feira", "Delivery"]},
-            {"nome": "Transporte", "pct": 5, "icone": "🚗", "subs": ["Combustível", "Uber", "Estacionamento", "Manutenção Veículo"]},
-            {"nome": "Lazer", "pct": 10, "icone": "🎯", "subs": ["Restaurantes", "Cinema", "Streaming", "Viagens"]},
-            {"nome": "Compras Pessoais", "pct": 10, "icone": "🛍️", "subs": ["Roupas", "Eletrônicos", "Presentes"]},
-            {"nome": "Saúde", "pct": 5, "icone": "💊", "subs": ["Plano de Saúde", "Farmácia", "Academia"]},
-            {"nome": "Educação", "pct": 5, "icone": "📚", "subs": ["Cursos", "Livros", "Mensalidade"]},
-            {"nome": "Poupança/Investimentos", "pct": 20, "icone": "💰", "subs": ["Reserva de Emergência", "Investimentos", "Previdência"]},
+            {"nome": "Moradia", "pct": 30, "icone": "", "subs": ["Aluguel", "Condomínio", "IPTU", "Manutenção"]},
+            {"nome": "Alimentação", "pct": 15, "icone": "", "subs": ["Supermercado", "Padaria", "Feira", "Delivery"]},
+            {"nome": "Transporte", "pct": 5, "icone": "", "subs": ["Combustível", "Uber", "Estacionamento", "Manutenção Veículo"]},
+            {"nome": "Lazer", "pct": 10, "icone": "", "subs": ["Restaurantes", "Cinema", "Streaming", "Viagens"]},
+            {"nome": "Compras Pessoais", "pct": 10, "icone": "", "subs": ["Roupas", "Eletrônicos", "Presentes"]},
+            {"nome": "Saúde", "pct": 5, "icone": "", "subs": ["Plano de Saúde", "Farmácia", "Academia"]},
+            {"nome": "Educação", "pct": 5, "icone": "", "subs": ["Cursos", "Livros", "Mensalidade"]},
+            {"nome": "Poupança/Investimentos", "pct": 20, "icone": "", "subs": ["Reserva de Emergência", "Investimentos", "Previdência"]},
         ]
     },
     "Estudante": {
         "descricao": "Foco em educação e sobrevivência com renda limitada.",
         "categorias": [
-            {"nome": "Moradia", "pct": 35, "icone": "🏠", "subs": ["Aluguel", "Condomínio", "Internet"]},
-            {"nome": "Alimentação", "pct": 25, "icone": "🍽️", "subs": ["Supermercado", "Restaurante Universitário", "Delivery"]},
-            {"nome": "Transporte", "pct": 10, "icone": "🚌", "subs": ["Ônibus", "Uber", "Estacionamento"]},
-            {"nome": "Educação", "pct": 10, "icone": "📚", "subs": ["Material", "Livros", "Cursos", "Impressão"]},
-            {"nome": "Lazer", "pct": 10, "icone": "🎯", "subs": ["Streaming", "Saídas", "Jogos"]},
-            {"nome": "Poupança", "pct": 10, "icone": "💰", "subs": ["Reserva de Emergência"]},
+            {"nome": "Moradia", "pct": 35, "icone": "", "subs": ["Aluguel", "Condomínio", "Internet"]},
+            {"nome": "Alimentação", "pct": 25, "icone": "", "subs": ["Supermercado", "Restaurante Universitário", "Delivery"]},
+            {"nome": "Transporte", "pct": 10, "icone": "", "subs": ["Ônibus", "Uber", "Estacionamento"]},
+            {"nome": "Educação", "pct": 10, "icone": "", "subs": ["Material", "Livros", "Cursos", "Impressão"]},
+            {"nome": "Lazer", "pct": 10, "icone": "", "subs": ["Streaming", "Saídas", "Jogos"]},
+            {"nome": "Poupança", "pct": 10, "icone": "", "subs": ["Reserva de Emergência"]},
         ]
     },
     "Família": {
         "descricao": "Distribuição equilibrada para quem tem dependentes.",
         "categorias": [
-            {"nome": "Moradia", "pct": 30, "icone": "🏠", "subs": ["Aluguel/Financiamento", "Condomínio", "IPTU", "Energia", "Água", "Gás"]},
-            {"nome": "Alimentação", "pct": 20, "icone": "🍽️", "subs": ["Supermercado", "Hortifrúti", "Padaria", "Delivery"]},
-            {"nome": "Educação Filhos", "pct": 10, "icone": "🎒", "subs": ["Escola", "Material Escolar", "Cursos"]},
-            {"nome": "Saúde", "pct": 10, "icone": "💊", "subs": ["Plano de Saúde", "Farmácia", "Dentista", "Pediatra"]},
-            {"nome": "Transporte", "pct": 10, "icone": "🚗", "subs": ["Combustível", "Seguro Auto", "Manutenção", "Uber"]},
-            {"nome": "Lazer", "pct": 5, "icone": "🎯", "subs": ["Passeios", "Restaurantes", "Streaming"]},
-            {"nome": "Poupança", "pct": 15, "icone": "💰", "subs": ["Reserva de Emergência", "Investimentos", "Faculdade Filhos"]},
+            {"nome": "Moradia", "pct": 30, "icone": "", "subs": ["Aluguel/Financiamento", "Condomínio", "IPTU", "Energia", "Água", "Gás"]},
+            {"nome": "Alimentação", "pct": 20, "icone": "", "subs": ["Supermercado", "Hortifrúti", "Padaria", "Delivery"]},
+            {"nome": "Educação Filhos", "pct": 10, "icone": "", "subs": ["Escola", "Material Escolar", "Cursos"]},
+            {"nome": "Saúde", "pct": 10, "icone": "", "subs": ["Plano de Saúde", "Farmácia", "Dentista", "Pediatra"]},
+            {"nome": "Transporte", "pct": 10, "icone": "", "subs": ["Combustível", "Seguro Auto", "Manutenção", "Uber"]},
+            {"nome": "Lazer", "pct": 5, "icone": "", "subs": ["Passeios", "Restaurantes", "Streaming"]},
+            {"nome": "Poupança", "pct": 15, "icone": "", "subs": ["Reserva de Emergência", "Investimentos", "Faculdade Filhos"]},
         ]
     },
     "Autônomo": {
         "descricao": "Renda variável exige mais controle e reserva maior.",
         "categorias": [
-            {"nome": "Moradia", "pct": 25, "icone": "🏠", "subs": ["Aluguel", "Condomínio", "Internet", "Energia"]},
-            {"nome": "Alimentação", "pct": 15, "icone": "🍽️", "subs": ["Supermercado", "Restaurantes", "Delivery"]},
-            {"nome": "Negócio/Trabalho", "pct": 15, "icone": "💼", "subs": ["Ferramentas", "Marketing", "Software", "Coworking"]},
-            {"nome": "Impostos/MEI", "pct": 10, "icone": "🏛️", "subs": ["DAS/MEI", "IRPF", "Contador"]},
-            {"nome": "Transporte", "pct": 5, "icone": "🚗", "subs": ["Combustível", "Uber", "Manutenção"]},
-            {"nome": "Lazer", "pct": 5, "icone": "🎯", "subs": ["Restaurantes", "Cinema", "Streaming"]},
-            {"nome": "Saúde", "pct": 5, "icone": "💊", "subs": ["Plano", "Farmácia", "Academia"]},
-            {"nome": "Poupança/Reserva", "pct": 20, "icone": "💰", "subs": ["Reserva de Emergência", "Investimentos", "Fluxo de Caixa"]},
+            {"nome": "Moradia", "pct": 25, "icone": "", "subs": ["Aluguel", "Condomínio", "Internet", "Energia"]},
+            {"nome": "Alimentação", "pct": 15, "icone": "", "subs": ["Supermercado", "Restaurantes", "Delivery"]},
+            {"nome": "Negócio/Trabalho", "pct": 15, "icone": "", "subs": ["Ferramentas", "Marketing", "Software", "Coworking"]},
+            {"nome": "Impostos/MEI", "pct": 10, "icone": "", "subs": ["DAS/MEI", "IRPF", "Contador"]},
+            {"nome": "Transporte", "pct": 5, "icone": "", "subs": ["Combustível", "Uber", "Manutenção"]},
+            {"nome": "Lazer", "pct": 5, "icone": "", "subs": ["Restaurantes", "Cinema", "Streaming"]},
+            {"nome": "Saúde", "pct": 5, "icone": "", "subs": ["Plano", "Farmácia", "Academia"]},
+            {"nome": "Poupança/Reserva", "pct": 20, "icone": "", "subs": ["Reserva de Emergência", "Investimentos", "Fluxo de Caixa"]},
         ]
     },
     "Minimalista": {
         "descricao": "Para quem quer simplificar ao máximo e focar em poupar.",
         "categorias": [
-            {"nome": "Essenciais", "pct": 50, "icone": "🏠", "subs": ["Moradia", "Alimentação", "Saúde", "Transporte"]},
-            {"nome": "Pessoal", "pct": 20, "icone": "🎯", "subs": ["Lazer", "Compras", "Educação"]},
-            {"nome": "Poupança", "pct": 30, "icone": "💰", "subs": ["Reserva de Emergência", "Investimentos"]},
+            {"nome": "Essenciais", "pct": 50, "icone": "", "subs": ["Moradia", "Alimentação", "Saúde", "Transporte"]},
+            {"nome": "Pessoal", "pct": 20, "icone": "", "subs": ["Lazer", "Compras", "Educação"]},
+            {"nome": "Poupança", "pct": 30, "icone": "", "subs": ["Reserva de Emergência", "Investimentos"]},
         ]
     },
     "Personalizado": {
@@ -78,7 +78,7 @@ class OnboardingManager:
     def renderizar():
         """Renderiza o fluxo completo de onboarding."""
         st.markdown(
-            "<h1 style='text-align:center;'>🎯 Bem-vindo ao Finanças Pro 2026!</h1>"
+            "<h1 style='text-align:center;'> Bem-vindo ao Finanças Pro 2026!</h1>"
             "<p style='text-align:center; color:#666; font-size:16px;'>"
             "Vamos configurar seu perfil financeiro em poucos passos.</p>",
             unsafe_allow_html=True
@@ -183,7 +183,7 @@ class OnboardingManager:
                     <div style="background:{barra_cor}; width:{barra_width}%; height:20px; border-radius:6px;
                                 transition: width 0.3s ease;"></div>
                 </div>
-                {'<div style="color:#e74c3c; font-size:12px; margin-top:5px;">⚠️ O total ultrapassou 100%!</div>' if total_pct > 100 else ''}
+                {'<div style="color:#e74c3c; font-size:12px; margin-top:5px;"> O total ultrapassou 100%!</div>' if total_pct > 100 else ''}
                 {'<div style="color:#f39c12; font-size:12px; margin-top:5px;">Faltam ' + str(100 - total_pct) + '% para completar.</div>' if total_pct < 100 else ''}
             </div>
         """, unsafe_allow_html=True)
@@ -193,7 +193,7 @@ class OnboardingManager:
             col_icon, col_nome, col_pct, col_del = st.columns([0.5, 3, 2, 0.5])
 
             with col_icon:
-                st.markdown(f"<div style='font-size:24px; padding-top:25px;'>{cat.get('icone', '📁')}</div>",
+                st.markdown(f"<div style='font-size:24px; padding-top:25px;'>{cat.get('icone', '')}</div>",
                             unsafe_allow_html=True)
 
             with col_nome:
@@ -207,7 +207,7 @@ class OnboardingManager:
                 )
 
             with col_del:
-                if st.button("🗑️", key=f"ob_del_{i}"):
+                if st.button("", key=f"ob_del_{i}"):
                     categorias.pop(i)
                     st.session_state.onboarding_categorias = categorias
                     st.rerun()
@@ -222,11 +222,11 @@ class OnboardingManager:
             nova_pct = st.number_input("% Nova", min_value=0, max_value=100, value=0,
                                        step=1, key="ob_nova_pct", label_visibility="collapsed")
         with col_add_btn:
-            if st.button("➕", key="ob_add_cat"):
+            if st.button("", key="ob_add_cat"):
                 if nova_cat.strip():
                     categorias.append({
                         "nome": nova_cat.strip(), "pct": nova_pct,
-                        "icone": "📁", "subs": []
+                        "icone": "", "subs": []
                     })
                     st.session_state.onboarding_categorias = categorias
                     st.rerun()
@@ -264,7 +264,7 @@ class OnboardingManager:
         for cat in categorias:
             pct = cat.get('pct', 0)
             cor = "#2ecc71" if pct <= 20 else ("#f39c12" if pct <= 40 else "#3498db")
-            icone = cat.get('icone', '📁')
+            icone = cat.get('icone', '')
             subs_text = ", ".join(cat.get('subs', [])) if cat.get('subs') else "Sem subcategorias"
 
             st.markdown(f"""
@@ -288,7 +288,7 @@ class OnboardingManager:
                 st.session_state.onboarding_step = 2
                 st.rerun()
         with col_save:
-            if st.button("✅ Salvar e Começar!", type="primary", use_container_width=True):
+            if st.button(" Salvar e Começar!", type="primary", use_container_width=True):
                 OnboardingManager._salvar_configuracao(categorias)
 
     @staticmethod
@@ -302,7 +302,7 @@ class OnboardingManager:
                 "INSERT INTO categorias (nome, percentual_meta, icone, ativa, user_id) "
                 "VALUES (%s, %s, %s, TRUE, %s) ON CONFLICT (nome, user_id) DO UPDATE "
                 "SET percentual_meta = EXCLUDED.percentual_meta, icone = EXCLUDED.icone",
-                (cat['nome'], cat.get('pct', 0), cat.get('icone', '📁'), user_id)
+                (cat['nome'], cat.get('pct', 0), cat.get('icone', ''), user_id)
             )
 
             # Busca ID da categoria inserida
@@ -322,7 +322,7 @@ class OnboardingManager:
         # Marca onboarding como concluído
         db.marcar_onboarding_completo(user_id)
 
-        st.success("🎉 Configuração salva com sucesso! Redirecionando...")
+        st.success(" Configuração salva com sucesso! Redirecionando...")
         st.session_state.pop('onboarding_step', None)
         st.session_state.pop('onboarding_perfil', None)
         st.session_state.pop('onboarding_categorias', None)

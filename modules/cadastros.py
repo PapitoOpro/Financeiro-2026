@@ -13,10 +13,10 @@ class CadastrosManager:
     @staticmethod
     def renderizar():
         """Renderiza a página de cadastros."""
-        st.header("[ ⚙️ ] Cadastros do Sistema")
+        st.header("[ ] Cadastros do Sistema")
         st.markdown("Gerencie contas bancárias, categorias macro (orçamento) e subcategorias (operacional).")
 
-        tab_cats, tab_contas = st.tabs(["🏷️ Categorias e Subcategorias", "💳 Bancos e Cartões"])
+        tab_cats, tab_contas = st.tabs([" Categorias e Subcategorias", " Bancos e Cartões"])
 
         with tab_cats:
             CadastrosManager._secao_categorias_completa()
@@ -32,7 +32,7 @@ class CadastrosManager:
         """Seção unificada: categorias macro com porcentagem + subcategorias."""
         user_id = db.get_user_id()
 
-        # ── Barra global de orçamento ──
+        # Barra global de orçamento 
         df_cats = db.buscar(
             "SELECT * FROM categorias WHERE user_id = %s AND ativa = TRUE ORDER BY nome",
             (user_id,)
@@ -48,7 +48,7 @@ class CadastrosManager:
         st.markdown(f"""
             <div style="background:#f1f2f6; border-radius:10px; padding:12px 15px; margin-bottom:15px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-                    <strong>🎯 Orçamento Distribuído</strong>
+                    <strong> Orçamento Distribuído</strong>
                     <strong style="color:{barra_cor};">{total_pct:.0f}% / 100%</strong>
                 </div>
                 <div style="background:#e0e0e0; border-radius:6px; height:14px;">
@@ -57,7 +57,7 @@ class CadastrosManager:
             </div>
         """, unsafe_allow_html=True)
 
-        # ── Nova Categoria Macro ──
+        # Nova Categoria Macro 
         st.markdown("### Categorias Macro (Orçamento)")
         with st.form("form_nova_cat_macro", clear_on_submit=True):
             c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
@@ -65,7 +65,7 @@ class CadastrosManager:
                                    label_visibility="collapsed")
             n_pct = c2.number_input("Meta %", min_value=0, max_value=100, value=0,
                                     label_visibility="collapsed")
-            n_icone = c3.text_input("Ícone", value="📁", label_visibility="collapsed")
+            n_icone = c3.text_input("Ícone", value="", label_visibility="collapsed")
 
             if c4.form_submit_button("Adicionar"):
                 if (n_nome or "").strip():
@@ -77,11 +77,11 @@ class CadastrosManager:
                     )
                     st.rerun()
                 else:
-                    st.error("❌ Digite um nome!")
+                    st.error(" Digite um nome!")
 
-        # ── Lista de Categorias Macro com suas Subcategorias ──
+        # Lista de Categorias Macro com suas Subcategorias 
         if df_cats.empty:
-            st.info("ℹ️ Nenhuma categoria cadastrada. Crie uma ou execute o Onboarding.")
+            st.info("ℹ Nenhuma categoria cadastrada. Crie uma ou execute o Onboarding.")
             return
 
         # Mostrar/ocultar arquivadas
@@ -92,12 +92,12 @@ class CadastrosManager:
                 (user_id,)
             )
             if not df_arquivadas.empty:
-                st.markdown("##### 📦 Categorias Arquivadas")
+                st.markdown("##### Categorias Arquivadas")
                 for _, r in df_arquivadas.iterrows():
                     col_nome, col_restore = st.columns([4, 1])
-                    icone = r.get('icone', '📁') or '📁'
+                    icone = r.get('icone', '') or ''
                     col_nome.markdown(f"~~{icone} {r['nome']}~~")
-                    if col_restore.button("🔄 Restaurar", key=f"restore_cat_{r['id']}"):
+                    if col_restore.button(" Restaurar", key=f"restore_cat_{r['id']}"):
                         db.executar(
                             "UPDATE categorias SET ativa = TRUE WHERE id = %s AND user_id = %s",
                             (r['id'], user_id)
@@ -108,14 +108,14 @@ class CadastrosManager:
 
         for _, cat in df_cats.iterrows():
             cat_id = int(cat['id'])
-            icone = cat.get('icone', '📁') or '📁'
+            icone = cat.get('icone', '') or ''
             pct_meta = float(cat.get('percentual_meta', 0) or 0)
             edit_flag = f"editing_cat_macro_{cat_id}"
 
             if edit_flag not in st.session_state:
                 st.session_state[edit_flag] = False
 
-            # ── Header da Categoria ──
+            # Header da Categoria 
             if not st.session_state[edit_flag]:
                 col_icon, col_nome, col_pct, col_edit, col_archive = st.columns([0.5, 3, 1.5, 0.5, 0.5])
 
@@ -130,18 +130,18 @@ class CadastrosManager:
                     unsafe_allow_html=True
                 )
                 with col_edit:
-                    if st.button("✏️", key=f"edit_cat_{cat_id}", help="Editar"):
+                    if st.button("", key=f"edit_cat_{cat_id}", help="Editar"):
                         st.session_state[edit_flag] = True
                         st.rerun()
                 with col_archive:
-                    if st.button("📦", key=f"archive_cat_{cat_id}", help="Arquivar"):
+                    if st.button("", key=f"archive_cat_{cat_id}", help="Arquivar"):
                         db.executar(
                             "UPDATE categorias SET ativa = FALSE WHERE id = %s AND user_id = %s",
                             (cat_id, user_id)
                         )
                         st.rerun()
             else:
-                # ── Modo edição da Categoria ──
+                # Modo edição da Categoria 
                 c1, c2, c3 = st.columns([3, 1, 1])
                 novo_nome = c1.text_input("Nome", value=cat['nome'], key=f"ec_cname_{cat_id}")
                 novo_pct = c2.number_input("Meta %", value=int(pct_meta), min_value=0,
@@ -149,7 +149,7 @@ class CadastrosManager:
                 novo_icone = c3.text_input("Ícone", value=icone, key=f"ec_cicon_{cat_id}")
 
                 bc1, bc2 = st.columns(2)
-                if bc1.button("💾 Salvar", key=f"save_cat_{cat_id}", use_container_width=True):
+                if bc1.button(" Salvar", key=f"save_cat_{cat_id}", use_container_width=True):
                     db.executar(
                         "UPDATE categorias SET nome=%s, percentual_meta=%s, icone=%s "
                         "WHERE id=%s AND user_id=%s",
@@ -157,11 +157,11 @@ class CadastrosManager:
                     )
                     st.session_state[edit_flag] = False
                     st.rerun()
-                if bc2.button("❌ Cancelar", key=f"cancel_cat_{cat_id}", use_container_width=True):
+                if bc2.button(" Cancelar", key=f"cancel_cat_{cat_id}", use_container_width=True):
                     st.session_state[edit_flag] = False
                     st.rerun()
 
-            # ── Subcategorias desta Categoria ──
+            # Subcategorias desta Categoria 
             df_subs = db.buscar(
                 "SELECT * FROM subcategorias WHERE categoria_id = %s AND user_id = %s AND ativa = TRUE ORDER BY nome",
                 (cat_id, user_id)
@@ -174,7 +174,7 @@ class CadastrosManager:
                     "Nova subcategoria", placeholder="Ex: Padaria, Uber, Netflix...",
                     key=f"new_sub_{cat_id}", label_visibility="collapsed"
                 )
-                if col_sub_btn.button("➕", key=f"add_sub_{cat_id}"):
+                if col_sub_btn.button("", key=f"add_sub_{cat_id}"):
                     if (nova_sub or "").strip():
                         db.executar(
                             "INSERT INTO subcategorias (nome, categoria_id, ativa, user_id) "
@@ -187,7 +187,7 @@ class CadastrosManager:
                     for _, sub in df_subs.iterrows():
                         sub_id = int(sub['id'])
                         c_nome, c_edit, c_archive = st.columns([4, 0.5, 0.5])
-                        c_nome.markdown(f"  ↳ {sub['nome']}")
+                        c_nome.markdown(f" ↳ {sub['nome']}")
                         edit_sub_flag = f"editing_sub_{sub_id}"
 
                         if st.session_state.get(edit_sub_flag, False):
@@ -195,23 +195,23 @@ class CadastrosManager:
                                 "Nome", value=sub['nome'], key=f"es_name_{sub_id}"
                             )
                             bs1, bs2 = st.columns(2)
-                            if bs1.button("💾", key=f"save_sub_{sub_id}"):
+                            if bs1.button("", key=f"save_sub_{sub_id}"):
                                 db.executar(
                                     "UPDATE subcategorias SET nome=%s WHERE id=%s AND user_id=%s",
                                     (novo_sub_nome.strip(), sub_id, user_id)
                                 )
                                 st.session_state[edit_sub_flag] = False
                                 st.rerun()
-                            if bs2.button("❌", key=f"cancel_sub_{sub_id}"):
+                            if bs2.button("", key=f"cancel_sub_{sub_id}"):
                                 st.session_state[edit_sub_flag] = False
                                 st.rerun()
                         else:
                             with c_edit:
-                                if st.button("✏️", key=f"edit_sub_{sub_id}"):
+                                if st.button("", key=f"edit_sub_{sub_id}"):
                                     st.session_state[edit_sub_flag] = True
                                     st.rerun()
                             with c_archive:
-                                if st.button("📦", key=f"archive_sub_{sub_id}", help="Arquivar"):
+                                if st.button("", key=f"archive_sub_{sub_id}", help="Arquivar"):
                                     db.executar(
                                         "UPDATE subcategorias SET ativa = FALSE WHERE id=%s AND user_id=%s",
                                         (sub_id, user_id)
@@ -228,7 +228,7 @@ class CadastrosManager:
     @staticmethod
     def _secao_contas():
         """Seção de gerenciamento de contas/bancos."""
-        st.markdown("### [ 💳 ] Bancos e Cartões")
+        st.markdown("### [ ] Bancos e Cartões")
         user_id = db.get_user_id()
 
         with st.form("form_novo_banco", clear_on_submit=True):
@@ -243,10 +243,10 @@ class CadastrosManager:
                         "INSERT INTO contas (nome, user_id) VALUES (?, ?)",
                         (n_banco.strip(), user_id)
                     ):
-                        st.success("✅ Banco adicionado!")
+                        st.success(" Banco adicionado!")
                         st.rerun()
                 else:
-                    st.error("❌ Digite um nome!")
+                    st.error(" Digite um nome!")
 
         st.markdown("**Cadastrados:**")
 
@@ -255,7 +255,7 @@ class CadastrosManager:
         )
 
         if df_contas.empty:
-            st.info("ℹ️ Nenhuma conta cadastrada.")
+            st.info("ℹ Nenhuma conta cadastrada.")
             return
 
         for _, r in df_contas.iterrows():
@@ -291,11 +291,11 @@ class CadastrosManager:
                     unsafe_allow_html=True
                 )
                 with col_edit:
-                    if st.button("✏️", key=f"edit_conta_{r['id']}", help="Editar"):
+                    if st.button("", key=f"edit_conta_{r['id']}", help="Editar"):
                         st.session_state[edit_flag] = True
                         st.rerun()
                 with col_del:
-                    if st.button("🗑️", key=f"del_conta_{r['id']}", help="Excluir"):
+                    if st.button("", key=f"del_conta_{r['id']}", help="Excluir"):
                         db.executar(
                             "DELETE FROM contas WHERE id=? AND user_id=?",
                             (r['id'], user_id)

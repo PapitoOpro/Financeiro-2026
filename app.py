@@ -21,7 +21,7 @@ from modules.onboarding import OnboardingManager
 # ==========================================
 st.set_page_config(
     page_title="Finanças Pro 2026",
-    page_icon="💰",
+    page_icon="$",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -121,19 +121,19 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Header ---
-st.sidebar.markdown('<div class="sidebar-title">💰 FINANÇAS PRO</div>', unsafe_allow_html=True)
+st.sidebar.markdown('<div class="sidebar-title">FINANÇAS PRO</div>', unsafe_allow_html=True)
 st.sidebar.markdown('<div class="sidebar-subtitle">Controle Financeiro</div>', unsafe_allow_html=True)
 st.sidebar.markdown("---")
 
 # --- Menu de navegação ---
 MENU_ITEMS = [
-    ("💵", "Controle de Caixa"),
-    ("📊", "Acompanhamento"),
-    ("📅", "Projeção de Gastos"),
-    ("🏷️", "Cadastros"),
-    ("📈", "Relatórios"),
-    ("🤖", "Consultor Financeiro"),
-    ("🔧", "Admin"),
+    ("", "Controle de Caixa"),
+    ("", "Acompanhamento"),
+    ("", "Projeção de Gastos"),
+    ("", "Cadastros"),
+    ("", "Relatórios"),
+    ("", "Consultor Financeiro"),
+    ("", "Admin"),
 ]
 
 if "menu_selecionado" not in st.session_state:
@@ -143,7 +143,7 @@ st.sidebar.markdown('<div class="menu-container">', unsafe_allow_html=True)
 for icone, label in MENU_ITEMS:
     is_active = st.session_state.menu_selecionado == label
     if st.sidebar.button(
-        f"{icone}  {label}",
+        f"{label}" if not icone else f"{icone}  {label}",
         key=f"menu_{label}",
         type="primary" if is_active else "secondary",
         use_container_width=True,

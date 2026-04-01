@@ -17,7 +17,7 @@ class RelatoriosManager:
 
     @staticmethod
     def renderizar():
-        st.header("📊 Relatórios Analíticos")
+        st.header(" Relatórios Analíticos")
 
         c1, c2 = st.columns(2)
         hoje = datetime.now().date()
@@ -26,7 +26,7 @@ class RelatoriosManager:
         d_fim = c2.date_input("Data Fim", value=hoje)
 
         if d_ini > d_fim:
-            st.error("❌ A data de início não pode ser maior que a data de fim.")
+            st.error(" A data de início não pode ser maior que a data de fim.")
             return
 
         # Query base — transações CAIXA
@@ -56,10 +56,10 @@ class RelatoriosManager:
         """
         df_cartao = db.buscar(q_cartao)
         if not df_cartao.empty and not df_cartao.isna().all(axis=None):
-            df_an = pd.concat([df_an, df_cartao.dropna(how='all', axis=1)], ignore_index=True)
+            df_an = pd.concat([df_an, df_cartao.dropna(how='all')], ignore_index=True)
 
         if df_an.empty:
-            st.info("ℹ️ Nenhuma movimentação registrada neste período.")
+            st.info("ℹ Nenhuma movimentação registrada neste período.")
             return
 
         # Map lowercase column -> original to lidar com alias/case diferentes
@@ -126,7 +126,7 @@ class RelatoriosManager:
         t_extrato, t_abc, t_consultor = st.tabs([
             "[+] Extrato do Período",
             "[>] Curva ABC (Data e Valor)",
-            "[🧠] Consultor Financeiro",
+            "[] Consultor Financeiro",
         ])
 
         with t_extrato:

@@ -18,7 +18,7 @@ from utils import moeda
 class ConsultorEngine:
     """Motor de regras que analisa dados e gera alertas/sugestões/insights."""
 
-    # ── Níveis ──
+    # Níveis 
     CRITICO = "critico"
     ATENCAO = "atencao"
     SUGESTAO = "sugestao"
@@ -26,11 +26,11 @@ class ConsultorEngine:
     SEGURO = "seguro"
 
     ICONES = {
-        "critico": "💣",
-        "atencao": "⚠️",
-        "sugestao": "💡",
-        "insight": "🧠",
-        "seguro": "🟢",
+        "critico": "",
+        "atencao": "",
+        "sugestao": "",
+        "insight": "",
+        "seguro": "",
     }
 
     CORES_NIVEL = {
@@ -99,7 +99,7 @@ class ConsultorEngine:
             ORDER BY f.data_vencimento
         """)
         if not df_cartao.empty and not df_cartao.isna().all(axis=None):
-            df = pd.concat([df, df_cartao.dropna(how='all', axis=1)], ignore_index=True)
+            df = pd.concat([df, df_cartao.dropna(how='all')], ignore_index=True)
 
         return df
 
@@ -137,7 +137,7 @@ class ConsultorEngine:
             ORDER BY f.data_vencimento
         """)
         if not df_cartao.empty and not df_cartao.isna().all(axis=None):
-            df = pd.concat([df, df_cartao.dropna(how='all', axis=1)], ignore_index=True)
+            df = pd.concat([df, df_cartao.dropna(how='all')], ignore_index=True)
 
         return df
 
@@ -170,7 +170,7 @@ class ConsultorEngine:
         saldo_mes = entradas - saidas
         saldo_acum = cls.saldo_acumulado()
 
-        # ── Regra 1: % de gasto sobre a renda ──
+        # Regra 1: % de gasto sobre a renda 
         if entradas > 0:
             pct_gasto = (saidas / entradas) * 100
             limite_critico = limites.get('pct_alerta_critico', 90)
@@ -183,7 +183,7 @@ class ConsultorEngine:
                     'titulo': f'Você já gastou {pct_gasto:.0f}% da sua renda!',
                     'mensagem': f'Seus gastos ({moeda(saidas)}) atingiram {pct_gasto:.0f}% das entradas ({moeda(entradas)}). '
                                 f'Limite crítico: {limite_critico:.0f}%.',
-                    'frase': f'Calma lá… você já gastou {pct_gasto:.0f}% da sua renda 😰',
+                    'frase': f'Calma lá… você já gastou {pct_gasto:.0f}% da sua renda ',
                 })
             elif pct_gasto >= limite_max:
                 alertas.append({
@@ -191,24 +191,24 @@ class ConsultorEngine:
                     'titulo': f'Gastos em {pct_gasto:.0f}% da renda',
                     'mensagem': f'Seus gastos ({moeda(saidas)}) estão em {pct_gasto:.0f}% das entradas ({moeda(entradas)}). '
                                 f'Limite recomendado: {limite_max:.0f}%.',
-                    'frase': f'Atenção! Você já usou {pct_gasto:.0f}% do orçamento 😅',
+                    'frase': f'Atenção! Você já usou {pct_gasto:.0f}% do orçamento ',
                 })
             elif pct_gasto >= limite_atencao:
                 alertas.append({
                     'nivel': cls.ATENCAO,
                     'titulo': f'Gastos chegando a {pct_gasto:.0f}% da renda',
                     'mensagem': f'Você gastou {moeda(saidas)} de {moeda(entradas)} em entradas. Fique atento.',
-                    'frase': f'Fique de olho… já foi {pct_gasto:.0f}% do orçamento 👀',
+                    'frase': f'Fique de olho… já foi {pct_gasto:.0f}% do orçamento ',
                 })
             else:
                 alertas.append({
                     'nivel': cls.SEGURO,
                     'titulo': f'Gastos em {pct_gasto:.0f}% da renda',
                     'mensagem': f'Você gastou {moeda(saidas)} de {moeda(entradas)}. Tudo dentro do planejado!',
-                    'frase': f'Mandou bem! Seus gastos estão controlados em {pct_gasto:.0f}% 💪',
+                    'frase': f'Mandou bem! Seus gastos estão controlados em {pct_gasto:.0f}% ',
                 })
 
-        # ── Regra 2: Categorias acima do limite (usa percentual_meta da categoria) ──
+        # Regra 2: Categorias acima do limite (usa percentual_meta da categoria) 
         if entradas > 0:
             df_saidas = df_mes[df_mes['valor'] < 0].copy()
             if not df_saidas.empty:
@@ -249,10 +249,10 @@ class ConsultorEngine:
                             'titulo': f'Categoria "{cat}" acima do limite',
                             'mensagem': f'{cat} consumiu {pct_cat:.1f}% da renda ({moeda(total_cat)}). '
                                         f'Meta configurada: {limite_cat:.0f}%.{detalhe_sub}',
-                            'frase': f'A categoria {cat} está puxando pesado: {pct_cat:.1f}% da renda 📊',
+                            'frase': f'A categoria {cat} está puxando pesado: {pct_cat:.1f}% da renda ',
                         })
 
-        # ── Regra 3: Dias restantes no mês vs saldo ──
+        # Regra 3: Dias restantes no mês vs saldo 
         hoje = datetime.now()
         if hoje.month == mes and hoje.year == ano:
             ultimo_dia = (datetime(ano, mes, 1) + relativedelta(months=1) - relativedelta(days=1)).day
@@ -271,7 +271,7 @@ class ConsultorEngine:
                         'titulo': f'Previsão: saldo negativo em {dias_ate_zero} dias',
                         'mensagem': f'Se continuar nesse ritmo ({moeda(gasto_diario_medio)}/dia), '
                                     f'seu saldo acaba antes do fim do mês!',
-                        'frase': f'Alerta! Nesse ritmo você fica no vermelho em {dias_ate_zero} dias 🚨',
+                        'frase': f'Alerta! Nesse ritmo você fica no vermelho em {dias_ate_zero} dias ',
                     })
                 elif saldo_previsto < saldo_minimo:
                     alertas.append({
@@ -279,7 +279,7 @@ class ConsultorEngine:
                         'titulo': 'Saldo previsto abaixo do mínimo',
                         'mensagem': f'Previsão de saldo no fim do mês: {moeda(saldo_previsto)}. '
                                     f'Mínimo recomendado: {moeda(saldo_minimo)}.',
-                        'frase': f'Cuidado! No fim do mês pode sobrar apenas {moeda(saldo_previsto)} 😬',
+                        'frase': f'Cuidado! No fim do mês pode sobrar apenas {moeda(saldo_previsto)} ',
                     })
 
             if saldo_mes < saldo_minimo and saldo_mes >= 0:
@@ -288,10 +288,10 @@ class ConsultorEngine:
                     'titulo': 'Saldo abaixo do mínimo recomendado',
                     'mensagem': f'Saldo atual do mês: {moeda(saldo_mes)}. '
                                 f'Mínimo recomendado: {moeda(saldo_minimo)}.',
-                    'frase': f'Seu saldo ({moeda(saldo_mes)}) está abaixo do mínimo de {moeda(saldo_minimo)} 💸',
+                    'frase': f'Seu saldo ({moeda(saldo_mes)}) está abaixo do mínimo de {moeda(saldo_minimo)} ',
                 })
 
-        # ── Regra 4: Dinheiro extra → sugestão de guardar ──
+        # Regra 4: Dinheiro extra → sugestão de guardar 
         df_hist = cls.dados_ultimos_meses(3)
         if not df_hist.empty and entradas > 0:
             df_hist['data'] = pd.to_datetime(df_hist['data'])
@@ -310,10 +310,10 @@ class ConsultorEngine:
                         'titulo': f'Renda extra de {moeda(extra)} detectada!',
                         'mensagem': f'Você recebeu {moeda(extra)} a mais que a média. '
                                     f'Que tal guardar {pct_guardar:.0f}% ({moeda(sugestao_guardar)})?',
-                        'frase': f'Boa notícia! Entrou {moeda(extra)} a mais. Guardar {moeda(sugestao_guardar)}? 🎯',
+                        'frase': f'Boa notícia! Entrou {moeda(extra)} a mais. Guardar {moeda(sugestao_guardar)}? ',
                     })
 
-        # ── Insight: Maior categoria de gasto ──
+        # Insight: Maior categoria de gasto 
         if entradas > 0 and not df_mes[df_mes['valor'] < 0].empty:
             df_saidas = df_mes[df_mes['valor'] < 0].copy()
             df_saidas['valor_abs'] = df_saidas['valor'].abs()
@@ -328,10 +328,10 @@ class ConsultorEngine:
                     'titulo': f'Maior gasto: {maior_cat} ({pct_maior:.0f}%)',
                     'mensagem': f'A categoria "{maior_cat}" representa {pct_maior:.0f}% dos gastos '
                                 f'do mês ({moeda(maior_val)} de {moeda(saidas)}).',
-                    'frase': f'Seu maior gasto é {maior_cat}: {pct_maior:.0f}% das saídas 📌',
+                    'frase': f'Seu maior gasto é {maior_cat}: {pct_maior:.0f}% das saídas ',
                 })
 
-        # ── Insight: Média dos últimos 3 meses ──
+        # Insight: Média dos últimos 3 meses 
         if not df_hist.empty:
             df_hist['data'] = pd.to_datetime(df_hist['data'])
             hist_saidas = df_hist[df_hist['valor'] < 0].copy()
@@ -349,7 +349,7 @@ class ConsultorEngine:
                             'titulo': 'Gastos acima da média recente',
                             'mensagem': f'Seus gastos este mês ({moeda(saidas)}) estão acima da média '
                                         f'dos últimos {len(media_mensal)} meses ({moeda(media_3m)}).',
-                            'frase': f'Você está gastando mais que o normal: {moeda(saidas)} vs média {moeda(media_3m)} 📈',
+                            'frase': f'Você está gastando mais que o normal: {moeda(saidas)} vs média {moeda(media_3m)} ',
                         })
                     else:
                         alertas.append({
@@ -357,15 +357,15 @@ class ConsultorEngine:
                             'titulo': 'Gastos dentro da média',
                             'mensagem': f'Seus gastos ({moeda(saidas)}) estão alinhados com a média '
                                         f'recente ({moeda(media_3m)}).',
-                            'frase': f'Seus gastos estão alinhados com sua média: {moeda(media_3m)} ✅',
+                            'frase': f'Seus gastos estão alinhados com sua média: {moeda(media_3m)} ',
                         })
 
-        # ── Insight: Saldo acumulado (visão ledger) ──
+        # Insight: Saldo acumulado (visão ledger) 
         alertas.append({
             'nivel': cls.INSIGHT,
             'titulo': f'Saldo acumulado geral: {moeda(saldo_acum)}',
             'mensagem': f'Saldo contínuo de todas as transações do caixa desde o início.',
-            'frase': f'Seu saldo acumulado total é {moeda(saldo_acum)} {"💚" if saldo_acum >= 0 else "🔴"}',
+            'frase': f'Seu saldo acumulado total é {moeda(saldo_acum)} {"" if saldo_acum >= 0 else ""}',
         })
 
         return alertas
@@ -442,7 +442,7 @@ class ConsultorManager:
     @staticmethod
     def renderizar():
         """Página completa do consultor financeiro."""
-        st.header("🧠 Consultor Financeiro")
+        st.header(" Consultor Financeiro")
         st.caption("Seu assistente inteligente de finanças — alertas, sugestões e insights personalizados.")
 
         # Filtros
@@ -453,14 +453,14 @@ class ConsultorManager:
 
         diag = ConsultorEngine.diagnostico_completo(ano, mes_num)
 
-        # ── Status Geral ──
+        # Status Geral 
         ConsultorManager._renderizar_status_geral(diag)
 
-        # ── Tabs principais ──
+        # Tabs principais 
         tab_alertas, tab_insights, tab_config = st.tabs([
-            "🔔 Alertas e Sugestões",
-            "📊 Diagnóstico Completo",
-            "⚙️ Configurar Limites",
+            " Alertas e Sugestões",
+            " Diagnóstico Completo",
+            " Configurar Limites",
         ])
 
         with tab_alertas:
@@ -570,7 +570,7 @@ class ConsultorManager:
     @staticmethod
     def _renderizar_diagnostico(diag):
         """Renderiza diagnóstico completo com gráficos."""
-        st.markdown("#### 📊 Distribuição de Gastos por Categoria")
+        st.markdown("#### Distribuição de Gastos por Categoria")
 
         dist_cat = diag['dist_categorias']
         if not dist_cat.empty:
@@ -621,7 +621,7 @@ class ConsultorManager:
         st.markdown("---")
 
         # Evolução mensal
-        st.markdown("#### 📈 Evolução Mensal (Últimos Meses)")
+        st.markdown("#### Evolução Mensal (Últimos Meses)")
         evolucao = diag['evolucao']
         if not evolucao.empty:
             import plotly.graph_objects as go
@@ -654,7 +654,7 @@ class ConsultorManager:
         st.markdown("---")
 
         # Previsão de gasto até o fim do mês
-        st.markdown("#### 🔮 Previsão até o Fim do Mês")
+        st.markdown("#### Previsão até o Fim do Mês")
         hoje = datetime.now()
         if diag['saidas'] > 0 and hoje.day > 1:
             gasto_diario = diag['saidas'] / hoje.day
@@ -674,11 +674,11 @@ class ConsultorManager:
     @staticmethod
     def _renderizar_config(limites_atuais):
         """Permite ao usuário configurar limites do consultor."""
-        st.markdown("#### ⚙️ Ajuste seus limites financeiros")
+        st.markdown("#### Ajuste seus limites financeiros")
         st.caption("Esses valores definem quando o consultor emite alertas.")
 
         with st.form("form_limites"):
-            st.markdown("**🎯 Limites Gerais**")
+            st.markdown("** Limites Gerais**")
             c1, c2 = st.columns(2)
 
             pct_max = c1.number_input(
@@ -710,7 +710,7 @@ class ConsultorManager:
                 value=float(limites_atuais.get('pct_sugestao_guardar', 30)),
             )
 
-            st.markdown("**📁 Metas por Categoria (%)**")
+            st.markdown("** Metas por Categoria (%)**")
             st.caption("As metas por categoria agora são configuradas em Cadastros → Categorias. "
                        "Cada categoria tem seu percentual de meta definido diretamente.")
 
@@ -722,11 +722,11 @@ class ConsultorManager:
             )
             if not df_cats.empty:
                 for _, cat in df_cats.iterrows():
-                    icone = cat.get('icone', '📁') or '📁'
+                    icone = cat.get('icone', '') or ''
                     pct = float(cat.get('percentual_meta', 0) or 0)
                     st.markdown(f"{icone} **{cat['nome']}**: {pct:.0f}%")
 
-            if st.form_submit_button("💾 Salvar Limites", use_container_width=True):
+            if st.form_submit_button(" Salvar Limites", use_container_width=True):
                 # Salva limites gerais
                 updates = {
                     'pct_gasto_maximo': pct_max,
@@ -744,10 +744,10 @@ class ConsultorManager:
                         (chave, valor, '', db.get_user_id())
                     )
 
-                st.success("✅ Limites atualizados com sucesso!")
+                st.success(" Limites atualizados com sucesso!")
                 st.rerun()
 
-    # ── Widget compacto para usar em outras páginas ──
+    # Widget compacto para usar em outras páginas 
 
     @staticmethod
     def widget_alertas(ano, mes, max_alertas=3):
@@ -774,7 +774,7 @@ class ConsultorManager:
         if not tem_destaque:
             return
 
-        st.markdown("#### 🧠 Consultor Financeiro")
+        st.markdown("#### Consultor Financeiro")
         for alerta in alertas_top:
             nivel = alerta['nivel']
             if nivel == ConsultorEngine.SEGURO:

@@ -36,7 +36,7 @@ class DatabaseManager:
                 key = st.secrets["SUPABASE_KEY"]
                 self._supabase = create_client(url, key)
             except Exception as e:
-                st.error(f"❌ Erro ao criar cliente Supabase: {e}")
+                st.error(f" Erro ao criar cliente Supabase: {e}")
                 return None
         return self._supabase
     
@@ -65,7 +65,7 @@ class DatabaseManager:
             )
             return conn
         except Exception as e:
-            st.error(f"❌ Erro de conexão com BD: {e}")
+            st.error(f" Erro de conexão com BD: {e}")
             return None
 
     def get_connection(self):
@@ -124,7 +124,7 @@ class DatabaseManager:
             # Não é erro fatal — apenas retornamos None e deixamos o caller
             # tentar usar a conexão DB-API tradicional.
             try:
-                st.warning(f"⚠️ Falha ao criar SQLAlchemy engine: {e}")
+                st.warning(f" Falha ao criar SQLAlchemy engine: {e}")
             except Exception:
                 pass
             return None
@@ -133,7 +133,7 @@ class DatabaseManager:
         """Executa uma query (INSERT, UPDATE, DELETE)."""
         conn = self.get_connection()
         if conn is None:
-            st.error("❌ Sem conexão com o banco de dados.")
+            st.error(" Sem conexão com o banco de dados.")
             return False
 
         q = query.replace('?', '%s')
@@ -143,7 +143,7 @@ class DatabaseManager:
             conn.commit()
             return True
         except Exception as e:
-            st.error(f"❌ Erro na execução: {e}")
+            st.error(f" Erro na execução: {e}")
             # Tenta rollback somente se a conexão ainda estiver aberta
             try:
                 if getattr(conn, 'closed', 1) == 0:
@@ -162,7 +162,7 @@ class DatabaseManager:
         """Retorna DataFrame com resultados."""
         conn = self.get_connection()
         if conn is None:
-            st.error("❌ Sem conexão com o banco de dados.")
+            st.error(" Sem conexão com o banco de dados.")
             return pd.DataFrame()
 
         q = query.replace('?', '%s')
@@ -176,7 +176,7 @@ class DatabaseManager:
             conn.commit()
             return df
         except Exception as e:
-            st.error(f"❌ Erro na busca: {e}")
+            st.error(f" Erro na busca: {e}")
             try:
                 conn.close()
             except Exception:
@@ -188,7 +188,7 @@ class DatabaseManager:
         """Retorna primeira linha do resultado."""
         conn = self.get_connection()
         if conn is None:
-            st.error("❌ Sem conexão com o banco de dados.")
+            st.error(" Sem conexão com o banco de dados.")
             return None
 
         q = query.replace('?', '%s')
@@ -199,7 +199,7 @@ class DatabaseManager:
             conn.commit()
             return result
         except Exception as e:
-            st.error(f"❌ Erro na busca: {e}")
+            st.error(f" Erro na busca: {e}")
             try:
                 conn.close()
             except Exception:
@@ -232,7 +232,7 @@ class DatabaseManager:
             id SERIAL PRIMARY KEY, 
             nome TEXT, 
             percentual_meta NUMERIC DEFAULT 0,
-            icone TEXT DEFAULT '📁',
+            icone TEXT DEFAULT '',
             ativa BOOLEAN DEFAULT TRUE,
             user_id INTEGER REFERENCES usuarios(id))''')
         self.executar('''CREATE TABLE IF NOT EXISTS subcategorias (
@@ -325,7 +325,7 @@ class DatabaseManager:
         except Exception:
             pass
         try:
-            self.executar("ALTER TABLE categorias ADD COLUMN IF NOT EXISTS icone TEXT DEFAULT '📁'")
+            self.executar("ALTER TABLE categorias ADD COLUMN IF NOT EXISTS icone TEXT DEFAULT ''")
         except Exception:
             pass
         try:
@@ -522,7 +522,7 @@ class DatabaseManager:
             faturas_sem_transacao = self.buscar(
                 "SELECT f.id, f.user_id FROM faturas f "
                 "WHERE NOT EXISTS ("
-                "  SELECT 1 FROM transacoes t WHERE t.fatura_id = f.id"
+                " SELECT 1 FROM transacoes t WHERE t.fatura_id = f.id"
                 ")"
             )
             if not faturas_sem_transacao.empty:
@@ -660,9 +660,9 @@ class DatabaseManager:
         """Retorna itens de uma fatura específica."""
         return self.buscar(
             "SELECT i.id, i.descricao, i.valor, i.data_compra, "
-            "       i.parcela_atual, i.parcela_total, "
-            "       cat.nome as categoria, i.categoria_id, i.subcategoria_id, "
-            "       COALESCE(sub.nome, '') as subcategoria "
+            " i.parcela_atual, i.parcela_total, "
+            " cat.nome as categoria, i.categoria_id, i.subcategoria_id, "
+            " COALESCE(sub.nome, '') as subcategoria "
             "FROM itens_fatura i "
             "LEFT JOIN categorias cat ON i.categoria_id = cat.id "
             "LEFT JOIN subcategorias sub ON i.subcategoria_id = sub.id "
@@ -762,10 +762,10 @@ class DatabaseManager:
         data_ref = a_partir_de or date.today()
         return self.buscar(
             "SELECT i.id, i.descricao, i.valor, i.data_compra, "
-            "       i.parcela_atual, i.parcela_total, "
-            "       cat.nome as categoria, c.nome as cartao, "
-            "       f.competencia, f.data_vencimento as venc_fatura, "
-            "       i.fatura_id, i.categoria_id "
+            " i.parcela_atual, i.parcela_total, "
+            " cat.nome as categoria, c.nome as cartao, "
+            " f.competencia, f.data_vencimento as venc_fatura, "
+            " i.fatura_id, i.categoria_id "
             "FROM itens_fatura i "
             "JOIN faturas f ON i.fatura_id = f.id "
             "LEFT JOIN categorias cat ON i.categoria_id = cat.id "
@@ -779,12 +779,12 @@ class DatabaseManager:
         """Retorna gastos de cartão agrupados por categoria (para acompanhamento/consultor)."""
         return self.buscar(
             "SELECT i.categoria_id, cat.nome as categoria, cat.icone, "
-            "       cat.percentual_meta, ABS(SUM(i.valor)) as gasto_real "
+            " cat.percentual_meta, ABS(SUM(i.valor)) as gasto_real "
             "FROM itens_fatura i "
             "JOIN faturas f ON i.fatura_id = f.id "
             "JOIN categorias cat ON i.categoria_id = cat.id "
             "WHERE i.user_id = %s "
-            "  AND f.data_vencimento BETWEEN %s AND %s "
+            " AND f.data_vencimento BETWEEN %s AND %s "
             "GROUP BY i.categoria_id, cat.nome, cat.icone, cat.percentual_meta "
             "ORDER BY cat.nome",
             (user_id, data_inicio, data_fim)
@@ -797,7 +797,7 @@ class DatabaseManager:
 
         rows = self.buscar(
             "SELECT t.id, t.descricao, t.valor, t.data_vencimento, "
-            "       t.conta_id, t.categoria_id, t.user_id "
+            " t.conta_id, t.categoria_id, t.user_id "
             "FROM transacoes t "
             "WHERE t.tipo_fluxo = 'CARTAO'"
         )

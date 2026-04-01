@@ -14,27 +14,27 @@ def resetar_banco():
         conn = db.get_connection()
         
         # Delete em ordem inversa de dependência (foreign keys)
-        print("🔄 Deletando dados...")
+        print(" Deletando dados...")
         
         db.executar("DELETE FROM transacoes")
-        print("✅ Transações deletadas")
+        print(" Transações deletadas")
         
         db.executar("DELETE FROM usuarios")
-        print("✅ Usuários deletados")
+        print(" Usuários deletados")
         
         db.executar("DELETE FROM categorias")
-        print("✅ Categorias deletadas")
+        print(" Categorias deletadas")
         
         db.executar("DELETE FROM contas")
-        print("✅ Contas deletadas")
+        print(" Contas deletadas")
         
-        print("\n✨ Banco de dados resetado com sucesso!")
-        print("📝 Agora você pode começar do zero.\n")
+        print("\n Banco de dados resetado com sucesso!")
+        print(" Agora você pode começar do zero.\n")
         
         return True
         
     except Exception as e:
-        print(f"❌ Erro ao resetar: {e}")
+        print(f" Erro ao resetar: {e}")
         return False
 
 def dropar_e_recriar():
@@ -42,7 +42,7 @@ def dropar_e_recriar():
     try:
         conn = db.get_connection()
         
-        print("⚠️  Deletando tabelas...")
+        print(" Deletando tabelas...")
         
         # Drop em ordem inversa de dependência
         db.executar("DROP TABLE IF EXISTS transacoes")
@@ -50,17 +50,17 @@ def dropar_e_recriar():
         db.executar("DROP TABLE IF EXISTS categorias")
         db.executar("DROP TABLE IF EXISTS contas")
         
-        print("✅ Tabelas deletadas")
+        print(" Tabelas deletadas")
         
         # Recriar tabelas
-        print("🏗️  Recriando tabelas...")
+        print(" Recriando tabelas...")
         db.inicializar_banco()
         
-        print("✨ Tabelas recriadas com sucesso!\n")
+        print(" Tabelas recriadas com sucesso!\n")
         return True
         
     except Exception as e:
-        print(f"❌ Erro: {e}")
+        print(f" Erro: {e}")
         return False
 
 if __name__ == "__main__":
@@ -79,21 +79,21 @@ if __name__ == "__main__":
         opcao = input("Digite sua escolha (0-2): ").strip()
         
         if opcao == "0":
-            print("❌ Cancelado")
+            print(" Cancelado")
             break
         elif opcao == "1":
-            confirma = input("\n⚠️  Tem certeza que quer deletar TODOS os dados? (sim/não): ").strip().lower()
+            confirma = input("\n Tem certeza que quer deletar TODOS os dados? (sim/não): ").strip().lower()
             if confirma == "sim":
                 resetar_banco()
                 break
             else:
-                print("❌ Cancelado\n")
+                print(" Cancelado\n")
         elif opcao == "2":
-            confirma = input("\n⚠️  ATENÇÃO! Isto vai deletar TODAS as tabelas. Tem certeza? (sim/não): ").strip().lower()
+            confirma = input("\n ATENÇÃO! Isto vai deletar TODAS as tabelas. Tem certeza? (sim/não): ").strip().lower()
             if confirma == "sim":
                 dropar_e_recriar()
                 break
             else:
-                print("❌ Cancelado\n")
+                print(" Cancelado\n")
         else:
-            print("❌ Opção inválida\n")
+            print(" Opção inválida\n")
