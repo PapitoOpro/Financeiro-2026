@@ -47,53 +47,144 @@ if st.session_state.get('logado'):
 # ==========================================
 # INTERFACE PRINCIPAL
 # ==========================================
-st.sidebar.title("FINANÇAS PRO 2026")
+
+# --- CSS do menu lateral moderno ---
+st.markdown("""
+<style>
+    /* Esconder radio buttons padrão */
+    section[data-testid="stSidebar"] .stRadio {display: none;}
+
+    /* Título sidebar */
+    .sidebar-title {
+        font-size: 1.4rem;
+        font-weight: 800;
+        text-align: center;
+        padding: 0.5rem 0 0.2rem;
+        background: linear-gradient(120deg, #06b6d4, #059669);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        letter-spacing: 0.5px;
+    }
+    .sidebar-subtitle {
+        text-align: center;
+        font-size: 0.75rem;
+        color: #888;
+        margin-bottom: 0.8rem;
+    }
+
+    /* Botões do menu */
+    section[data-testid="stSidebar"] div.menu-container button {
+        width: 100%;
+        text-align: left;
+        padding: 0.55rem 0.9rem;
+        margin-bottom: 2px;
+        border: none;
+        border-radius: 10px;
+        background: transparent;
+        color: #ccc;
+        font-size: 0.9rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    section[data-testid="stSidebar"] div.menu-container button:hover {
+        background: rgba(6, 182, 212, 0.10);
+        color: #fff;
+    }
+    section[data-testid="stSidebar"] div.menu-container button[kind="primary"] {
+        background: linear-gradient(135deg, rgba(6,182,212,0.18), rgba(5,150,105,0.13));
+        color: #06b6d4;
+        font-weight: 700;
+        border-left: 3px solid #06b6d4;
+    }
+
+    /* User footer */
+    .sidebar-user {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0.5rem 0.8rem;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.04);
+        margin-top: 0.5rem;
+    }
+    .sidebar-user-name {
+        font-size: 0.82rem;
+        color: #aaa;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# --- Header ---
+st.sidebar.markdown('<div class="sidebar-title">💰 FINANÇAS PRO</div>', unsafe_allow_html=True)
+st.sidebar.markdown('<div class="sidebar-subtitle">Controle Financeiro</div>', unsafe_allow_html=True)
 st.sidebar.markdown("---")
 
-# Menu de navegação
-menu = st.sidebar.radio(
-    "📍 Módulos:",
-    [
-        "1- Controle de Caixa",
-        "2- Acompanhamento",
-        "3- Projeção de Gastos",
-        "4- Cadastros",
-        "5- Relatórios",
-        "6- Consultor Financeiro",
-        "7- Admin 🔧",
-    ],
-    key="main_menu"
+# --- Menu de navegação ---
+MENU_ITEMS = [
+    ("💵", "Controle de Caixa"),
+    ("📊", "Acompanhamento"),
+    ("📅", "Projeção de Gastos"),
+    ("🏷️", "Cadastros"),
+    ("📈", "Relatórios"),
+    ("🤖", "Consultor Financeiro"),
+    ("🔧", "Admin"),
+]
+
+if "menu_selecionado" not in st.session_state:
+    st.session_state.menu_selecionado = "Controle de Caixa"
+
+st.sidebar.markdown('<div class="menu-container">', unsafe_allow_html=True)
+for icone, label in MENU_ITEMS:
+    is_active = st.session_state.menu_selecionado == label
+    if st.sidebar.button(
+        f"{icone}  {label}",
+        key=f"menu_{label}",
+        type="primary" if is_active else "secondary",
+        use_container_width=True,
+    ):
+        st.session_state.menu_selecionado = label
+        st.rerun()
+st.sidebar.markdown('</div>', unsafe_allow_html=True)
+
+# --- Rodapé do sidebar ---
+st.sidebar.markdown("---")
+st.sidebar.markdown(
+    f'<div class="sidebar-user">👤 <span class="sidebar-user-name">{st.session_state.usuario_nome}</span></div>',
+    unsafe_allow_html=True
 )
-
-# Space e botão logout
-st.sidebar.markdown("---")
-col_user, col_logout = st.sidebar.columns([1, 0.5])
-col_user.caption(f"👤 {st.session_state.usuario_nome}")
-if col_logout.button("Sair", width='stretch'):
+if st.sidebar.button("🚪  Sair", use_container_width=True):
     AuthManager.fazer_logout()
+
+menu = st.session_state.menu_selecionado
 
 # ==========================================
 # ROTEAMENTO DE PÁGINAS
 # ==========================================
-if menu == "1- Controle de Caixa":
+if menu == "Controle de Caixa":
     CaixaManager.renderizar()
 
-elif menu == "2- Acompanhamento":
+elif menu == "Acompanhamento":
     AcompanhamentoManager.renderizar()
 
-elif menu == "3- Projeção de Gastos":
+elif menu == "Projeção de Gastos":
     ParcelasManager.renderizar()
 
-elif menu == "4- Cadastros":
+elif menu == "Cadastros":
     CadastrosManager.renderizar()
 
-elif menu == "5- Relatórios":
+elif menu == "Relatórios":
     RelatoriosManager.renderizar()
 
-elif menu == "6- Consultor Financeiro":
+elif menu == "Consultor Financeiro":
     ConsultorManager.renderizar()
 
-elif menu == "7- Admin 🔧":
+elif menu == "Admin":
     AdminManager.renderizar()
 
 # ==========================================
