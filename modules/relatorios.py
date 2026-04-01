@@ -55,8 +55,8 @@ class RelatoriosManager:
             AND f.data_vencimento BETWEEN '{d_ini}' AND '{d_fim}'
         """
         df_cartao = db.buscar(q_cartao)
-        if not df_cartao.empty:
-            df_an = pd.concat([df_an, df_cartao], ignore_index=True)
+        if not df_cartao.empty and not df_cartao.isna().all(axis=None):
+            df_an = pd.concat([df_an, df_cartao.dropna(how='all', axis=1)], ignore_index=True)
 
         if df_an.empty:
             st.info("ℹ️ Nenhuma movimentação registrada neste período.")

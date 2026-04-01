@@ -146,6 +146,7 @@ class ParcelasManager:
                     num_parc, int(p_total), ctid, user_id
                 )
                 db.atualizar_total_fatura(fatura_id)
+                db.sincronizar_transacao_fatura(fatura_id, user_id)
 
             st.success(f"✅ {parcelas_lancar} parcelas lançadas com sucesso!")
             ParcelasManager._resetar_estado_pdf()
@@ -520,6 +521,7 @@ class ParcelasManager:
                             duplicados += 1
 
                         db.atualizar_total_fatura(fatura_id)
+                        db.sincronizar_transacao_fatura(fatura_id, user_id)
 
                 except Exception as inner_e:
                     st.warning(f"Erro ao processar linha '{desc}': {inner_e}")
@@ -731,7 +733,7 @@ class ParcelasManager:
                             parc_label = f"({int(r['parcela_atual']):02d}/{int(r['parcela_total']):02d})"
 
                             with c_sel:
-                                st.checkbox("", key=f"sel_item_{r['id']}", label_visibility="collapsed")
+                                st.checkbox("Selecionar", key=f"sel_item_{r['id']}", label_visibility="collapsed")
 
                             c1.write(pd.to_datetime(r['data_vencimento']).strftime('%d/%m/%Y'))
                             c2.markdown(

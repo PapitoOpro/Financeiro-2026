@@ -517,6 +517,23 @@ class DatabaseManager:
         except Exception:
             pass
 
+        # ── Garante que toda fatura tem transação no caixa ──
+        try:
+            faturas_sem_transacao = self.buscar(
+                "SELECT f.id, f.user_id FROM faturas f "
+                "WHERE NOT EXISTS ("
+                "  SELECT 1 FROM transacoes t WHERE t.fatura_id = f.id"
+                ")"
+            )
+            if not faturas_sem_transacao.empty:
+                for _, f in faturas_sem_transacao.iterrows():
+                    try:
+                        self.sincronizar_transacao_fatura(f['id'], f['user_id'])
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
         self._skip_rls = False
         DatabaseManager._banco_inicializado = True
 
@@ -655,53 +672,78 @@ class DatabaseManager:
         )
 
     def pagar_fatura(self, fatura_id, user_id, data_pagamento=None):
-        """Marca fatura como paga e cria transação de pagamento no caixa."""
+        """Marca fatura como paga (compensa a transação no caixa)."""
         from datetime import date
         data_pgto = data_pagamento or date.today()
 
-        fatura = self.buscar_um(
-            "SELECT f.valor_total, c.nome, f.competencia "
-            "FROM faturas f JOIN contas c ON f.conta_id = c.id "
-            "WHERE f.id = %s AND f.user_id = %s",
-            (fatura_id, user_id)
-        )
-        if not fatura:
-            return False
-
-        valor_total, cartao_nome, competencia = fatura
-
-        # Marca como paga
+        # Marca fatura como paga
         self.executar(
             "UPDATE faturas SET status = 'paga', data_pagamento = %s WHERE id = %s",
             (data_pgto, fatura_id)
         )
 
-        # Cria transação única no caixa
-        fatura_row = self.buscar_um(
-            "SELECT conta_id FROM faturas WHERE id = %s", (fatura_id,)
-        )
-        conta_id = fatura_row[0] if fatura_row else None
-
+        # Compensa a transação correspondente no caixa
         self.executar(
-            "INSERT INTO transacoes "
-            "(descricao, valor, data_vencimento, conta_id, tipo_fluxo, user_id, "
-            " compensado, data_compensacao, fatura_id) "
-            "VALUES (%s, %s, %s, %s, 'CAIXA', %s, TRUE, %s, %s)",
-            (f"Fatura {cartao_nome} - Ref {competencia}",
-             -abs(valor_total), data_pgto, conta_id, user_id, data_pgto, fatura_id)
+            "UPDATE transacoes SET compensado = TRUE, data_compensacao = %s "
+            "WHERE fatura_id = %s AND user_id = %s",
+            (data_pgto, fatura_id, user_id)
         )
         return True
 
     def reabrir_fatura(self, fatura_id, user_id):
-        """Reabre uma fatura paga, removendo a transação de pagamento."""
-        self.executar(
-            "DELETE FROM transacoes WHERE fatura_id = %s AND user_id = %s",
-            (fatura_id, user_id)
-        )
+        """Reabre uma fatura paga (descompensa a transação no caixa)."""
         self.executar(
             "UPDATE faturas SET status = 'aberta', data_pagamento = NULL WHERE id = %s",
             (fatura_id,)
         )
+        self.executar(
+            "UPDATE transacoes SET compensado = FALSE, data_compensacao = NULL "
+            "WHERE fatura_id = %s AND user_id = %s",
+            (fatura_id, user_id)
+        )
+
+    def sincronizar_transacao_fatura(self, fatura_id, user_id):
+        """Cria ou atualiza a transação única no caixa que representa a fatura.
+        
+        - Fatura aparece como 1 linha no extrato (pendente)
+        - Ao compensar no caixa = fatura paga
+        """
+        fatura = self.buscar_um(
+            "SELECT f.valor_total, c.nome, f.competencia, f.data_vencimento, f.conta_id, f.status "
+            "FROM faturas f JOIN contas c ON f.conta_id = c.id "
+            "WHERE f.id = %s AND f.user_id = %s",
+            (fatura_id, user_id)
+        )
+        if not fatura:
+            return
+
+        valor_total, cartao_nome, competencia, data_venc, conta_id, status = fatura
+        descricao = f"Fatura {cartao_nome} - Ref {competencia}"
+        is_paga = status == 'paga'
+
+        # Verifica se já existe transação para essa fatura
+        existente = self.buscar_um(
+            "SELECT id FROM transacoes WHERE fatura_id = %s AND user_id = %s",
+            (fatura_id, user_id)
+        )
+
+        if existente:
+            # Atualiza valor (pode ter mudado se itens foram editados/excluídos)
+            self.executar(
+                "UPDATE transacoes SET descricao = %s, valor = %s, data_vencimento = %s, conta_id = %s "
+                "WHERE fatura_id = %s AND user_id = %s",
+                (descricao, -abs(valor_total), data_venc, conta_id, fatura_id, user_id)
+            )
+        else:
+            # Cria transação pendente (não compensada) no caixa
+            self.executar(
+                "INSERT INTO transacoes "
+                "(descricao, valor, data_vencimento, conta_id, tipo_fluxo, user_id, "
+                " compensado, data_compensacao, fatura_id) "
+                "VALUES (%s, %s, %s, %s, 'CAIXA', %s, %s, %s, %s)",
+                (descricao, -abs(valor_total), data_venc, conta_id, user_id,
+                 is_paga, data_venc if is_paga else None, fatura_id)
+            )
 
     def excluir_fatura(self, fatura_id, user_id):
         """Exclui fatura e todos os seus itens (CASCADE)."""
@@ -798,11 +840,12 @@ class DatabaseManager:
             except Exception:
                 continue
 
-        # Recalcula totais
-        faturas_criadas = self.buscar("SELECT DISTINCT id FROM faturas")
+        # Recalcula totais e sincroniza transações no caixa
+        faturas_criadas = self.buscar("SELECT DISTINCT id, user_id FROM faturas")
         if not faturas_criadas.empty:
             for _, f in faturas_criadas.iterrows():
                 self.atualizar_total_fatura(f['id'])
+                self.sincronizar_transacao_fatura(f['id'], f['user_id'])
 
 # Instância global
 db = DatabaseManager()

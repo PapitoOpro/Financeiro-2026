@@ -225,16 +225,20 @@ class CaixaManager:
             st.info("Nenhum lançamento encontrado com esse filtro.")
             return
 
-        # Coleta IDs pendentes de compensação para bulk
-        ids_pendentes = df_view[df_view['compensado'] == False]['id'].tolist() if 'compensado' in df_view.columns else []
+        # Separa faturas de transações normais
+        df_faturas = df_view[df_view['fatura_id'].notna()].copy()
+        df_normais = df_view[df_view['fatura_id'].isna()].copy()
+
+        # Coleta IDs pendentes de transações normais para bulk
+        ids_pendentes_normais = df_normais[df_normais['compensado'] == False]['id'].tolist() if not df_normais.empty and 'compensado' in df_normais.columns else []
         selected_comp_ids = [
             int(k.replace('comp_sel_', ''))
             for k in st.session_state
             if isinstance(k, str) and k.startswith('comp_sel_') and st.session_state[k]
-            and int(k.replace('comp_sel_', '')) in [int(x) for x in ids_pendentes]
+            and int(k.replace('comp_sel_', '')) in [int(x) for x in ids_pendentes_normais]
         ]
 
-        # Barra de compensação em massa
+        # Barra de compensação em massa (transações normais)
         if selected_comp_ids:
             col_info, col_btn = st.columns([3, 1])
             with col_info:
@@ -248,138 +252,292 @@ class CaixaManager:
                             "UPDATE transacoes SET compensado=TRUE, data_compensacao=? WHERE id=? AND user_id=?",
                             (hoje, sid, user_id)
                         )
-                    # Limpa checkboxes
                     for k in list(st.session_state.keys()):
                         if isinstance(k, str) and k.startswith('comp_sel_'):
                             del st.session_state[k]
                     st.rerun()
 
-        for _, row in df_view.iterrows():
-            rid = int(row['id'])
-            editing_key = f"editing_caixa_{rid}"
-            is_editing = st.session_state.get(editing_key, False)
-            is_compensado = bool(row.get('compensado', False))
-            
-            if not is_editing:
-                # --- MODO LEITURA ---
-                # Checkbox para selecionar pendentes + colunas normais
-                if not is_compensado:
-                    c_sel, c1, c2, c3, c_comp, c4, c5 = st.columns([0.3, 1.2, 3.0, 2.0, 0.7, 0.5, 0.5])
-                    with c_sel:
-                        st.checkbox("", key=f"comp_sel_{rid}", label_visibility="collapsed")
-                else:
-                    c1, c2, c3, c_comp, c4, c5 = st.columns([1.3, 3.0, 2.0, 0.7, 0.5, 0.5])
-                
-                c1.write(pd.to_datetime(row['data']).strftime('%d/%m/%Y'))
-                
-                # Badge de status
-                badge_comp = (
-                    "<span style='background:#2ecc71; color:white; padding:1px 6px; border-radius:4px; font-size:10px;'>✅</span> "
+        # ========== SEÇÃO FATURAS ==========
+        if not df_faturas.empty:
+            st.markdown("#### 💳 Faturas")
+            user_id = db.get_user_id()
+
+            for fatura_id_val, grp in df_faturas.groupby('fatura_id'):
+                fatura_id_val = int(fatura_id_val)
+                row = grp.iloc[0]
+                is_compensado = bool(row.get('compensado', False))
+                rid = int(row['id'])
+
+                badge = (
+                    "<span style='background:#2ecc71; color:white; padding:2px 8px; border-radius:4px; font-size:11px;'>🟢 Paga</span>"
                     if is_compensado else
-                    "<span style='background:#f39c12; color:white; padding:1px 6px; border-radius:4px; font-size:10px;'>⏳</span> "
+                    "<span style='background:#e74c3c; color:white; padding:2px 8px; border-radius:4px; font-size:11px;'>🔴 Pendente</span>"
                 )
-                c2.markdown(
-                    f"{badge_comp}**{row['descricao']}**<br>"
-                    f"<span style='color:gray; font-size:12px;'>{row['categoria']}"
-                    f"{' → ' + row['subcategoria'] if row.get('subcategoria') else ''}"
-                    f" | {row['banco']}</span>",
-                    unsafe_allow_html=True
-                )
-                
-                cor = get_cor_valor(row['valor'])
-                c3.markdown(
-                    f"<div style='text-align: right; color: {cor}; font-weight: bold;'>{moeda(row['valor'])}</div>",
+                cor_valor = get_cor_valor(row['valor'])
+                data_venc = pd.to_datetime(row['data']).strftime('%d/%m/%Y')
+
+                # Header da fatura
+                st.markdown(
+                    f"<div style='background:#f8f9fa; border-left:4px solid {'#2ecc71' if is_compensado else '#e74c3c'}; "
+                    f"padding:12px 15px; border-radius:6px; margin:8px 0 4px 0;'>"
+                    f"<div style='display:flex; justify-content:space-between; align-items:center;'>"
+                    f"<div>"
+                    f"<strong style='font-size:15px;'>💳 {row['descricao']}</strong><br>"
+                    f"<span style='color:gray; font-size:12px;'>Vencimento: {data_venc} | {row['banco']}</span>"
+                    f"</div>"
+                    f"<div style='text-align:right;'>"
+                    f"<strong style='font-size:18px; color:{cor_valor};'>{moeda(row['valor'])}</strong><br>"
+                    f"{badge}"
+                    f"</div>"
+                    f"</div></div>",
                     unsafe_allow_html=True
                 )
 
-                # Botão compensar / descompensar
-                with c_comp:
+                # Botões de ação da fatura
+                c_pagar, c_excluir = st.columns([1, 1])
+                with c_pagar:
                     if not is_compensado:
-                        if st.button("✅", key=f"comp_caixa_{rid}", help="Compensar"):
-                            db.executar(
-                                "UPDATE transacoes SET compensado=TRUE, data_compensacao=? WHERE id=? AND user_id=?",
-                                (datetime.now().date(), rid, db.get_user_id())
-                            )
+                        if st.button(f"✅ Pagar Fatura", key=f"pagar_fat_{fatura_id_val}", use_container_width=True):
+                            db.pagar_fatura(fatura_id_val, user_id, datetime.now().date())
                             st.rerun()
                     else:
-                        if st.button("↩️", key=f"uncomp_caixa_{rid}", help="Descompensar"):
-                            db.executar(
-                                "UPDATE transacoes SET compensado=FALSE, data_compensacao=NULL WHERE id=? AND user_id=?",
-                                (rid, db.get_user_id())
-                            )
+                        if st.button(f"↩️ Reabrir Fatura", key=f"reabrir_fat_{fatura_id_val}", use_container_width=True):
+                            db.reabrir_fatura(fatura_id_val, user_id)
                             st.rerun()
-                
-                with c4:
-                    if st.button("✏️", key=f"edit_caixa_{rid}", help="Editar"):
-                        st.session_state[editing_key] = True
+                with c_excluir:
+                    if st.button("🗑️ Excluir Fatura", key=f"del_fat_{fatura_id_val}", use_container_width=True):
+                        st.session_state[f"confirm_del_fat_{fatura_id_val}"] = True
                         st.rerun()
-                
-                with c5:
-                    if st.button("🗑️", key=f"del_caixa_{rid}", help="Excluir"):
-                        st.session_state[f"confirm_del_caixa_{rid}"] = True
-                        st.rerun()
-                
-                # Confirmação de exclusão
-                if st.session_state.get(f"confirm_del_caixa_{rid}", False):
-                    st.warning(f"Excluir **{row['descricao']}**?")
-                    cc1, cc2 = st.columns(2)
-                    if cc1.button("✅ Sim", key=f"yes_del_{rid}"):
-                        db.executar("DELETE FROM transacoes WHERE id=? AND user_id=?", (rid, db.get_user_id()))
-                        st.session_state.pop(f"confirm_del_caixa_{rid}", None)
-                        st.rerun()
-                    if cc2.button("❌ Não", key=f"no_del_{rid}"):
-                        st.session_state.pop(f"confirm_del_caixa_{rid}", None)
-                        st.rerun()
-            else:
-                # --- MODO EDIÇÃO INLINE ---
-                st.markdown(f"---\n**Editando: {row['descricao']}**")
-                
-                n_desc = st.text_input("Descrição", value=row['descricao'], key=f"ec_desc_{rid}")
-                
-                ec1, ec2 = st.columns(2)
-                n_val = ec1.number_input("Valor (R$)", value=abs(float(row['valor'])), min_value=0.0, key=f"ec_val_{rid}")
-                n_tipo = ec2.radio("Tipo", ["Entrada", "Saída"], index=0 if row['valor'] >= 0 else 1, key=f"ec_tipo_{rid}")
-                
-                try:
-                    default_date = pd.to_datetime(row['data']).date() if not pd.isnull(row['data']) else datetime.now().date()
-                except Exception:
-                    default_date = datetime.now().date()
-                
-                ec3, ec4, ec5 = st.columns(3)
-                n_data = ec3.date_input("Data", value=default_date, key=f"ec_data_{rid}")
-                
-                lista_contas = df_contas['nome'].tolist()
-                idx_conta = lista_contas.index(row['banco']) if row.get('banco') in lista_contas else 0
-                n_conta = ec4.selectbox("Conta / Banco", lista_contas, index=idx_conta, key=f"ec_cnt_{rid}")
-                
-                lista_cats = df_cats['nome'].tolist()
-                idx_cat = lista_cats.index(row['categoria']) if row.get('categoria') in lista_cats else 0
-                n_cat = ec5.selectbox("Categoria", lista_cats, index=idx_cat, key=f"ec_cat_{rid}")
 
-                n_compensado = st.checkbox("✅ Compensado", value=is_compensado, key=f"ec_comp_{rid}")
-                
-                btn1, btn2 = st.columns(2)
-                if btn1.button("💾 Salvar", key=f"ec_save_{rid}", use_container_width=True):
-                    cid = int(df_contas[df_contas.nome == n_conta].id.values[0])
-                    ctid = int(df_cats[df_cats.nome == n_cat].id.values[0])
-                    v_final = -n_val if n_tipo == "Saída" else n_val
-                    data_comp = datetime.now().date() if n_compensado and not is_compensado else (row.get('data_compensacao') if n_compensado else None)
-                    
-                    db.executar(
-                        "UPDATE transacoes SET descricao=?, valor=?, data_vencimento=?, conta_id=?, categoria_id=?, compensado=?, data_compensacao=? WHERE id=? AND user_id=?",
-                        (n_desc, v_final, n_data, cid, ctid, n_compensado, data_comp, rid, db.get_user_id())
+                # Confirmação de exclusão de fatura
+                if st.session_state.get(f"confirm_del_fat_{fatura_id_val}", False):
+                    st.warning(f"Excluir fatura **{row['descricao']}** e todos os seus itens?")
+                    cc1, cc2 = st.columns(2)
+                    if cc1.button("✅ Sim, excluir", key=f"yes_del_fat_{fatura_id_val}"):
+                        db.excluir_fatura(fatura_id_val, user_id)
+                        st.session_state.pop(f"confirm_del_fat_{fatura_id_val}", None)
+                        st.rerun()
+                    if cc2.button("❌ Não", key=f"no_del_fat_{fatura_id_val}"):
+                        st.session_state.pop(f"confirm_del_fat_{fatura_id_val}", None)
+                        st.rerun()
+
+                # Expander com itens da fatura
+                df_itens_fat = db.buscar_itens_fatura(fatura_id_val)
+                n_itens = len(df_itens_fat) if not df_itens_fat.empty else 0
+
+                with st.expander(f"📋 Ver itens da fatura ({n_itens} itens)", expanded=False):
+                    if df_itens_fat.empty:
+                        st.info("Nenhum item nesta fatura.")
+                    else:
+                        for _, item in df_itens_fat.iterrows():
+                            item_id = int(item['id'])
+                            editing_item_key = f"editing_fat_item_{item_id}"
+                            is_editing_item = st.session_state.get(editing_item_key, False)
+
+                            parc_label = ""
+                            if item.get('parcela_atual') and item.get('parcela_total'):
+                                parc_label = f" ({int(item['parcela_atual']):02d}/{int(item['parcela_total']):02d})"
+
+                            if not is_editing_item:
+                                ci1, ci2, ci3, ci4, ci5 = st.columns([1.3, 3.5, 2.0, 0.5, 0.5])
+                                data_compra_str = pd.to_datetime(item['data_compra']).strftime('%d/%m/%Y') if item.get('data_compra') and not pd.isnull(item['data_compra']) else ""
+                                ci1.write(data_compra_str)
+                                ci2.markdown(
+                                    f"**{item['descricao']}**{parc_label}<br>"
+                                    f"<span style='color:gray; font-size:12px;'>{item.get('categoria', '')}"
+                                    f"{' → ' + item['subcategoria'] if item.get('subcategoria') else ''}"
+                                    f"</span>",
+                                    unsafe_allow_html=True
+                                )
+                                ci3.markdown(
+                                    f"<div style='text-align:right; color:#c0392b; font-weight:bold;'>{moeda(abs(item['valor']))}</div>",
+                                    unsafe_allow_html=True
+                                )
+                                with ci4:
+                                    if st.button("✏️", key=f"edit_fi_{item_id}", help="Editar item"):
+                                        st.session_state[editing_item_key] = True
+                                        st.rerun()
+                                with ci5:
+                                    if st.button("🗑️", key=f"del_fi_{item_id}", help="Excluir item"):
+                                        st.session_state[f"confirm_del_fi_{item_id}"] = True
+                                        st.rerun()
+
+                                # Confirmação de exclusão do item
+                                if st.session_state.get(f"confirm_del_fi_{item_id}", False):
+                                    st.warning(f"Excluir **{item['descricao']}**?")
+                                    cd1, cd2 = st.columns(2)
+                                    if cd1.button("✅ Sim", key=f"yes_del_fi_{item_id}"):
+                                        db.executar("DELETE FROM itens_fatura WHERE id=? AND user_id=?", (item_id, user_id))
+                                        db.atualizar_total_fatura(fatura_id_val)
+                                        db.sincronizar_transacao_fatura(fatura_id_val, user_id)
+                                        st.session_state.pop(f"confirm_del_fi_{item_id}", None)
+                                        st.rerun()
+                                    if cd2.button("❌ Não", key=f"no_del_fi_{item_id}"):
+                                        st.session_state.pop(f"confirm_del_fi_{item_id}", None)
+                                        st.rerun()
+                            else:
+                                # Edição inline do item da fatura
+                                with st.form(f"form_edit_fi_{item_id}"):
+                                    d_desc = st.text_input("Descrição", value=item['descricao'], key=f"efi_desc_{item_id}")
+                                    d_val = st.number_input("Valor (R$)", min_value=0.0, value=float(abs(item['valor'])), key=f"efi_val_{item_id}")
+                                    cat_op = df_cats['nome'].tolist() if not df_cats.empty else []
+                                    default_cat_idx = 0
+                                    try:
+                                        default_cat_idx = cat_op.index(item.get('categoria', '')) if item.get('categoria', '') in cat_op else 0
+                                    except Exception:
+                                        default_cat_idx = 0
+                                    sel_cat = st.selectbox("Categoria", cat_op, index=default_cat_idx, key=f"efi_cat_{item_id}")
+
+                                    save_clicked = st.form_submit_button("💾 Salvar")
+                                    cancel_clicked = st.form_submit_button("❌ Cancelar")
+
+                                    if cancel_clicked:
+                                        st.session_state[editing_item_key] = False
+                                        st.rerun()
+
+                                    if save_clicked:
+                                        try:
+                                            ctid = int(df_cats[df_cats.nome == sel_cat].id.values[0])
+                                            db.executar(
+                                                "UPDATE itens_fatura SET descricao=?, valor=?, categoria_id=? WHERE id=? AND user_id=?",
+                                                (d_desc, abs(float(d_val)), ctid, item_id, user_id)
+                                            )
+                                            db.atualizar_total_fatura(fatura_id_val)
+                                            db.sincronizar_transacao_fatura(fatura_id_val, user_id)
+                                        except Exception as e:
+                                            st.error(f"Erro ao atualizar item: {e}")
+                                        st.session_state[editing_item_key] = False
+                                        st.rerun()
+
+                st.markdown("<hr style='margin: 5px 0 10px 0; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
+
+        # ========== SEÇÃO TRANSAÇÕES NORMAIS ==========
+        if not df_normais.empty:
+            if not df_faturas.empty:
+                st.markdown("#### 📝 Transações Avulsas")
+
+            for _, row in df_normais.iterrows():
+                rid = int(row['id'])
+                editing_key = f"editing_caixa_{rid}"
+                is_editing = st.session_state.get(editing_key, False)
+                is_compensado = bool(row.get('compensado', False))
+
+                if not is_editing:
+                    # --- MODO LEITURA ---
+                    if not is_compensado:
+                        c_sel, c1, c2, c3, c_comp, c4, c5 = st.columns([0.3, 1.2, 3.0, 2.0, 0.7, 0.5, 0.5])
+                        with c_sel:
+                            st.checkbox("Selecionar", key=f"comp_sel_{rid}", label_visibility="collapsed")
+                    else:
+                        c1, c2, c3, c_comp, c4, c5 = st.columns([1.3, 3.0, 2.0, 0.7, 0.5, 0.5])
+
+                    c1.write(pd.to_datetime(row['data']).strftime('%d/%m/%Y'))
+
+                    badge_comp = (
+                        "<span style='background:#2ecc71; color:white; padding:1px 6px; border-radius:4px; font-size:10px;'>✅</span> "
+                        if is_compensado else
+                        "<span style='background:#f39c12; color:white; padding:1px 6px; border-radius:4px; font-size:10px;'>⏳</span> "
                     )
-                    st.session_state.pop(editing_key, None)
-                    st.rerun()
-                
-                if btn2.button("❌ Cancelar", key=f"ec_cancel_{rid}", use_container_width=True):
-                    st.session_state.pop(editing_key, None)
-                    st.rerun()
-                
-                st.markdown("---")
-            
-            if not is_editing:
-                st.markdown("<hr style='margin: 0px 0px 10px 0px; padding: 0; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
+                    c2.markdown(
+                        f"{badge_comp}**{row['descricao']}**<br>"
+                        f"<span style='color:gray; font-size:12px;'>{row['categoria']}"
+                        f"{' → ' + row['subcategoria'] if row.get('subcategoria') else ''}"
+                        f" | {row['banco']}</span>",
+                        unsafe_allow_html=True
+                    )
+
+                    cor = get_cor_valor(row['valor'])
+                    c3.markdown(
+                        f"<div style='text-align: right; color: {cor}; font-weight: bold;'>{moeda(row['valor'])}</div>",
+                        unsafe_allow_html=True
+                    )
+
+                    with c_comp:
+                        if not is_compensado:
+                            if st.button("✅", key=f"comp_caixa_{rid}", help="Compensar"):
+                                db.executar(
+                                    "UPDATE transacoes SET compensado=TRUE, data_compensacao=? WHERE id=? AND user_id=?",
+                                    (datetime.now().date(), rid, db.get_user_id())
+                                )
+                                st.rerun()
+                        else:
+                            if st.button("↩️", key=f"uncomp_caixa_{rid}", help="Descompensar"):
+                                db.executar(
+                                    "UPDATE transacoes SET compensado=FALSE, data_compensacao=NULL WHERE id=? AND user_id=?",
+                                    (rid, db.get_user_id())
+                                )
+                                st.rerun()
+
+                    with c4:
+                        if st.button("✏️", key=f"edit_caixa_{rid}", help="Editar"):
+                            st.session_state[editing_key] = True
+                            st.rerun()
+
+                    with c5:
+                        if st.button("🗑️", key=f"del_caixa_{rid}", help="Excluir"):
+                            st.session_state[f"confirm_del_caixa_{rid}"] = True
+                            st.rerun()
+
+                    if st.session_state.get(f"confirm_del_caixa_{rid}", False):
+                        st.warning(f"Excluir **{row['descricao']}**?")
+                        cc1, cc2 = st.columns(2)
+                        if cc1.button("✅ Sim", key=f"yes_del_{rid}"):
+                            db.executar("DELETE FROM transacoes WHERE id=? AND user_id=?", (rid, db.get_user_id()))
+                            st.session_state.pop(f"confirm_del_caixa_{rid}", None)
+                            st.rerun()
+                        if cc2.button("❌ Não", key=f"no_del_{rid}"):
+                            st.session_state.pop(f"confirm_del_caixa_{rid}", None)
+                            st.rerun()
+                else:
+                    # --- MODO EDIÇÃO INLINE ---
+                    st.markdown(f"---\n**Editando: {row['descricao']}**")
+
+                    n_desc = st.text_input("Descrição", value=row['descricao'], key=f"ec_desc_{rid}")
+
+                    ec1, ec2 = st.columns(2)
+                    n_val = ec1.number_input("Valor (R$)", value=abs(float(row['valor'])), min_value=0.0, key=f"ec_val_{rid}")
+                    n_tipo = ec2.radio("Tipo", ["Entrada", "Saída"], index=0 if row['valor'] >= 0 else 1, key=f"ec_tipo_{rid}")
+
+                    try:
+                        default_date = pd.to_datetime(row['data']).date() if not pd.isnull(row['data']) else datetime.now().date()
+                    except Exception:
+                        default_date = datetime.now().date()
+
+                    ec3, ec4, ec5 = st.columns(3)
+                    n_data = ec3.date_input("Data", value=default_date, key=f"ec_data_{rid}")
+
+                    lista_contas = df_contas['nome'].tolist()
+                    idx_conta = lista_contas.index(row['banco']) if row.get('banco') in lista_contas else 0
+                    n_conta = ec4.selectbox("Conta / Banco", lista_contas, index=idx_conta, key=f"ec_cnt_{rid}")
+
+                    lista_cats = df_cats['nome'].tolist()
+                    idx_cat = lista_cats.index(row['categoria']) if row.get('categoria') in lista_cats else 0
+                    n_cat = ec5.selectbox("Categoria", lista_cats, index=idx_cat, key=f"ec_cat_{rid}")
+
+                    n_compensado = st.checkbox("✅ Compensado", value=is_compensado, key=f"ec_comp_{rid}")
+
+                    btn1, btn2 = st.columns(2)
+                    if btn1.button("💾 Salvar", key=f"ec_save_{rid}", use_container_width=True):
+                        cid = int(df_contas[df_contas.nome == n_conta].id.values[0])
+                        ctid = int(df_cats[df_cats.nome == n_cat].id.values[0])
+                        v_final = -n_val if n_tipo == "Saída" else n_val
+                        data_comp = datetime.now().date() if n_compensado and not is_compensado else (row.get('data_compensacao') if n_compensado else None)
+
+                        db.executar(
+                            "UPDATE transacoes SET descricao=?, valor=?, data_vencimento=?, conta_id=?, categoria_id=?, compensado=?, data_compensacao=? WHERE id=? AND user_id=?",
+                            (n_desc, v_final, n_data, cid, ctid, n_compensado, data_comp, rid, db.get_user_id())
+                        )
+                        st.session_state.pop(editing_key, None)
+                        st.rerun()
+
+                    if btn2.button("❌ Cancelar", key=f"ec_cancel_{rid}", use_container_width=True):
+                        st.session_state.pop(editing_key, None)
+                        st.rerun()
+
+                    st.markdown("---")
+
+                if not is_editing:
+                    st.markdown("<hr style='margin: 0px 0px 10px 0px; padding: 0; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
 
                 # Expander com itens da fatura (se for pagamento de fatura)
                 fatura_id_val = row.get('fatura_id')

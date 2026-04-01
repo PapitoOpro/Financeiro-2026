@@ -79,11 +79,11 @@ class AcompanhamentoManager:
 
         # Inclui gastos de cartão (itens_fatura) no total por categoria
         df_gastos_cartao = db.buscar_gastos_cartao_por_categoria(user_id, data_inicio, data_fim)
-        if not df_gastos_cartao.empty:
+        if not df_gastos_cartao.empty and not df_gastos_cartao.isna().all(axis=None):
             if df_gastos.empty:
                 df_gastos = df_gastos_cartao
             else:
-                df_combined = pd.concat([df_gastos, df_gastos_cartao], ignore_index=True)
+                df_combined = pd.concat([df_gastos, df_gastos_cartao.dropna(how='all', axis=1)], ignore_index=True)
                 df_gastos = df_combined.groupby(['categoria_id', 'categoria', 'icone', 'percentual_meta'], as_index=False).agg({'gasto_real': 'sum'})
 
         # Carrega gastos por subcategoria (CAIXA + cartão)
@@ -113,8 +113,8 @@ class AcompanhamentoManager:
             GROUP BY i.categoria_id, s.nome
             ORDER BY gasto_sub DESC
         """)
-        if not df_sub_cartao.empty and not df_gastos_sub.empty:
-            df_gastos_sub = pd.concat([df_gastos_sub, df_sub_cartao], ignore_index=True)
+        if not df_sub_cartao.empty and not df_sub_cartao.isna().all(axis=None) and not df_gastos_sub.empty:
+            df_gastos_sub = pd.concat([df_gastos_sub, df_sub_cartao.dropna(how='all', axis=1)], ignore_index=True)
             df_gastos_sub = df_gastos_sub.groupby(['categoria_id', 'subcategoria'], as_index=False).agg({'gasto_sub': 'sum'})
         elif not df_sub_cartao.empty:
             df_gastos_sub = df_sub_cartao
