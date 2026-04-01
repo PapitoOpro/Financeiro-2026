@@ -59,7 +59,7 @@ class CaixaManager:
                    cat.nome as categoria, c.nome as banco,
                    COALESCE(sub.nome, '') as subcategoria,
                    COALESCE(t.compensado, FALSE) as compensado,
-                   t.data_compensacao
+                   t.data_compensacao, t.fatura_id
             FROM transacoes t 
             LEFT JOIN categorias cat ON t.categoria_id = cat.id 
             LEFT JOIN contas c ON t.conta_id = c.id
@@ -380,3 +380,20 @@ class CaixaManager:
             
             if not is_editing:
                 st.markdown("<hr style='margin: 0px 0px 10px 0px; padding: 0; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
+
+                # Expander com itens da fatura (se for pagamento de fatura)
+                fatura_id_val = row.get('fatura_id')
+                if fatura_id_val and not pd.isna(fatura_id_val):
+                    with st.expander(f"📋 Ver itens da fatura", expanded=False):
+                        df_itens = db.buscar_itens_fatura(int(fatura_id_val))
+                        if not df_itens.empty:
+                            for _, item in df_itens.iterrows():
+                                parc = f"({int(item['parcela_atual']):02d}/{int(item['parcela_total']):02d})"
+                                st.markdown(
+                                    f"&nbsp;&nbsp;• **{item['descricao']}** {parc} — "
+                                    f"<span style='color:#c0392b;'>{moeda(abs(item['valor']))}</span>"
+                                    f" <small style='color:gray;'>({item.get('categoria', '')})</small>",
+                                    unsafe_allow_html=True
+                                )
+                        else:
+                            st.caption("Nenhum item encontrado nesta fatura.")

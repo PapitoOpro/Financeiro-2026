@@ -449,6 +449,74 @@ class DatabaseManager:
         except Exception:
             pass
 
+        # ── MIGRAÇÃO: Tabelas de Faturas (container de fatura) ──
+        try:
+            self.executar('''CREATE TABLE IF NOT EXISTS faturas (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES usuarios(id),
+                conta_id INTEGER REFERENCES contas(id),
+                competencia TEXT NOT NULL,
+                valor_total NUMERIC DEFAULT 0,
+                data_vencimento DATE,
+                status TEXT DEFAULT 'aberta',
+                data_pagamento DATE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''')
+        except Exception:
+            pass
+
+        try:
+            self.executar('''CREATE TABLE IF NOT EXISTS itens_fatura (
+                id SERIAL PRIMARY KEY,
+                fatura_id INTEGER REFERENCES faturas(id) ON DELETE CASCADE,
+                descricao TEXT NOT NULL,
+                valor NUMERIC NOT NULL,
+                data_compra DATE,
+                parcela_atual INTEGER DEFAULT 1,
+                parcela_total INTEGER DEFAULT 1,
+                categoria_id INTEGER REFERENCES categorias(id),
+                subcategoria_id INTEGER REFERENCES subcategorias(id),
+                user_id INTEGER REFERENCES usuarios(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''')
+        except Exception:
+            pass
+
+        # FK opcional de transacoes → faturas (pagamento da fatura)
+        try:
+            self.executar(
+                "ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS fatura_id INTEGER REFERENCES faturas(id)"
+            )
+        except Exception:
+            pass
+
+        # Índices para faturas
+        try:
+            self.executar(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_faturas_conta_comp_user "
+                "ON faturas(conta_id, competencia, user_id)"
+            )
+        except Exception:
+            pass
+
+        try:
+            self.executar(
+                "CREATE INDEX IF NOT EXISTS ix_itens_fatura_fatura ON itens_fatura(fatura_id)"
+            )
+        except Exception:
+            pass
+
+        # ── MIGRAÇÃO: Converter transacoes CARTAO existentes em faturas ──
+        try:
+            tem_cartao = self.buscar_um(
+                "SELECT 1 FROM transacoes WHERE tipo_fluxo = 'CARTAO' "
+                "AND NOT EXISTS (SELECT 1 FROM itens_fatura LIMIT 1) LIMIT 1"
+            )
+            if tem_cartao:
+                self._migrar_cartao_para_faturas()
+        except Exception:
+            pass
+
         self._skip_rls = False
         DatabaseManager._banco_inicializado = True
 
@@ -504,6 +572,237 @@ class DatabaseManager:
             "SELECT c.* FROM categorias c JOIN subcategorias s ON s.categoria_id = c.id WHERE s.id = %s",
             (subcategoria_id,)
         )
+
+    # ══════════════════════════════════════════
+    # FATURAS — CRUD
+    # ══════════════════════════════════════════
+
+    def criar_fatura(self, user_id, conta_id, competencia, data_vencimento, valor_total=0):
+        """Cria uma fatura ou retorna a existente para o mesmo cartão/competência."""
+        existente = self.buscar_um(
+            "SELECT id FROM faturas WHERE conta_id = %s AND competencia = %s AND user_id = %s",
+            (conta_id, competencia, user_id)
+        )
+        if existente:
+            return existente[0]
+
+        self.executar(
+            "INSERT INTO faturas (user_id, conta_id, competencia, data_vencimento, valor_total) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (user_id, conta_id, competencia, data_vencimento, valor_total)
+        )
+        row = self.buscar_um(
+            "SELECT id FROM faturas WHERE conta_id = %s AND competencia = %s AND user_id = %s",
+            (conta_id, competencia, user_id)
+        )
+        return row[0] if row else None
+
+    def adicionar_item_fatura(self, fatura_id, descricao, valor, data_compra,
+                               parcela_atual, parcela_total, categoria_id, user_id,
+                               subcategoria_id=None):
+        """Adiciona um item a uma fatura."""
+        return self.executar(
+            "INSERT INTO itens_fatura "
+            "(fatura_id, descricao, valor, data_compra, parcela_atual, parcela_total, "
+            " categoria_id, subcategoria_id, user_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (fatura_id, descricao, abs(valor), data_compra, parcela_atual,
+             parcela_total, categoria_id, subcategoria_id, user_id)
+        )
+
+    def atualizar_total_fatura(self, fatura_id):
+        """Recalcula valor_total da fatura a partir dos itens."""
+        self.executar(
+            "UPDATE faturas SET valor_total = "
+            "(SELECT COALESCE(SUM(valor), 0) FROM itens_fatura WHERE fatura_id = %s) "
+            "WHERE id = %s",
+            (fatura_id, fatura_id)
+        )
+
+    def buscar_faturas(self, user_id, competencia=None, conta_id=None):
+        """Retorna faturas do usuário com filtros opcionais."""
+        query = """
+            SELECT f.id, f.competencia, f.valor_total, f.data_vencimento,
+                   f.status, f.data_pagamento, c.nome as cartao,
+                   f.conta_id, f.created_at
+            FROM faturas f
+            LEFT JOIN contas c ON f.conta_id = c.id
+            WHERE f.user_id = %s
+        """
+        params = [user_id]
+        if competencia:
+            query += " AND f.competencia = %s"
+            params.append(competencia)
+        if conta_id:
+            query += " AND f.conta_id = %s"
+            params.append(conta_id)
+        query += " ORDER BY f.data_vencimento DESC"
+        return self.buscar(query, tuple(params))
+
+    def buscar_itens_fatura(self, fatura_id):
+        """Retorna itens de uma fatura específica."""
+        return self.buscar(
+            "SELECT i.id, i.descricao, i.valor, i.data_compra, "
+            "       i.parcela_atual, i.parcela_total, "
+            "       cat.nome as categoria, i.categoria_id, i.subcategoria_id, "
+            "       COALESCE(sub.nome, '') as subcategoria "
+            "FROM itens_fatura i "
+            "LEFT JOIN categorias cat ON i.categoria_id = cat.id "
+            "LEFT JOIN subcategorias sub ON i.subcategoria_id = sub.id "
+            "WHERE i.fatura_id = %s "
+            "ORDER BY i.descricao",
+            (fatura_id,)
+        )
+
+    def pagar_fatura(self, fatura_id, user_id, data_pagamento=None):
+        """Marca fatura como paga e cria transação de pagamento no caixa."""
+        from datetime import date
+        data_pgto = data_pagamento or date.today()
+
+        fatura = self.buscar_um(
+            "SELECT f.valor_total, c.nome, f.competencia "
+            "FROM faturas f JOIN contas c ON f.conta_id = c.id "
+            "WHERE f.id = %s AND f.user_id = %s",
+            (fatura_id, user_id)
+        )
+        if not fatura:
+            return False
+
+        valor_total, cartao_nome, competencia = fatura
+
+        # Marca como paga
+        self.executar(
+            "UPDATE faturas SET status = 'paga', data_pagamento = %s WHERE id = %s",
+            (data_pgto, fatura_id)
+        )
+
+        # Cria transação única no caixa
+        fatura_row = self.buscar_um(
+            "SELECT conta_id FROM faturas WHERE id = %s", (fatura_id,)
+        )
+        conta_id = fatura_row[0] if fatura_row else None
+
+        self.executar(
+            "INSERT INTO transacoes "
+            "(descricao, valor, data_vencimento, conta_id, tipo_fluxo, user_id, "
+            " compensado, data_compensacao, fatura_id) "
+            "VALUES (%s, %s, %s, %s, 'CAIXA', %s, TRUE, %s, %s)",
+            (f"Fatura {cartao_nome} - Ref {competencia}",
+             -abs(valor_total), data_pgto, conta_id, user_id, data_pgto, fatura_id)
+        )
+        return True
+
+    def reabrir_fatura(self, fatura_id, user_id):
+        """Reabre uma fatura paga, removendo a transação de pagamento."""
+        self.executar(
+            "DELETE FROM transacoes WHERE fatura_id = %s AND user_id = %s",
+            (fatura_id, user_id)
+        )
+        self.executar(
+            "UPDATE faturas SET status = 'aberta', data_pagamento = NULL WHERE id = %s",
+            (fatura_id,)
+        )
+
+    def excluir_fatura(self, fatura_id, user_id):
+        """Exclui fatura e todos os seus itens (CASCADE)."""
+        self.executar(
+            "DELETE FROM transacoes WHERE fatura_id = %s AND user_id = %s",
+            (fatura_id, user_id)
+        )
+        self.executar(
+            "DELETE FROM faturas WHERE id = %s AND user_id = %s",
+            (fatura_id, user_id)
+        )
+
+    def buscar_itens_parcelas_futuras(self, user_id, a_partir_de=None):
+        """Retorna todos os itens que ainda têm parcelas futuras (para previsão)."""
+        from datetime import date
+        data_ref = a_partir_de or date.today()
+        return self.buscar(
+            "SELECT i.id, i.descricao, i.valor, i.data_compra, "
+            "       i.parcela_atual, i.parcela_total, "
+            "       cat.nome as categoria, c.nome as cartao, "
+            "       f.competencia, f.data_vencimento as venc_fatura, "
+            "       i.fatura_id, i.categoria_id "
+            "FROM itens_fatura i "
+            "JOIN faturas f ON i.fatura_id = f.id "
+            "LEFT JOIN categorias cat ON i.categoria_id = cat.id "
+            "LEFT JOIN contas c ON f.conta_id = c.id "
+            "WHERE i.user_id = %s AND i.parcela_atual < i.parcela_total "
+            "ORDER BY f.data_vencimento, i.descricao",
+            (user_id,)
+        )
+
+    def buscar_gastos_cartao_por_categoria(self, user_id, data_inicio, data_fim):
+        """Retorna gastos de cartão agrupados por categoria (para acompanhamento/consultor)."""
+        return self.buscar(
+            "SELECT i.categoria_id, cat.nome as categoria, cat.icone, "
+            "       cat.percentual_meta, ABS(SUM(i.valor)) as gasto_real "
+            "FROM itens_fatura i "
+            "JOIN faturas f ON i.fatura_id = f.id "
+            "JOIN categorias cat ON i.categoria_id = cat.id "
+            "WHERE i.user_id = %s "
+            "  AND f.data_vencimento BETWEEN %s AND %s "
+            "GROUP BY i.categoria_id, cat.nome, cat.icone, cat.percentual_meta "
+            "ORDER BY cat.nome",
+            (user_id, data_inicio, data_fim)
+        )
+
+    def _migrar_cartao_para_faturas(self):
+        """Migra transacoes CARTAO existentes para o modelo faturas + itens."""
+        import re
+        from datetime import date
+
+        rows = self.buscar(
+            "SELECT t.id, t.descricao, t.valor, t.data_vencimento, "
+            "       t.conta_id, t.categoria_id, t.user_id "
+            "FROM transacoes t "
+            "WHERE t.tipo_fluxo = 'CARTAO'"
+        )
+        if rows.empty:
+            return
+
+        for _, r in rows.iterrows():
+            try:
+                user_id = r['user_id']
+                conta_id = r['conta_id']
+                data_venc = r['data_vencimento']
+                if pd.isna(data_venc):
+                    continue
+
+                dt = pd.to_datetime(data_venc)
+                competencia = dt.strftime('%m/%Y')
+
+                # Cria ou reutiliza fatura
+                fatura_id = self.criar_fatura(
+                    user_id, conta_id, competencia,
+                    dt.date() if hasattr(dt, 'date') else dt
+                )
+                if not fatura_id:
+                    continue
+
+                # Extrai parcela da descrição: [Cartao] Desc (02/10)
+                desc_limpa = re.sub(r'^\[.*?\]\s*', '', str(r['descricao']))
+                parc_match = re.search(r'\((\d+)/(\d+)\)$', desc_limpa)
+                parcela_atual = int(parc_match.group(1)) if parc_match else 1
+                parcela_total = int(parc_match.group(2)) if parc_match else 1
+                if parc_match:
+                    desc_limpa = desc_limpa[:parc_match.start()].strip()
+
+                self.adicionar_item_fatura(
+                    fatura_id, desc_limpa, abs(r['valor']),
+                    dt.date() if hasattr(dt, 'date') else dt,
+                    parcela_atual, parcela_total,
+                    r['categoria_id'], user_id
+                )
+            except Exception:
+                continue
+
+        # Recalcula totais
+        faturas_criadas = self.buscar("SELECT DISTINCT id FROM faturas")
+        if not faturas_criadas.empty:
+            for _, f in faturas_criadas.iterrows():
+                self.atualizar_total_fatura(f['id'])
 
 # Instância global
 db = DatabaseManager()

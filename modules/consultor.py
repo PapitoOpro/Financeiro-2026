@@ -81,6 +81,26 @@ class ConsultorEngine:
             AND t.data_vencimento BETWEEN '{data_inicio}' AND '{data_fim}'
             ORDER BY t.data_vencimento
         """)
+
+        # Inclui itens de fatura (gastos cartão) na análise
+        df_cartao = db.buscar(f"""
+            SELECT i.id, f.data_vencimento as data, i.descricao,
+                   -ABS(i.valor) as valor,
+                   cat.nome as categoria, c.nome as banco,
+                   i.categoria_id, cat.percentual_meta,
+                   COALESCE(sub.nome, '') as subcategoria
+            FROM itens_fatura i
+            JOIN faturas f ON i.fatura_id = f.id
+            LEFT JOIN categorias cat ON i.categoria_id = cat.id
+            LEFT JOIN contas c ON f.conta_id = c.id
+            LEFT JOIN subcategorias sub ON i.subcategoria_id = sub.id
+            WHERE i.user_id = {user_id}
+            AND f.data_vencimento BETWEEN '{data_inicio}' AND '{data_fim}'
+            ORDER BY f.data_vencimento
+        """)
+        if not df_cartao.empty:
+            df = pd.concat([df, df_cartao], ignore_index=True)
+
         return df
 
     @staticmethod
@@ -102,6 +122,23 @@ class ConsultorEngine:
             AND t.data_vencimento BETWEEN '{data_inicio}' AND '{data_fim}'
             ORDER BY t.data_vencimento
         """)
+
+        # Inclui itens de fatura no histórico
+        df_cartao = db.buscar(f"""
+            SELECT i.id, f.data_vencimento as data, i.descricao,
+                   -ABS(i.valor) as valor,
+                   cat.nome as categoria, c.nome as banco
+            FROM itens_fatura i
+            JOIN faturas f ON i.fatura_id = f.id
+            LEFT JOIN categorias cat ON i.categoria_id = cat.id
+            LEFT JOIN contas c ON f.conta_id = c.id
+            WHERE i.user_id = {user_id}
+            AND f.data_vencimento BETWEEN '{data_inicio}' AND '{data_fim}'
+            ORDER BY f.data_vencimento
+        """)
+        if not df_cartao.empty:
+            df = pd.concat([df, df_cartao], ignore_index=True)
+
         return df
 
     @staticmethod

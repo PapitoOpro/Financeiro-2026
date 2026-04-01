@@ -62,7 +62,7 @@ class AcompanhamentoManager:
         """)
         renda_mes = float(entradas.iloc[0]['total']) if not entradas.empty else 0
 
-        # Carrega gastos por categoria
+        # Carrega gastos por categoria (CAIXA)
         df_gastos = db.buscar(f"""
             SELECT t.categoria_id, cat.nome as categoria, cat.icone,
                    cat.percentual_meta,
@@ -77,7 +77,16 @@ class AcompanhamentoManager:
             ORDER BY cat.nome
         """)
 
-        # Carrega gastos por subcategoria (para detalhe)
+        # Inclui gastos de cartão (itens_fatura) no total por categoria
+        df_gastos_cartao = db.buscar_gastos_cartao_por_categoria(user_id, data_inicio, data_fim)
+        if not df_gastos_cartao.empty:
+            if df_gastos.empty:
+                df_gastos = df_gastos_cartao
+            else:
+                df_combined = pd.concat([df_gastos, df_gastos_cartao], ignore_index=True)
+                df_gastos = df_combined.groupby(['categoria_id', 'categoria', 'icone', 'percentual_meta'], as_index=False).agg({'gasto_real': 'sum'})
+
+        # Carrega gastos por subcategoria (CAIXA + cartão)
         df_gastos_sub = db.buscar(f"""
             SELECT t.categoria_id, s.nome as subcategoria,
                    ABS(SUM(t.valor)) as gasto_sub
@@ -90,6 +99,25 @@ class AcompanhamentoManager:
             GROUP BY t.categoria_id, s.nome
             ORDER BY gasto_sub DESC
         """)
+
+        # Inclui subcategorias de itens_fatura
+        df_sub_cartao = db.buscar(f"""
+            SELECT i.categoria_id, COALESCE(s.nome, 'Sem subcategoria') as subcategoria,
+                   ABS(SUM(i.valor)) as gasto_sub
+            FROM itens_fatura i
+            JOIN faturas f ON i.fatura_id = f.id
+            LEFT JOIN subcategorias s ON i.subcategoria_id = s.id
+            WHERE i.user_id = {user_id}
+            AND i.subcategoria_id IS NOT NULL
+            AND f.data_vencimento BETWEEN '{data_inicio}' AND '{data_fim}'
+            GROUP BY i.categoria_id, s.nome
+            ORDER BY gasto_sub DESC
+        """)
+        if not df_sub_cartao.empty and not df_gastos_sub.empty:
+            df_gastos_sub = pd.concat([df_gastos_sub, df_sub_cartao], ignore_index=True)
+            df_gastos_sub = df_gastos_sub.groupby(['categoria_id', 'subcategoria'], as_index=False).agg({'gasto_sub': 'sum'})
+        elif not df_sub_cartao.empty:
+            df_gastos_sub = df_sub_cartao
 
         # Dia do mês e total de dias (para marcador de ritmo)
         hoje = datetime.now()

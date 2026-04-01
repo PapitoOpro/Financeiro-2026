@@ -29,7 +29,7 @@ class RelatoriosManager:
             st.error("❌ A data de início não pode ser maior que a data de fim.")
             return
 
-        # Query base (ajustada para diferentes drivers)
+        # Query base — transações CAIXA
         user_id = db.get_user_id()
         q = f"""
             SELECT t.data_vencimento, t.descricao, t.valor, cat.nome AS categoria, c.nome AS banco
@@ -42,6 +42,21 @@ class RelatoriosManager:
         """
 
         df_an = db.buscar(q)
+
+        # Inclui itens de fatura (gastos cartão) no relatório
+        q_cartao = f"""
+            SELECT f.data_vencimento, i.descricao, -ABS(i.valor) as valor,
+                   cat.nome AS categoria, c.nome AS banco
+            FROM itens_fatura i
+            JOIN faturas f ON i.fatura_id = f.id
+            LEFT JOIN categorias cat ON i.categoria_id = cat.id
+            LEFT JOIN contas c ON f.conta_id = c.id
+            WHERE i.user_id = {user_id}
+            AND f.data_vencimento BETWEEN '{d_ini}' AND '{d_fim}'
+        """
+        df_cartao = db.buscar(q_cartao)
+        if not df_cartao.empty:
+            df_an = pd.concat([df_an, df_cartao], ignore_index=True)
 
         if df_an.empty:
             st.info("ℹ️ Nenhuma movimentação registrada neste período.")

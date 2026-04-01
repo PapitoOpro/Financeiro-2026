@@ -27,7 +27,7 @@ def _confirmar_exclusao_dialog():
     if len(ids) == 1:
         st.warning(f"⚠️ Excluir **{descs[0]}**?\n\nEsta ação é irreversível.")
     else:
-        st.warning(f"⚠️ Excluir **{len(ids)} parcela(s)**? Esta ação é irreversível.")
+        st.warning(f"⚠️ Excluir **{len(ids)} item(ns)**? Esta ação é irreversível.")
         for desc in descs:
             st.markdown(f"- {desc}")
 
@@ -36,14 +36,29 @@ def _confirmar_exclusao_dialog():
     with col1:
         if st.button("✅ Sim, excluir", use_container_width=True, type="primary"):
             user_id = db.get_user_id()
+            tipo = st.session_state.get('excluir_tipo', 'item_fatura')
+            fatura_ids_afetadas = set()
+
             for rid in ids:
-                db.executar("DELETE FROM transacoes WHERE id=? AND user_id=?", (rid, user_id))
-            st.session_state['parcela_msg_sucesso'] = f"✅ {len(ids)} parcela(s) excluída(s) com sucesso!"
+                if tipo == 'item_fatura':
+                    # Busca fatura_id antes de excluir
+                    row = db.buscar_um("SELECT fatura_id FROM itens_fatura WHERE id=? AND user_id=?", (rid, user_id))
+                    if row:
+                        fatura_ids_afetadas.add(row[0])
+                    db.executar("DELETE FROM itens_fatura WHERE id=? AND user_id=?", (rid, user_id))
+                else:
+                    db.executar("DELETE FROM transacoes WHERE id=? AND user_id=?", (rid, user_id))
+
+            # Recalcula totais das faturas afetadas
+            for fid in fatura_ids_afetadas:
+                db.atualizar_total_fatura(fid)
+
+            st.session_state['parcela_msg_sucesso'] = f"✅ {len(ids)} item(ns) excluído(s) com sucesso!"
             st.session_state.pop('ids_para_excluir', None)
             st.session_state.pop('descs_para_excluir', None)
-            # Limpa checkboxes selecionados
+            st.session_state.pop('excluir_tipo', None)
             for k in list(st.session_state.keys()):
-                if isinstance(k, str) and k.startswith('sel_parc_'):
+                if isinstance(k, str) and k.startswith('sel_item_'):
                     del st.session_state[k]
             st.rerun()
     with col2:
@@ -113,28 +128,27 @@ class ParcelasManager:
     
     @staticmethod
     def _lancar_parcelas(desc, val, p_atual, p_total, cnt, cat, dt_ini, df_contas, df_cats):
-        """Lança as parcelas manuais no banco de dados."""
+        """Lança parcelas manuais criando faturas + itens."""
         try:
             cid = int(df_contas[df_contas.nome == cnt].id.values[0])
             ctid = int(df_cats[df_cats.nome == cat].id.values[0])
+            user_id = db.get_user_id()
             parcelas_lancar = (int(p_total) - int(p_atual)) + 1
 
             for i in range(parcelas_lancar):
                 venc = dt_ini + relativedelta(months=i)
                 num_parc = int(p_atual) + i
-                d_final = f"[{cnt}] {desc} ({num_parc:02d}/{int(p_total):02d})"
-                
-                # Se usar PostgreSQL (Supabase), mude ? para %s
-                query = """
-                    INSERT INTO transacoes 
-                    (descricao, valor, data_vencimento, conta_id, categoria_id, tipo_fluxo, user_id) 
-                    VALUES (?, ?, ?, ?, ?, 'CARTAO', ?)
-                """
-                db.executar(query, (d_final, -float(val), venc, cid, ctid, db.get_user_id()))
-            
+                competencia = venc.strftime('%m/%Y')
+
+                fatura_id = db.criar_fatura(user_id, cid, competencia, venc)
+                db.adicionar_item_fatura(
+                    fatura_id, desc, float(val), dt_ini,
+                    num_parc, int(p_total), ctid, user_id
+                )
+                db.atualizar_total_fatura(fatura_id)
+
             st.success(f"✅ {parcelas_lancar} parcelas lançadas com sucesso!")
             ParcelasManager._resetar_estado_pdf()
-            # Pequeno delay antes do rerun ajuda a visualizar a mensagem de sucesso
 
         except Exception as e:
             st.error(f"Erro ao lançar parcelas: {e}")
@@ -311,7 +325,6 @@ class ParcelasManager:
                             dados_finais, banco_detectado, conta, cat, data_base, df_contas, df_cats
                         )
     @staticmethod
-    @staticmethod
     def _tab_importar_csv(df_contas, df_cats):
         """Aba para importar faturas via arquivo CSV (Otimizada e com Conversor de Moeda)."""
         st.subheader("📊 Importador de Faturas via CSV")
@@ -458,9 +471,8 @@ class ParcelasManager:
 
     @staticmethod
     def _importar_pdf_dados(dados, banco, conta, cat, data_base, df_contas, df_cats):
-        """Importa dados do PDF para o BD com trava de duplicidade."""
+        """Importa dados do PDF/CSV criando faturas + itens (modelo novo)."""
         try:
-            # Busca IDs da conta e categoria selecionadas
             contas_match = df_contas[df_contas.nome == conta]
             cats_match = df_cats[df_cats.nome == cat]
 
@@ -473,55 +485,47 @@ class ParcelasManager:
 
             cid = int(contas_match.id.values[0])
             ctid = int(cats_match.id.values[0])
-            
+            user_id = db.get_user_id()
+
             novos = 0
             duplicados = 0
             erros = 0
-            
+
             for desc, parc, val in dados:
                 try:
-                    # Extrai os números da parcela "02/10"
                     atual, total = map(int, parc.split("/"))
-                    
-                    # Gerar todas as parcelas restantes a partir da atual
+
                     for i in range(atual - 1, total):
                         venc = data_base + relativedelta(months=i - (atual - 1))
                         num_parc_atual = i + 1
-                        
-                        desc_f = f"[{conta}] {desc} ({num_parc_atual:02d}/{total:02d})"
-                        
-                        # 🔒 TRAVA DE DUPLICIDADE (ignora prefixo [Cartão] via LIKE)
-                        desc_busca = f"%] {desc} ({num_parc_atual:02d}/{total:02d})"
-                        
-                        query_check = """
-                            SELECT id FROM transacoes 
-                            WHERE descricao LIKE ?
-                            AND ROUND(valor::numeric, 2) = ROUND(?::numeric, 2)
-                            AND data_vencimento = ?
-                            AND user_id = ?
-                        """
-                        check = db.buscar_um(query_check, (desc_busca, -float(val), venc, db.get_user_id()))
-                        
+                        competencia = venc.strftime('%m/%Y')
+
+                        fatura_id = db.criar_fatura(user_id, cid, competencia, venc)
+
+                        # Trava anti-duplicidade: verifica se item já existe nessa fatura
+                        check = db.buscar_um(
+                            "SELECT 1 FROM itens_fatura "
+                            "WHERE fatura_id = ? AND descricao = ? AND parcela_atual = ? "
+                            "AND parcela_total = ? AND user_id = ?",
+                            (fatura_id, desc, num_parc_atual, total, user_id)
+                        )
+
                         if not check:
-                            query_ins = """
-                                INSERT INTO transacoes 
-                                (descricao, valor, data_vencimento, conta_id, categoria_id, tipo_fluxo, user_id) 
-                                VALUES (?, ?, ?, ?, ?, 'CARTAO', ?)
-                            """
-                            resultado = db.executar(query_ins, (desc_f, -float(val), venc, cid, ctid, db.get_user_id()))
-                            if resultado:
-                                novos += 1
-                            else:
-                                erros += 1
+                            db.adicionar_item_fatura(
+                                fatura_id, desc, abs(val), data_base,
+                                num_parc_atual, total, ctid, user_id
+                            )
+                            novos += 1
                         else:
                             duplicados += 1
-                            
+
+                        db.atualizar_total_fatura(fatura_id)
+
                 except Exception as inner_e:
                     st.warning(f"Erro ao processar linha '{desc}': {inner_e}")
                     erros += 1
                     continue
 
-            # Feedback
             if novos > 0:
                 st.toast(f"✅ {novos} parcelas salvas!", icon="🎉")
             if duplicados > 0:
@@ -530,45 +534,58 @@ class ParcelasManager:
                 st.toast(f"⚠️ {erros} com erro.", icon="⚠️")
             if novos == 0 and duplicados > 0:
                 st.warning(f"🛡️ Nenhuma parcela nova importada — {duplicados} já existiam no sistema.")
-            
+
             ParcelasManager._resetar_estado_pdf()
-            #st.rerun() # Descomente se quiser forçar a recarga imediata, mas o toast pode sumir rápido.
 
         except Exception as e:
             st.error(f"Erro fatal na importação: {e}")
 
     @staticmethod
     def _tab_previsao():
-        """Aba com previsão de gastos - Dashboard completo."""
+        """Aba com previsão de gastos - Dashboard completo (lê de faturas + itens)."""
         st.subheader("📅 Dashboard de Previsão de Gastos")
 
-        # Carrega contas e categorias (necessário para edição)
         user_id = db.get_user_id()
         df_contas = db.buscar(f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome")
         df_cats = db.buscar(f"SELECT * FROM categorias WHERE user_id = {user_id} ORDER BY nome")
 
-        df_p = db.buscar(f"""
-            SELECT t.id, t.data_vencimento, t.descricao, t.valor, c.nome as banco, cat.nome as categoria
-            FROM transacoes t
-            LEFT JOIN contas c ON t.conta_id = c.id
-            LEFT JOIN categorias cat ON t.categoria_id = cat.id
-            WHERE t.user_id = {user_id}
-            AND t.tipo_fluxo='CARTAO'
-            ORDER BY t.data_vencimento ASC
+        # Busca faturas do usuário
+        df_faturas = db.buscar(f"""
+            SELECT f.id as fatura_id, f.competencia, f.valor_total, f.data_vencimento,
+                   f.status, f.data_pagamento, c.nome as banco, f.conta_id
+            FROM faturas f
+            LEFT JOIN contas c ON f.conta_id = c.id
+            WHERE f.user_id = {user_id}
+            ORDER BY f.data_vencimento ASC
         """)
 
-        if df_p.empty:
+        # Busca itens de fatura do usuário
+        df_itens = db.buscar(f"""
+            SELECT i.id, i.fatura_id, i.descricao, i.valor, i.data_compra,
+                   i.parcela_atual, i.parcela_total,
+                   cat.nome as categoria, c.nome as banco,
+                   f.competencia, f.data_vencimento, f.status,
+                   i.categoria_id
+            FROM itens_fatura i
+            JOIN faturas f ON i.fatura_id = f.id
+            LEFT JOIN contas c ON f.conta_id = c.id
+            LEFT JOIN categorias cat ON i.categoria_id = cat.id
+            WHERE i.user_id = {user_id}
+            ORDER BY f.data_vencimento ASC, i.descricao
+        """)
+
+        if df_itens.empty:
             st.info("ℹ️ Nenhuma parcela lançada no cartão ainda.")
             return
 
-        df_p['data_vencimento'] = pd.to_datetime(df_p['data_vencimento'])
-        df_p['valor_abs'] = df_p['valor'].abs()
+        df_itens['data_vencimento'] = pd.to_datetime(df_itens['data_vencimento'])
+        df_itens['valor_abs'] = df_itens['valor'].abs()
 
         # 1. MÉTRICAS DE TOPO
-        total_divida = df_p['valor_abs'].sum()
+        total_divida = df_itens['valor_abs'].sum()
 
-        df_p['Mes_Ano'] = df_p['data_vencimento'].dt.to_period('M')
-        agrupado_mes = df_p.groupby('Mes_Ano')['valor_abs'].sum().reset_index()
+        df_itens['Mes_Ano'] = df_itens['data_vencimento'].dt.to_period('M')
+        agrupado_mes = df_itens.groupby('Mes_Ano')['valor_abs'].sum().reset_index()
         agrupado_mes['Mes_Ano_Str'] = agrupado_mes['Mes_Ano'].astype(str)
         agrupado_mes = agrupado_mes.sort_values('Mes_Ano')
 
@@ -595,7 +612,7 @@ class ParcelasManager:
 
         st.write("")
 
-        # 2. GRÁFICO DE EVOLUÇÃO (Plotly: barras mensais + linha cumulativa)
+        # 2. GRÁFICO DE EVOLUÇÃO
         st.markdown("**📈 Evolução do Parcelamento nos Próximos Meses**")
         agrupado_mes['cumulativo'] = agrupado_mes['valor_abs'].cumsum()
         fig = go.Figure()
@@ -609,8 +626,8 @@ class ParcelasManager:
 
         # 3. DISTRIBUIÇÃO POR CARTÃO / CATEGORIA
         st.markdown("**🧭 Distribuição por Cartão / Categoria (Próximos Meses)**")
-        distrib_cartao = df_p.groupby('banco')['valor_abs'].sum().reset_index().sort_values('valor_abs', ascending=False)
-        distrib_categoria = df_p.groupby('categoria')['valor_abs'].sum().reset_index().sort_values('valor_abs', ascending=False)
+        distrib_cartao = df_itens.groupby('banco')['valor_abs'].sum().reset_index().sort_values('valor_abs', ascending=False)
+        distrib_categoria = df_itens.groupby('categoria')['valor_abs'].sum().reset_index().sort_values('valor_abs', ascending=False)
 
         d1, d2 = st.columns(2)
         with d1:
@@ -630,50 +647,50 @@ class ParcelasManager:
 
         # 4. EXPORTAÇÃO / RELATÓRIO
         st.markdown("**📥 Exportar Relatório**")
-        csv_rel = df_p[['id','data_vencimento','descricao','valor_abs','banco','categoria']].copy()
+        csv_rel = df_itens[['id','data_vencimento','descricao','valor_abs','banco','categoria','parcela_atual','parcela_total']].copy()
         csv_rel = csv_rel.rename(columns={
             'id': 'ID',
             'data_vencimento': 'Data Vencimento',
             'descricao': 'Descrição',
             'valor_abs': 'Valor (R$)',
             'banco': 'Cartão',
-            'categoria': 'Categoria'
+            'categoria': 'Categoria',
+            'parcela_atual': 'Parcela',
+            'parcela_total': 'Total Parcelas'
         })
         csv_bytes = csv_rel.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Baixar CSV de Previsão", data=csv_bytes, file_name="previsao_parcelas.csv", mime="text/csv")
 
         st.markdown("---")
 
-        # 5. LISTAGEM CASCATA COM EDIÇÃO/EXCLUSÃO
+        # 5. LISTAGEM POR FATURA (grouped by month → card → items)
         st.markdown("**📋 Detalhamento por Mês**")
 
-        # Mensagem de sucesso após exclusão
         msg_sucesso = st.session_state.pop('parcela_msg_sucesso', None)
         if msg_sucesso:
             st.toast(msg_sucesso)
 
         meses_previsao = st.slider("Ver previsão detalhada para quantos meses?", 1, 24, 6)
-        primeiro_mes = df_p['data_vencimento'].min().replace(day=1)
+        primeiro_mes = df_itens['data_vencimento'].min().replace(day=1)
 
-        # Coletar IDs selecionados via checkboxes para exclusão em massa
-        all_parc_ids = df_p['id'].tolist()
+        # IDs selecionados para exclusão em massa
+        all_item_ids = df_itens['id'].tolist()
         selected_ids = [
-            int(k.replace('sel_parc_', ''))
+            int(k.replace('sel_item_', ''))
             for k in st.session_state
-            if isinstance(k, str) and k.startswith('sel_parc_') and st.session_state[k]
-            and int(k.replace('sel_parc_', '')) in all_parc_ids
+            if isinstance(k, str) and k.startswith('sel_item_') and st.session_state[k]
+            and int(k.replace('sel_item_', '')) in all_item_ids
         ]
 
         for i in range(meses_previsao):
             mes_atual = primeiro_mes + relativedelta(months=i)
-            f_mes = df_p[
-                (df_p['data_vencimento'].dt.month == mes_atual.month) &
-                (df_p['data_vencimento'].dt.year == mes_atual.year)
+            f_mes = df_itens[
+                (df_itens['data_vencimento'].dt.month == mes_atual.month) &
+                (df_itens['data_vencimento'].dt.year == mes_atual.year)
             ]
 
             if not f_mes.empty:
                 total_mes = f_mes['valor_abs'].sum()
-                # Manter expander aberto se tiver itens selecionados dentro dele
                 ids_no_mes = set(f_mes['id'].tolist())
                 tem_selecionados = bool(ids_no_mes & set(selected_ids))
 
@@ -683,103 +700,113 @@ class ParcelasManager:
                     for cartao in cartoes_no_mes:
                         f_cartao = f_mes[f_mes['banco'].fillna("Desconhecido") == cartao]
                         subtotal_cartao = f_cartao['valor_abs'].sum()
-                        st.markdown(f"**💳 Fatura: {cartao}** — Subtotal: <span style='color:#c0392b;'>{moeda(subtotal_cartao)}</span>", unsafe_allow_html=True)
+
+                        # Status da fatura (aberta/paga)
+                        status_fatura = f_cartao['status'].iloc[0] if 'status' in f_cartao.columns else 'aberta'
+                        badge = "🟢 Paga" if status_fatura == 'paga' else "🔴 Aberta"
+
+                        st.markdown(
+                            f"**💳 Fatura: {cartao}** — Subtotal: "
+                            f"<span style='color:#c0392b;'>{moeda(subtotal_cartao)}</span> "
+                            f"<small>({badge})</small>",
+                            unsafe_allow_html=True
+                        )
+
+                        # Botão pagar fatura
+                        fatura_id_val = f_cartao['fatura_id'].iloc[0] if 'fatura_id' in f_cartao.columns else None
+                        if fatura_id_val and status_fatura == 'aberta':
+                            if st.button(f"💰 Pagar Fatura {cartao} {mes_atual.strftime('%m/%Y')}", key=f"pagar_{fatura_id_val}"):
+                                db.pagar_fatura(fatura_id_val, user_id)
+                                st.toast(f"✅ Fatura {cartao} {mes_atual.strftime('%m/%Y')} paga!")
+                                st.rerun()
+                        elif fatura_id_val and status_fatura == 'paga':
+                            if st.button(f"↩️ Reabrir Fatura {cartao} {mes_atual.strftime('%m/%Y')}", key=f"reabrir_{fatura_id_val}"):
+                                db.reabrir_fatura(fatura_id_val, user_id)
+                                st.toast(f"↩️ Fatura reaberta!")
+                                st.rerun()
 
                         for _, r in f_cartao.iterrows():
-                            # Colunas: checkbox, data, descrição, valor, editar, excluir
                             c_sel, c1, c2, c3, c4, c5 = st.columns([0.4, 1.3, 3.0, 2.3, 0.7, 0.7])
-                            clean_desc_row = re.sub(r'^\[.*?\]\s*', '', r['descricao'])
+
+                            parc_label = f"({int(r['parcela_atual']):02d}/{int(r['parcela_total']):02d})"
 
                             with c_sel:
-                                st.checkbox("", key=f"sel_parc_{r['id']}", label_visibility="collapsed")
+                                st.checkbox("", key=f"sel_item_{r['id']}", label_visibility="collapsed")
 
                             c1.write(pd.to_datetime(r['data_vencimento']).strftime('%d/%m/%Y'))
-                            c2.markdown(f"**{clean_desc_row}**<br><span style='color:gray; font-size:12px;'>{r.get('categoria','')}</span>", unsafe_allow_html=True)
-                            c3.markdown(f"<div style='text-align: right; color:{'#27ae60' if r['valor']>0 else '#c0392b'}; font-weight:bold;'>{moeda(abs(r['valor']))}</div>", unsafe_allow_html=True)
+                            c2.markdown(
+                                f"**{r['descricao']}** {parc_label}<br>"
+                                f"<span style='color:gray; font-size:12px;'>{r.get('categoria','')}</span>",
+                                unsafe_allow_html=True
+                            )
+                            c3.markdown(
+                                f"<div style='text-align: right; color:#c0392b; font-weight:bold;'>"
+                                f"{moeda(abs(r['valor']))}</div>",
+                                unsafe_allow_html=True
+                            )
 
-                            # Edit toggle: abre um formulário inline abaixo da linha
                             with c4:
-                                if st.button("✏️", key=f"edit_toggle_{r['id']}"):
-                                    key_ed = f"editing_{r['id']}"
+                                if st.button("✏️", key=f"edit_item_{r['id']}"):
+                                    key_ed = f"editing_item_{r['id']}"
                                     st.session_state[key_ed] = not st.session_state.get(key_ed, False)
 
-                            # Delete button: abre dialog modal de confirmação
                             with c5:
-                                if st.button("🗑️", key=f"del_parc_{r['id']}"):
+                                if st.button("🗑️", key=f"del_item_{r['id']}"):
                                     st.session_state['ids_para_excluir'] = [int(r['id'])]
-                                    st.session_state['descs_para_excluir'] = [f"{clean_desc_row} ({moeda(abs(r['valor']))})"]
+                                    st.session_state['descs_para_excluir'] = [f"{r['descricao']} {parc_label} ({moeda(abs(r['valor']))})"]
+                                    st.session_state['excluir_tipo'] = 'item_fatura'
                                     _confirmar_exclusao_dialog()
 
-                            # Se o usuário solicitou edição dessa linha, mostramos um formulário inline
-                            if st.session_state.get(f"editing_{r['id']}"):
-                                with st.form(f"form_edit_{r['id']}"):
-                                    d_desc = st.text_input("Descrição", value=clean_desc_row, key=f"edit_desc_{r['id']}")
-                                    d_val = st.number_input("Valor (R$)", min_value=0.0, value=float(abs(r['valor'])), key=f"edit_val_{r['id']}")
-                                    d_date = st.date_input("Data de Vencimento", value=pd.to_datetime(r['data_vencimento']).date(), key=f"edit_date_{r['id']}")
-                                    conta_op = df_contas['nome'].tolist() if not df_contas.empty else []
+                            # Formulário de edição inline
+                            if st.session_state.get(f"editing_item_{r['id']}"):
+                                with st.form(f"form_edit_item_{r['id']}"):
+                                    d_desc = st.text_input("Descrição", value=r['descricao'], key=f"edit_desc_i_{r['id']}")
+                                    d_val = st.number_input("Valor (R$)", min_value=0.0, value=float(abs(r['valor'])), key=f"edit_val_i_{r['id']}")
                                     cat_op = df_cats['nome'].tolist() if not df_cats.empty else []
-                                    default_conta_idx = 0
-                                    try:
-                                        default_conta_idx = conta_op.index(cartao) if cartao in conta_op else 0
-                                    except Exception:
-                                        default_conta_idx = 0
-                                    sel_conta = st.selectbox("Cartão", conta_op, index=default_conta_idx, key=f"edit_cnt_{r['id']}")
                                     default_cat_idx = 0
                                     try:
                                         default_cat_idx = cat_op.index(r.get('categoria', '')) if r.get('categoria', '') in cat_op else 0
                                     except Exception:
                                         default_cat_idx = 0
-                                    sel_cat = st.selectbox("Categoria", cat_op, index=default_cat_idx, key=f"edit_cat_{r['id']}")
+                                    sel_cat = st.selectbox("Categoria", cat_op, index=default_cat_idx, key=f"edit_cat_i_{r['id']}")
 
-                                    save_clicked = st.form_submit_button("Salvar alterações", key=f"save_{r['id']}")
-                                    cancel_clicked = st.form_submit_button("Voltar", key=f"cancel_{r['id']}")
+                                    save_clicked = st.form_submit_button("Salvar alterações")
+                                    cancel_clicked = st.form_submit_button("Voltar")
 
                                     if cancel_clicked:
-                                        st.session_state[f"editing_{r['id']}"] = False
-                                        exp = getattr(st, "experimental_rerun", None)
-                                        if callable(exp):
-                                            try:
-                                                exp()
-                                            except Exception:
-                                                ParcelasManager._safe_rerun()
-                                        else:
-                                            ParcelasManager._safe_rerun()
+                                        st.session_state[f"editing_item_{r['id']}"] = False
+                                        st.rerun()
 
                                     if save_clicked:
                                         try:
-                                            cid = int(df_contas[df_contas.nome == sel_conta].id.values[0])
                                             ctid = int(df_cats[df_cats.nome == sel_cat].id.values[0])
-                                            db.executar("""
-                                                UPDATE transacoes SET descricao=?, valor=?, data_vencimento=?, conta_id=?, categoria_id=? WHERE id=? AND user_id=?
-                                            """, (f"[{sel_conta}] {d_desc}", -abs(float(d_val)), d_date, cid, ctid, int(r['id']), db.get_user_id()))
-                                            st.success("Parcela atualizada com sucesso.")
+                                            db.executar(
+                                                "UPDATE itens_fatura SET descricao=?, valor=?, categoria_id=? WHERE id=? AND user_id=?",
+                                                (d_desc, abs(float(d_val)), ctid, int(r['id']), user_id)
+                                            )
+                                            # Recalcula total da fatura
+                                            db.atualizar_total_fatura(int(r['fatura_id']))
+                                            st.success("Item atualizado com sucesso.")
                                         except Exception as e:
-                                            st.error(f"Erro ao atualizar parcela: {e}")
-                                        # Fecha o formulário e tenta forçar rerun
-                                        st.session_state[f"editing_{r['id']}"] = False
-                                        exp = getattr(st, "experimental_rerun", None)
-                                        if callable(exp):
-                                            try:
-                                                exp()
-                                            except Exception:
-                                                ParcelasManager._safe_rerun()
-                                        else:
-                                            ParcelasManager._safe_rerun()
+                                            st.error(f"Erro ao atualizar item: {e}")
+                                        st.session_state[f"editing_item_{r['id']}"] = False
+                                        st.rerun()
 
-        # Barra de exclusão em massa (abaixo dos expanders para não atrapalhar a seleção)
+        # Exclusão em massa
         if selected_ids:
             st.markdown("---")
             col_bulk_info, col_bulk_btn = st.columns([3, 1])
             with col_bulk_info:
-                st.info(f"📌 **{len(selected_ids)}** parcela(s) selecionada(s)")
+                st.info(f"📌 **{len(selected_ids)}** item(ns) selecionado(s)")
             with col_bulk_btn:
                 if st.button("🗑️ Excluir selecionados", type="primary", use_container_width=True):
                     descs = []
                     for sid in selected_ids:
-                        row_match = df_p[df_p['id'] == sid]
+                        row_match = df_itens[df_itens['id'] == sid]
                         if not row_match.empty:
-                            desc = re.sub(r'^\[.*?\]\s*', '', row_match.iloc[0]['descricao'])
+                            desc = row_match.iloc[0]['descricao']
                             descs.append(f"{desc} ({moeda(abs(row_match.iloc[0]['valor']))})")
                     st.session_state['ids_para_excluir'] = selected_ids
                     st.session_state['descs_para_excluir'] = descs
+                    st.session_state['excluir_tipo'] = 'item_fatura'
                     _confirmar_exclusao_dialog()
