@@ -43,16 +43,27 @@ class CaixaManager:
         # Carrega dados
         user_id = db.get_user_id()
         df_contas = db.buscar(f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome")
-        df_cats = db.buscar(f"SELECT * FROM categorias WHERE user_id = {user_id} ORDER BY nome")
+        df_cats = db.buscar(f"SELECT * FROM categorias WHERE user_id = {user_id} AND ativa = TRUE ORDER BY nome")
+        
+        # Carrega todas as subcategorias ativas
+        df_subs = db.buscar(f"""
+            SELECT s.id, s.nome, s.categoria_id, c.nome as categoria_nome
+            FROM subcategorias s
+            JOIN categorias c ON s.categoria_id = c.id
+            WHERE s.user_id = {user_id} AND s.ativa = TRUE
+            ORDER BY c.nome, s.nome
+        """)
         
         df_caixa = db.buscar(f"""
             SELECT t.id, t.data_vencimento as data, t.descricao, t.valor,
                    cat.nome as categoria, c.nome as banco,
+                   COALESCE(sub.nome, '') as subcategoria,
                    COALESCE(t.compensado, FALSE) as compensado,
                    t.data_compensacao
             FROM transacoes t 
             LEFT JOIN categorias cat ON t.categoria_id = cat.id 
             LEFT JOIN contas c ON t.conta_id = c.id
+            LEFT JOIN subcategorias sub ON t.subcategoria_id = sub.id
             WHERE t.user_id = {user_id}
             AND (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL) 
             AND t.data_vencimento BETWEEN '{data_inicio}' AND '{data_fim}' 
@@ -83,7 +94,7 @@ class CaixaManager:
         
         # LADO DIREITO: FORMULÁRIO
         with col_form:
-            CaixaManager._renderizar_formulario(df_contas, df_cats)
+            CaixaManager._renderizar_formulario(df_contas, df_cats, df_subs)
         
         # LADO ESQUERDO: EXTRATO
         with col_extrato:
@@ -115,9 +126,14 @@ class CaixaManager:
         ''', unsafe_allow_html=True)
     
     @staticmethod
-    def _renderizar_formulario(df_contas, df_cats):
-        """Renderiza formulário de novo lançamento."""
+    def _renderizar_formulario(df_contas, df_cats, df_subs=None):
+        """Renderiza formulário de novo lançamento com seleção por subcategoria."""
         st.markdown("**[ + ] Novo Lançamento**")
+        
+        # Monta lista de subcategorias agrupadas: "Subcategoria (Categoria)"
+        if df_subs is None:
+            df_subs = pd.DataFrame()
+        tem_subs = not df_subs.empty
         
         with st.form("form_caixa", clear_on_submit=True):
             desc_r = st.text_input("Descrição")
@@ -131,10 +147,35 @@ class CaixaManager:
                 "Conta / Banco",
                 df_contas['nome'] if not df_contas.empty else [""]
             )
-            cat_r = st.selectbox(
-                "Categoria",
-                df_cats['nome'] if not df_cats.empty else [""]
-            )
+            
+            # Seleção inteligente: subcategoria → auto-associa à categoria
+            sub_id_sel = None
+            cat_id_sel = None
+            
+            if tem_subs:
+                opcoes_sub = df_subs.apply(
+                    lambda r: f"{r['nome']} ({r['categoria_nome']})", axis=1
+                ).tolist()
+                # Adiciona opção de "Sem subcategoria"
+                opcoes_completas = ["(Selecionar categoria diretamente)"] + opcoes_sub
+                
+                sel_sub = st.selectbox("Subcategoria", opcoes_completas,
+                                       help="Escolha a subcategoria e a categoria será associada automaticamente.")
+                
+                if sel_sub != "(Selecionar categoria diretamente)":
+                    idx = opcoes_sub.index(sel_sub)
+                    sub_id_sel = int(df_subs.iloc[idx]['id'])
+                    cat_id_sel = int(df_subs.iloc[idx]['categoria_id'])
+                    st.caption(f"→ Categoria: **{df_subs.iloc[idx]['categoria_nome']}**")
+            
+            # Fallback: seleção direta de categoria (se não tem subs ou escolheu "direto")
+            if cat_id_sel is None:
+                cat_r = st.selectbox(
+                    "Categoria",
+                    df_cats['nome'] if not df_cats.empty else [""]
+                )
+            else:
+                cat_r = None
 
             compensado_r = st.checkbox("✅ Já compensado", value=False)
             
@@ -143,14 +184,19 @@ class CaixaManager:
                     st.error("❌ Preencha descrição e valor!")
                 else:
                     cid = int(df_contas[df_contas.nome == conta_r].id.values[0])
-                    ctid = int(df_cats[df_cats.nome == cat_r].id.values[0])
+                    
+                    if cat_id_sel is not None:
+                        ctid = cat_id_sel
+                    else:
+                        ctid = int(df_cats[df_cats.nome == cat_r].id.values[0])
+                    
                     valor_final = -val_r if "Saída" in tipo else val_r
                     data_comp = data_pg if compensado_r else None
                     user_id = db.get_user_id()
                     
                     db.executar(
-                        "INSERT INTO transacoes (descricao, valor, data_vencimento, conta_id, categoria_id, tipo_fluxo, compensado, data_compensacao, user_id) VALUES (?,?,?,?,?,'CAIXA',?,?,?)",
-                        (desc_r, valor_final, data_pg, cid, ctid, compensado_r, data_comp, user_id)
+                        "INSERT INTO transacoes (descricao, valor, data_vencimento, conta_id, categoria_id, subcategoria_id, tipo_fluxo, compensado, data_compensacao, user_id) VALUES (?,?,?,?,?,?,'CAIXA',?,?,?)",
+                        (desc_r, valor_final, data_pg, cid, ctid, sub_id_sel, compensado_r, data_comp, user_id)
                     )
                     st.rerun()
     
@@ -234,7 +280,9 @@ class CaixaManager:
                 )
                 c2.markdown(
                     f"{badge_comp}**{row['descricao']}**<br>"
-                    f"<span style='color:gray; font-size:12px;'>{row['categoria']} | {row['banco']}</span>",
+                    f"<span style='color:gray; font-size:12px;'>{row['categoria']}"
+                    f"{' → ' + row['subcategoria'] if row.get('subcategoria') else ''}"
+                    f" | {row['banco']}</span>",
                     unsafe_allow_html=True
                 )
                 

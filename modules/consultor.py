@@ -69,10 +69,13 @@ class ConsultorEngine:
 
         df = db.buscar(f"""
             SELECT t.id, t.data_vencimento as data, t.descricao, t.valor,
-                   cat.nome as categoria, c.nome as banco
+                   cat.nome as categoria, c.nome as banco,
+                   cat.id as categoria_id, cat.percentual_meta,
+                   COALESCE(sub.nome, '') as subcategoria
             FROM transacoes t
             LEFT JOIN categorias cat ON t.categoria_id = cat.id
             LEFT JOIN contas c ON t.conta_id = c.id
+            LEFT JOIN subcategorias sub ON t.subcategoria_id = sub.id
             WHERE t.user_id = {user_id}
             AND (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL)
             AND t.data_vencimento BETWEEN '{data_inicio}' AND '{data_fim}'
@@ -168,26 +171,47 @@ class ConsultorEngine:
                     'frase': f'Mandou bem! Seus gastos estão controlados em {pct_gasto:.0f}% 💪',
                 })
 
-        # ── Regra 2: Categorias acima do limite ──
+        # ── Regra 2: Categorias acima do limite (usa percentual_meta da categoria) ──
         if entradas > 0:
             df_saidas = df_mes[df_mes['valor'] < 0].copy()
             if not df_saidas.empty:
                 df_saidas['valor_abs'] = df_saidas['valor'].abs()
                 por_cat = df_saidas.groupby('categoria')['valor_abs'].sum()
 
+                # Carrega percentual_meta das categorias
+                cat_metas = {}
+                if 'percentual_meta' in df_saidas.columns:
+                    for _, row in df_saidas.drop_duplicates('categoria').iterrows():
+                        if row.get('categoria'):
+                            cat_metas[row['categoria']] = float(row.get('percentual_meta') or 0)
+
                 for cat, total_cat in por_cat.items():
                     pct_cat = (total_cat / entradas) * 100
                     cat_str = str(cat)
-                    chave_limite = f'pct_cat_{cat_str.lower().replace(" ", "_")}' if cat else None
 
-                    limite_cat = limites.get(chave_limite, 30) if chave_limite else 30
+                    # Usa percentual_meta da categoria; fallback para limites_financeiros
+                    limite_cat = cat_metas.get(cat_str, 0)
+                    if limite_cat == 0:
+                        chave_limite = f'pct_cat_{cat_str.lower().replace(" ", "_")}' if cat else None
+                        limite_cat = limites.get(chave_limite, 30) if chave_limite else 30
 
-                    if pct_cat >= limite_cat:
+                    if pct_cat >= limite_cat and limite_cat > 0:
+                        # Inteligência via Micro: detalha subcategorias responsáveis
+                        detalhe_sub = ""
+                        df_cat_saidas = df_saidas[df_saidas['categoria'] == cat]
+                        if 'subcategoria' in df_cat_saidas.columns:
+                            subs = df_cat_saidas[df_cat_saidas['subcategoria'] != '']
+                            if not subs.empty:
+                                por_sub = subs.groupby('subcategoria')['valor_abs'].sum().sort_values(ascending=False)
+                                top_sub = por_sub.head(3)
+                                sub_details = [f"{s}: {moeda(v)}" for s, v in top_sub.items()]
+                                detalhe_sub = f" Principais subcategorias: {', '.join(sub_details)}."
+
                         alertas.append({
                             'nivel': cls.ATENCAO,
                             'titulo': f'Categoria "{cat}" acima do limite',
                             'mensagem': f'{cat} consumiu {pct_cat:.1f}% da renda ({moeda(total_cat)}). '
-                                        f'Limite configurado: {limite_cat:.0f}%.',
+                                        f'Meta configurada: {limite_cat:.0f}%.{detalhe_sub}',
                             'frase': f'A categoria {cat} está puxando pesado: {pct_cat:.1f}% da renda 📊',
                         })
 
@@ -649,31 +673,21 @@ class ConsultorManager:
                 value=float(limites_atuais.get('pct_sugestao_guardar', 30)),
             )
 
-            st.markdown("**📁 Limites por Categoria (%)**")
-            st.caption("Defina o percentual máximo sobre a renda para cada categoria. "
-                       "O consultor alerta quando uma categoria ultrapassar esse limite.")
+            st.markdown("**📁 Metas por Categoria (%)**")
+            st.caption("As metas por categoria agora são configuradas em Cadastros → Categorias. "
+                       "Cada categoria tem seu percentual de meta definido diretamente.")
 
-            # Carrega categorias do banco (deduplica por nome normalizado)
+            # Mostra resumo das categorias e suas metas
             user_id = db.get_user_id()
-            df_cats = db.buscar(f"SELECT DISTINCT nome FROM categorias WHERE user_id = {user_id} ORDER BY nome")
-            cats_vistos = set()
-            cats = []
-            for nome in (df_cats['nome'].tolist() if not df_cats.empty else []):
-                chave_norm = nome.lower().replace(" ", "_")
-                if chave_norm not in cats_vistos:
-                    cats_vistos.add(chave_norm)
-                    cats.append(nome)
-
-            cat_limites = {}
-            cols = st.columns(min(len(cats), 3)) if cats else []
-            for i, cat in enumerate(cats):
-                chave = f'pct_cat_{cat.lower().replace(" ", "_")}'
-                val_atual = float(limites_atuais.get(chave, 30))
-                col = cols[i % len(cols)] if cols else st
-                cat_limites[chave] = col.number_input(
-                    f"{cat} (%)", min_value=0.0, max_value=100.0,
-                    step=5.0, value=val_atual, key=f"lim_{chave}"
-                )
+            df_cats = db.buscar(
+                f"SELECT nome, percentual_meta, icone FROM categorias "
+                f"WHERE user_id = {user_id} AND ativa = TRUE ORDER BY nome"
+            )
+            if not df_cats.empty:
+                for _, cat in df_cats.iterrows():
+                    icone = cat.get('icone', '📁') or '📁'
+                    pct = float(cat.get('percentual_meta', 0) or 0)
+                    st.markdown(f"{icone} **{cat['nome']}**: {pct:.0f}%")
 
             if st.form_submit_button("💾 Salvar Limites", use_container_width=True):
                 # Salva limites gerais
@@ -684,7 +698,6 @@ class ConsultorManager:
                     'saldo_minimo': saldo_min,
                     'pct_sugestao_guardar': pct_guardar,
                 }
-                updates.update(cat_limites)
 
                 for chave, valor in updates.items():
                     db.executar(

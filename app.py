@@ -13,6 +13,8 @@ from modules.admin import AdminManager
 from modules.parcelas_exemplo import ParcelasManager
 from modules.relatorios import RelatoriosManager
 from modules.consultor import ConsultorManager
+from modules.acompanhamento import AcompanhamentoManager
+from modules.onboarding import OnboardingManager
 
 # ==========================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -37,6 +39,11 @@ AuthManager.tela_login()
 if st.session_state.get('logado'):
     db.inicializar_dados_usuario(st.session_state.get('usuario_id'))
 
+    # Verifica se precisa de onboarding
+    if not db.usuario_completou_onboarding(st.session_state.get('usuario_id')):
+        OnboardingManager.renderizar()
+        st.stop()
+
 # ==========================================
 # INTERFACE PRINCIPAL
 # ==========================================
@@ -48,11 +55,12 @@ menu = st.sidebar.radio(
     "📍 Módulos:",
     [
         "1- Controle de Caixa",
-        "2- Projeção de Gastos",
-        "3- Cadastros",
-        "4- Relatórios",
-        "5- Consultor Financeiro",
-        "6- Admin 🔧",
+        "2- Acompanhamento",
+        "3- Projeção de Gastos",
+        "4- Cadastros",
+        "5- Relatórios",
+        "6- Consultor Financeiro",
+        "7- Admin 🔧",
     ],
     key="main_menu"
 )
@@ -70,19 +78,22 @@ if col_logout.button("Sair", width='stretch'):
 if menu == "1- Controle de Caixa":
     CaixaManager.renderizar()
 
-elif menu == "2- Projeção de Gastos":
+elif menu == "2- Acompanhamento":
+    AcompanhamentoManager.renderizar()
+
+elif menu == "3- Projeção de Gastos":
     ParcelasManager.renderizar()
 
-elif menu == "3- Cadastros":
+elif menu == "4- Cadastros":
     CadastrosManager.renderizar()
 
-elif menu == "4- Relatórios":
+elif menu == "5- Relatórios":
     RelatoriosManager.renderizar()
 
-elif menu == "5- Consultor Financeiro":
+elif menu == "6- Consultor Financeiro":
     ConsultorManager.renderizar()
 
-elif menu == "6- Admin 🔧":
+elif menu == "7- Admin 🔧":
     AdminManager.renderizar()
 
 # ==========================================

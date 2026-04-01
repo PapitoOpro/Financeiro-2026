@@ -20,11 +20,13 @@ except Exception:
 
 class DatabaseManager:
     """Gerenciador centralizado de conexões e operações do banco."""
-    
+    _banco_inicializado = False
+
     def __init__(self):
         self.conn = None
         self.engine = None
         self._supabase = None
+        self._skip_rls = False
     
     def get_supabase(self):
         """Retorna o cliente Supabase (lazy init)."""
@@ -41,7 +43,10 @@ class DatabaseManager:
     @staticmethod
     def get_user_id():
         """Retorna o ID do usuário logado."""
-        return st.session_state.get('usuario_id')
+        try:
+            return st.session_state.get('usuario_id')
+        except Exception:
+            return None
     
     def conectar(self):
         """Cria uma conexão com o banco de dados (não cacheada).
@@ -55,7 +60,8 @@ class DatabaseManager:
                 database=st.secrets["db_name"],
                 user=st.secrets["db_user"],
                 password=st.secrets["db_password"],
-                port=st.secrets["db_port"]
+                port=st.secrets["db_port"],
+                connect_timeout=10
             )
             return conn
         except Exception as e:
@@ -66,8 +72,8 @@ class DatabaseManager:
         """Retorna a conexão atual, reconectando se necessário."""
         try:
             if self.conn is not None and getattr(self.conn, "closed", 1) == 0:
-                # Atualiza variável de sessão RLS com usuário atual
-                self._set_rls_user(self.conn)
+                if not self._skip_rls:
+                    self._set_rls_user(self.conn)
                 return self.conn
         except Exception:
             # Qualquer problema ao checar a conexão força reconexão
@@ -75,7 +81,7 @@ class DatabaseManager:
 
         # Tenta (re)criar a conexão
         self.conn = self.conectar()
-        if self.conn is not None:
+        if self.conn is not None and not self._skip_rls:
             self._set_rls_user(self.conn)
         return self.conn
 
@@ -166,7 +172,9 @@ class DatabaseManager:
             engine = self.get_engine()
             if engine is not None:
                 return pd.read_sql(q, engine, params=params)
-            return pd.read_sql(q, conn, params=params)
+            df = pd.read_sql(q, conn, params=params)
+            conn.commit()
+            return df
         except Exception as e:
             st.error(f"❌ Erro na busca: {e}")
             try:
@@ -187,7 +195,9 @@ class DatabaseManager:
         try:
             with conn.cursor() as cur:
                 cur.execute(q, params)
-                return cur.fetchone()
+                result = cur.fetchone()
+            conn.commit()
+            return result
         except Exception as e:
             st.error(f"❌ Erro na busca: {e}")
             try:
@@ -199,6 +209,17 @@ class DatabaseManager:
     
     def inicializar_banco(self):
         """Cria as tabelas se não existirem e aplica migrações."""
+        if DatabaseManager._banco_inicializado:
+            return
+
+        self._skip_rls = True
+
+        # Timeout para DDL: não esperar mais de 5s por locks
+        try:
+            self.executar("SET lock_timeout = '5s'")
+        except Exception:
+            pass
+
         # Usuarios primeiro (referenciado por outras tabelas)
         self.executar('''CREATE TABLE IF NOT EXISTS usuarios (
             id SERIAL PRIMARY KEY, 
@@ -207,7 +228,19 @@ class DatabaseManager:
             auth_id UUID UNIQUE)''')
 
         self.executar('CREATE TABLE IF NOT EXISTS contas (id SERIAL PRIMARY KEY, nome TEXT, user_id INTEGER REFERENCES usuarios(id))')
-        self.executar('CREATE TABLE IF NOT EXISTS categorias (id SERIAL PRIMARY KEY, nome TEXT, user_id INTEGER REFERENCES usuarios(id))')
+        self.executar('''CREATE TABLE IF NOT EXISTS categorias (
+            id SERIAL PRIMARY KEY, 
+            nome TEXT, 
+            percentual_meta NUMERIC DEFAULT 0,
+            icone TEXT DEFAULT '📁',
+            ativa BOOLEAN DEFAULT TRUE,
+            user_id INTEGER REFERENCES usuarios(id))''')
+        self.executar('''CREATE TABLE IF NOT EXISTS subcategorias (
+            id SERIAL PRIMARY KEY,
+            nome TEXT NOT NULL,
+            categoria_id INTEGER REFERENCES categorias(id),
+            ativa BOOLEAN DEFAULT TRUE,
+            user_id INTEGER REFERENCES usuarios(id))''')
         self.executar('''CREATE TABLE IF NOT EXISTS transacoes (
             id SERIAL PRIMARY KEY, 
             descricao TEXT, 
@@ -215,6 +248,7 @@ class DatabaseManager:
             data_vencimento DATE, 
             conta_id INTEGER REFERENCES contas(id),
             categoria_id INTEGER REFERENCES categorias(id),
+            subcategoria_id INTEGER REFERENCES subcategorias(id),
             tipo_fluxo TEXT,
             user_id INTEGER REFERENCES usuarios(id))''')
 
@@ -277,13 +311,49 @@ class DatabaseManager:
             pass
 
         # ── MIGRAÇÃO MULTI-TENANT: Adicionar user_id às tabelas existentes ──
-        for tabela in ['contas', 'categorias', 'transacoes', 'limites_financeiros']:
+        for tabela in ['contas', 'categorias', 'transacoes', 'limites_financeiros', 'subcategorias']:
             try:
                 self.executar(
                     f"ALTER TABLE {tabela} ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES usuarios(id)"
                 )
             except Exception:
                 pass
+
+        # ── MIGRAÇÃO: subcategorias + campos novos em categorias ──
+        try:
+            self.executar("ALTER TABLE categorias ADD COLUMN IF NOT EXISTS percentual_meta NUMERIC DEFAULT 0")
+        except Exception:
+            pass
+        try:
+            self.executar("ALTER TABLE categorias ADD COLUMN IF NOT EXISTS icone TEXT DEFAULT '📁'")
+        except Exception:
+            pass
+        try:
+            self.executar("ALTER TABLE categorias ADD COLUMN IF NOT EXISTS ativa BOOLEAN DEFAULT TRUE")
+        except Exception:
+            pass
+        try:
+            self.executar('''CREATE TABLE IF NOT EXISTS subcategorias (
+                id SERIAL PRIMARY KEY,
+                nome TEXT NOT NULL,
+                categoria_id INTEGER REFERENCES categorias(id),
+                ativa BOOLEAN DEFAULT TRUE,
+                user_id INTEGER REFERENCES usuarios(id))''')
+        except Exception:
+            pass
+        try:
+            self.executar("ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS subcategoria_id INTEGER REFERENCES subcategorias(id)")
+        except Exception:
+            pass
+        try:
+            self.executar("CREATE UNIQUE INDEX IF NOT EXISTS ux_subcategorias_nome_cat_user ON subcategorias(nome, categoria_id, user_id)")
+        except Exception:
+            pass
+        # Flag de onboarding concluído
+        try:
+            self.executar("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS onboarding_completo BOOLEAN DEFAULT FALSE")
+        except Exception:
+            pass
 
         # Popula user_id para dados existentes (atribui ao primeiro usuário)
         try:
@@ -375,8 +445,12 @@ class DatabaseManager:
         # Restaura timeout padrão após migrações
         try:
             self.executar("SET statement_timeout = '0'")
+            self.executar("SET lock_timeout = '0'")
         except Exception:
             pass
+
+        self._skip_rls = False
+        DatabaseManager._banco_inicializado = True
 
     def inicializar_dados_usuario(self, user_id):
         """Insere limites padrão para um usuário se ainda não existirem."""
@@ -393,9 +467,6 @@ class DatabaseManager:
             ('pct_alerta_critico', 90, 'Percentual de gasto que dispara alerta crítico (%)'),
             ('pct_alerta_preventivo', 70, 'Percentual de gasto que dispara alerta preventivo (%)'),
             ('saldo_minimo', 500, 'Saldo mínimo recomendado (R$)'),
-            ('pct_cat_alimentacao', 30, 'Limite % para categoria Alimentação'),
-            ('pct_cat_lazer', 15, 'Limite % para categoria Lazer'),
-            ('pct_cat_transporte', 15, 'Limite % para categoria Transporte'),
             ('pct_sugestao_guardar', 30, 'Sugestão de % a guardar de dinheiro extra'),
         ]
         for chave, valor, desc in defaults:
@@ -404,6 +475,35 @@ class DatabaseManager:
                 "VALUES (%s, %s, %s, %s) ON CONFLICT (chave, user_id) DO NOTHING",
                 (chave, valor, desc, user_id)
             )
+
+    def usuario_completou_onboarding(self, user_id):
+        """Verifica se o usuário já completou o onboarding."""
+        if not user_id:
+            return False
+        row = self.buscar_um(
+            "SELECT onboarding_completo FROM usuarios WHERE id = %s", (user_id,)
+        )
+        return bool(row and row[0])
+
+    def marcar_onboarding_completo(self, user_id):
+        """Marca o onboarding como concluído."""
+        self.executar(
+            "UPDATE usuarios SET onboarding_completo = TRUE WHERE id = %s", (user_id,)
+        )
+
+    def buscar_subcategorias_por_categoria(self, categoria_id, user_id):
+        """Retorna subcategorias ativas de uma categoria."""
+        return self.buscar(
+            "SELECT * FROM subcategorias WHERE categoria_id = %s AND user_id = %s AND ativa = TRUE ORDER BY nome",
+            (categoria_id, user_id)
+        )
+
+    def buscar_categoria_por_subcategoria(self, subcategoria_id):
+        """Retorna a categoria macro dada uma subcategoria."""
+        return self.buscar_um(
+            "SELECT c.* FROM categorias c JOIN subcategorias s ON s.categoria_id = c.id WHERE s.id = %s",
+            (subcategoria_id,)
+        )
 
 # Instância global
 db = DatabaseManager()
