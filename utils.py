@@ -182,14 +182,11 @@ def _is_data_transacao(valor_str):
 
 
 def _is_parcela_valida(parc_str):
-    """Verifica se XX/YY é uma parcela válida (não é data, não é à vista)."""
+    """Verifica se XX/YY é uma parcela válida (não é data). Inclui à vista (1/1)."""
     try:
         atual, total = map(int, parc_str.split("/"))
-        # Compra à vista: atual == total (01/01, 1/1, 03/03, etc.)
-        if atual == total:
-            return False
-        # Parcela válida: total > 1 e atual <= total
-        if total > 1 and 1 <= atual <= total:
+        # Parcela válida: total >= 1 e atual <= total
+        if total >= 1 and 1 <= atual <= total:
             return True
         return False
     except (ValueError, AttributeError):

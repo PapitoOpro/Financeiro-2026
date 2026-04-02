@@ -427,12 +427,9 @@ class ParcelasManager:
                                         parc_formatada = f"{int(parc_match.group(1))}/{int(parc_match.group(2))}"
                                         desc_limpa = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', '', desc_original).strip()
                                 
-                                # FILTRO: Ignora compras à vista (01/01, 1/1, etc.)
-                                # Na previsão só importamos parcelas com futuro
+                                # Valida formato da parcela
                                 try:
                                     p_atual, p_total = map(int, parc_formatada.split("/"))
-                                    if p_atual == p_total:
-                                        continue
                                 except (ValueError, AttributeError):
                                     continue
                                 
@@ -572,7 +569,7 @@ class ParcelasManager:
             ORDER BY f.data_vencimento ASC
         """)
 
-        # Busca itens de fatura do usuário
+        # Busca itens de fatura do usuário (somente parcelas futuras)
         df_itens = db.buscar(f"""
             SELECT i.id, i.fatura_id, i.descricao, i.valor, i.data_compra,
                    i.parcela_atual, i.parcela_total,
@@ -584,6 +581,7 @@ class ParcelasManager:
             LEFT JOIN contas c ON f.conta_id = c.id
             LEFT JOIN categorias cat ON i.categoria_id = cat.id
             WHERE i.user_id = {user_id}
+              AND i.parcela_atual < i.parcela_total
             ORDER BY f.data_vencimento ASC, i.descricao
         """)
 
