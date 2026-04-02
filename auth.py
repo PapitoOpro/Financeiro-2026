@@ -190,7 +190,7 @@ class AuthManager:
             st.markdown('<div class="login-welcome">Seja bem-vindo.</div>', unsafe_allow_html=True)
             st.markdown(
                 "<div style='text-align: center; margin: 6px 0 12px 0;'>"
-                "<a href='https://github.com/PapitoOpro/Financeiro-2026/blob/main/GUIA_USO.md' "
+                "<a href='?guia=1' "
                 "target='_blank' style='color: #3498db; font-size: 0.85em; text-decoration: none;'>"
                 "Guia de Uso do Sistema"
                 "</a></div>",

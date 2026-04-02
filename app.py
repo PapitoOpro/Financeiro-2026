@@ -27,6 +27,22 @@ st.set_page_config(
 )
 
 # ==========================================
+# PÁGINA DO GUIA DE USO (acesso público)
+# ==========================================
+if st.query_params.get("guia"):
+    st.markdown(
+        "<div style='max-width: 800px; margin: 0 auto;'>",
+        unsafe_allow_html=True
+    )
+    try:
+        with open("GUIA_USO.md", "r", encoding="utf-8") as f:
+            st.markdown(f.read())
+    except FileNotFoundError:
+        st.error("Arquivo GUIA_USO.md não encontrado.")
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.stop()
+
+# ==========================================
 # INICIALIZAÇÃO
 # ==========================================
 # Inicializa banco de dados
@@ -161,7 +177,7 @@ if st.sidebar.button("🚪  Sair", use_container_width=True):
     AuthManager.fazer_logout()
 st.sidebar.markdown(
     "<div style='text-align: center; margin-top: 8px;'>"
-    "<a href='https://github.com/PapitoOpro/Financeiro-2026/blob/main/GUIA_USO.md' "
+    "<a href='?guia=1' "
     "target='_blank' style='color: #3498db; font-size: 0.95em; text-decoration: none;'>"
     "Guia de Uso"
     "</a></div>",
