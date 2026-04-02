@@ -11,6 +11,7 @@ from database import db
 from config import MESES_LISTA
 from utils import moeda
 from modules.consultor import ConsultorManager, ConsultorEngine
+from modules.acompanhamento import AcompanhamentoManager
 
 
 class RelatoriosManager:
@@ -28,7 +29,22 @@ class RelatoriosManager:
     # ─── Renderização principal ───────────────────────────────
     @staticmethod
     def renderizar():
-        st.header("Relatórios Analíticos")
+        st.header("Relatórios")
+
+        tab_analiticos, tab_acompanhamento = st.tabs([
+            "Relatórios Analíticos",
+            "Acompanhamento",
+        ])
+
+        with tab_analiticos:
+            RelatoriosManager._renderizar_analiticos()
+
+        with tab_acompanhamento:
+            AcompanhamentoManager.renderizar_conteudo()
+
+    # ─── Relatórios Analíticos ────────────────────────────────
+    @staticmethod
+    def _renderizar_analiticos():
 
         # ── 1. Filtros ──────────────────────────────────────
         st.subheader("Filtros")

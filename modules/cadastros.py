@@ -130,11 +130,11 @@ class CadastrosManager:
                     unsafe_allow_html=True
                 )
                 with col_edit:
-                    if st.button("Editar", key=f"edit_cat_{cat_id}", help="Editar", icon=":material/edit:"):
+                    if st.button("\u200b", key=f"edit_cat_{cat_id}", help="Editar", icon=":material/edit:"):
                         st.session_state[edit_flag] = True
                         st.rerun()
                 with col_archive:
-                    if st.button("Arquivar", key=f"archive_cat_{cat_id}", help="Arquivar", icon=":material/archive:"):
+                    if st.button("\u200b", key=f"archive_cat_{cat_id}", help="Arquivar", icon=":material/archive:"):
                         db.executar(
                             "UPDATE categorias SET ativa = FALSE WHERE id = %s AND user_id = %s",
                             (cat_id, user_id)
@@ -207,11 +207,11 @@ class CadastrosManager:
                                 st.rerun()
                         else:
                             with c_edit:
-                                if st.button("Editar", key=f"edit_sub_{sub_id}", icon=":material/edit:"):
+                                if st.button("\u200b", key=f"edit_sub_{sub_id}", help="Editar", icon=":material/edit:"):
                                     st.session_state[edit_sub_flag] = True
                                     st.rerun()
                             with c_archive:
-                                if st.button("Arquivar", key=f"archive_sub_{sub_id}", help="Arquivar", icon=":material/archive:"):
+                                if st.button("\u200b", key=f"archive_sub_{sub_id}", help="Arquivar", icon=":material/archive:"):
                                     db.executar(
                                         "UPDATE subcategorias SET ativa = FALSE WHERE id=%s AND user_id=%s",
                                         (sub_id, user_id)
@@ -291,11 +291,11 @@ class CadastrosManager:
                     unsafe_allow_html=True
                 )
                 with col_edit:
-                    if st.button("Editar", key=f"edit_conta_{r['id']}", help="Editar", icon=":material/edit:"):
+                    if st.button("\u200b", key=f"edit_conta_{r['id']}", help="Editar", icon=":material/edit:"):
                         st.session_state[edit_flag] = True
                         st.rerun()
                 with col_del:
-                    if st.button("Excluir", key=f"del_conta_{r['id']}", help="Excluir", icon=":material/delete:"):
+                    if st.button("\u200b", key=f"del_conta_{r['id']}", help="Excluir", icon=":material/delete:"):
                         db.executar(
                             "DELETE FROM contas WHERE id=? AND user_id=?",
                             (r['id'], user_id)

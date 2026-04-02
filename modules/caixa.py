@@ -369,11 +369,11 @@ class CaixaManager:
                                     unsafe_allow_html=True
                                 )
                                 with ci4:
-                                    if st.button("Ed", key=f"edit_fi_{item_id}", help="Editar item", icon=":material/edit:"):
+                                    if st.button("\u200b", key=f"edit_fi_{item_id}", help="Editar item", icon=":material/edit:"):
                                         st.session_state[editing_item_key] = True
                                         st.rerun()
                                 with ci5:
-                                    if st.button("Del", key=f"del_fi_{item_id}", help="Excluir item", icon=":material/delete:"):
+                                    if st.button("\u200b", key=f"del_fi_{item_id}", help="Excluir item", icon=":material/delete:"):
                                         st.session_state[f"confirm_del_fi_{item_id}"] = True
                                         st.rerun()
 
@@ -469,14 +469,14 @@ class CaixaManager:
 
                     with c_comp:
                         if not is_compensado:
-                            if st.button("OK", key=f"comp_caixa_{rid}", help="Compensar", icon=":material/check:"):
+                            if st.button("\u200b", key=f"comp_caixa_{rid}", help="Compensar", icon=":material/check:"):
                                 db.executar(
                                     "UPDATE transacoes SET compensado=TRUE, data_compensacao=? WHERE id=? AND user_id=?",
                                     (datetime.now().date(), rid, db.get_user_id())
                                 )
                                 st.rerun()
                         else:
-                            if st.button("Voltar", key=f"uncomp_caixa_{rid}", help="Descompensar", icon=":material/undo:"):
+                            if st.button("\u200b", key=f"uncomp_caixa_{rid}", help="Descompensar", icon=":material/undo:"):
                                 db.executar(
                                     "UPDATE transacoes SET compensado=FALSE, data_compensacao=NULL WHERE id=? AND user_id=?",
                                     (rid, db.get_user_id())
@@ -484,12 +484,12 @@ class CaixaManager:
                                 st.rerun()
 
                     with c4:
-                        if st.button("Ed", key=f"edit_caixa_{rid}", help="Editar", icon=":material/edit:"):
+                        if st.button("\u200b", key=f"edit_caixa_{rid}", help="Editar", icon=":material/edit:"):
                             st.session_state[editing_key] = True
                             st.rerun()
 
                     with c5:
-                        if st.button("Del", key=f"del_caixa_{rid}", help="Excluir", icon=":material/delete:"):
+                        if st.button("\u200b", key=f"del_caixa_{rid}", help="Excluir", icon=":material/delete:"):
                             st.session_state[f"confirm_del_caixa_{rid}"] = True
                             st.rerun()
 

@@ -16,8 +16,13 @@ class AcompanhamentoManager:
 
     @staticmethod
     def renderizar():
-        """Página de acompanhamento: Orçado vs Realizado por categoria."""
-        st.header(" Acompanhamento Diário")
+        """Página de acompanhamento standalone (mantida por compatibilidade)."""
+        st.header("Acompanhamento Inteligente")
+        AcompanhamentoManager.renderizar_conteudo()
+
+    @staticmethod
+    def renderizar_conteudo():
+        """Conteúdo do acompanhamento (sem header, para uso dentro de tabs)."""
         st.caption("Visualize o progresso dos seus gastos por categoria com barras intuitivas.")
 
         # Filtros

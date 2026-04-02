@@ -288,7 +288,7 @@ class ParcelasManager:
                         format="%.2f"
                     )
                 with c_del:
-                    if st.button("Excluir", key=f"audit_del_{idx}", icon=":material/delete:"):
+                    if st.button("\u200b", key=f"audit_del_{idx}", help="Excluir", icon=":material/delete:"):
                         itens_para_remover.append(idx)
 
             # Remover itens excluídos (processa após o loop para não alterar índices durante iteração)
@@ -759,12 +759,12 @@ class ParcelasManager:
                             )
 
                             with c4:
-                                if st.button("Editar", key=f"edit_item_{r['id']}", icon=":material/edit:"):
+                                if st.button("\u200b", key=f"edit_item_{r['id']}", help="Editar", icon=":material/edit:"):
                                     key_ed = f"editing_item_{r['id']}"
                                     st.session_state[key_ed] = not st.session_state.get(key_ed, False)
 
                             with c5:
-                                if st.button("Excluir", key=f"del_item_{r['id']}", icon=":material/delete:"):
+                                if st.button("\u200b", key=f"del_item_{r['id']}", help="Excluir", icon=":material/delete:"):
                                     st.session_state['ids_para_excluir'] = [int(r['id'])]
                                     st.session_state['descs_para_excluir'] = [f"{r['descricao']} {parc_label} ({moeda(abs(r['valor']))})"]
                                     st.session_state['excluir_tipo'] = 'item_fatura'

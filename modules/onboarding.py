@@ -207,7 +207,7 @@ class OnboardingManager:
                 )
 
             with col_del:
-                if st.button("Excluir", key=f"ob_del_{i}", icon=":material/delete:"):
+                if st.button("\u200b", key=f"ob_del_{i}", help="Excluir", icon=":material/delete:"):
                     categorias.pop(i)
                     st.session_state.onboarding_categorias = categorias
                     st.rerun()
@@ -222,7 +222,7 @@ class OnboardingManager:
             nova_pct = st.number_input("% Nova", min_value=0, max_value=100, value=0,
                                        step=1, key="ob_nova_pct", label_visibility="collapsed")
         with col_add_btn:
-            if st.button("Adicionar", key="ob_add_cat", icon=":material/add:"):
+            if st.button("\u200b", key="ob_add_cat", help="Adicionar", icon=":material/add:"):
                 if nova_cat.strip():
                     categorias.append({
                         "nome": nova_cat.strip(), "pct": nova_pct,

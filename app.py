@@ -127,17 +127,16 @@ st.sidebar.markdown("---")
 
 # --- Menu de navegação ---
 MENU_ITEMS = [
+    ("", "Consultor Financeiro"),
     ("", "Controle de Caixa"),
-    ("", "Acompanhamento"),
     ("", "Projeção de Gastos"),
     ("", "Cadastros"),
     ("", "Relatórios"),
-    ("", "Consultor Financeiro"),
     ("", "Admin"),
 ]
 
 if "menu_selecionado" not in st.session_state:
-    st.session_state.menu_selecionado = "Controle de Caixa"
+    st.session_state.menu_selecionado = "Consultor Financeiro"
 
 st.sidebar.markdown('<div class="menu-container">', unsafe_allow_html=True)
 for icone, label in MENU_ITEMS:
@@ -168,9 +167,6 @@ menu = st.session_state.menu_selecionado
 # ==========================================
 if menu == "Controle de Caixa":
     CaixaManager.renderizar()
-
-elif menu == "Acompanhamento":
-    AcompanhamentoManager.renderizar()
 
 elif menu == "Projeção de Gastos":
     ParcelasManager.renderizar()
