@@ -267,7 +267,7 @@ class CadastrosManager:
             if edit_flag not in st.session_state:
                 st.session_state[edit_flag] = False
 
-            col_nome, col_edit, col_del = st.columns([4, 1, 1])
+            col_nome, col_edit, col_del = st.columns([4, 0.5, 0.5])
 
             if st.session_state[edit_flag]:
                 with col_nome:
@@ -287,7 +287,7 @@ class CadastrosManager:
                         st.rerun()
             else:
                 col_nome.markdown(
-                    f"<div style='padding-top: 5px; font-weight: 500;'>{r['nome']}</div>",
+                    f"<div style='line-height: 1.8; font-weight: 500;'>{r['nome']}</div>",
                     unsafe_allow_html=True
                 )
                 with col_edit:
@@ -301,5 +301,3 @@ class CadastrosManager:
                             (r['id'], user_id)
                         )
                         st.rerun()
-
-            st.markdown("<hr style='margin: 0px 0px 5px 0px;'>", unsafe_allow_html=True)
