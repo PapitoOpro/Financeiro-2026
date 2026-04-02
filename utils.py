@@ -150,6 +150,54 @@ def parser_generico(texto):
 # ORQUESTRADOR PRINCIPAL
 # ==========================================
 
+def _split_multicolunas(texto):
+    """Divide linhas com múltiplas transações (formato Itaú 2 colunas).
+
+    O pdfplumber extrai faturas Itaú em layout de 2 colunas, mesclando
+    duas transações por linha. Ex:
+      '28/02 ASSAI 347,53 01/03 Conveniencia 22,04'
+    Se torna:
+      '28/02 ASSAI 347,53'
+      '01/03 Conveniencia 22,04'
+    """
+    linhas_out = []
+    for linha in texto.split('\n'):
+        # Divide onde um valor monetário (NNN,NN) é seguido por DD/MM (nova transação)
+        partes = re.split(
+            r'(\d{1,3}(?:\.\d{3})*,\d{2})\s+(?=\d{1,2}/\d{1,2}\b)',
+            linha
+        )
+
+        if len(partes) >= 3:
+            # partes alternadas: [texto0, valor0, texto1, valor1, ..., textoN]
+            i = 0
+            while i < len(partes) - 1:
+                combined = (partes[i].strip() + ' ' + partes[i + 1]).strip()
+                if combined:
+                    linhas_out.append(combined)
+                i += 2
+            # Último segmento (última transação da linha)
+            if i < len(partes) and partes[i].strip():
+                linhas_out.append(partes[i].strip())
+        else:
+            # Sem split multi-coluna — verifica se há transação DD/MM embarcada
+            # Ex: "RAFAELRODRIGUES(final8122) 04/03 BURGERKING 118,30"
+            stripped = linha.strip()
+            if stripped and not re.match(r'\d{1,2}/\d{1,2}\b', stripped):
+                m = re.search(
+                    r'(\d{1,2}/\d{1,2}\s+\S.*?\s+\d{1,3}(?:\.\d{3})*,\d{2})\s*$',
+                    stripped
+                )
+                if m:
+                    linhas_out.append(m.group(1))
+                else:
+                    linhas_out.append(linha)
+            else:
+                linhas_out.append(linha)
+
+    return '\n'.join(linhas_out)
+
+
 def _cortar_texto_antes_proximas_faturas(texto):
     """Remove tudo a partir de 'Compras parceladas - próximas faturas' e seções similares.
     
@@ -525,18 +573,21 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
         # 4. Cortar texto ANTES de "próximas faturas" para não importar parcelas futuras
         texto_fatura_atual = _cortar_texto_antes_proximas_faturas(texto_norm)
 
+        # 5. Dividir linhas multi-coluna (Itaú extrai 2 transações por linha)
+        texto_fatura_atual = _split_multicolunas(texto_fatura_atual)
+
         # Debug: mostra quantos chars foram cortados
-        chars_cortados = len(texto_norm) - len(texto_fatura_atual)
+        chars_cortados = len(texto_norm) - len(_cortar_texto_antes_proximas_faturas(texto_norm))
         if chars_cortados > 0:
             print(f"[DEBUG] Texto cortado: {chars_cortados} caracteres removidos (seção de próximas faturas)")
         else:
             print(f"[DEBUG] Nenhum corte aplicado — texto completo ({len(texto_norm)} chars)")
 
-        # 5. Extrair parcelas (itens com indicador XX/YY) — apenas da fatura atual
+        # 6. Extrair parcelas (itens com indicador XX/YY) — apenas da fatura atual
         dados_parcelados = extrair_parcelas(texto_fatura_atual)
         print(f"[DEBUG] Parcelas encontradas: {len(dados_parcelados)}")
 
-        # 6. Extrair itens à vista (sem indicador de parcela) — apenas da fatura atual
+        # 7. Extrair itens à vista (sem indicador de parcela) — apenas da fatura atual
         if incluir_avista:
             dados_avista = extrair_itens_avista(texto_fatura_atual, dados_parcelados)
             print(f"[DEBUG] Itens à vista encontrados: {len(dados_avista)}")
