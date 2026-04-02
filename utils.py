@@ -338,6 +338,37 @@ def extrair_parcelas(texto):
                 _add_resultado(desc.strip(), parc, val_limpo)
         except: continue
 
+    # ================================================================
+    # PÓS-PROCESSAMENTO: dedup parcelas consecutivas do mesmo item
+    # Itaú mostra parcela atual (ex: 04/12) E a do próximo mês (05/12)
+    # no corpo da fatura. Manter apenas a de MENOR número — o sistema
+    # projeta as futuras automaticamente ao importar.
+    # ================================================================
+    by_desc_total = {}  # (desc_base, total) -> (menor_atual, indice)
+    for i, (desc, parc, val) in enumerate(resultados):
+        try:
+            atual, total = map(int, parc.split("/"))
+            desc_base = re.sub(r'\s+', ' ', desc.upper().strip())
+            key = (desc_base, total)
+            if key not in by_desc_total or atual < by_desc_total[key][0]:
+                by_desc_total[key] = (atual, i)
+        except:
+            pass
+
+    indices_remover = set()
+    for i, (desc, parc, val) in enumerate(resultados):
+        try:
+            atual, total = map(int, parc.split("/"))
+            desc_base = re.sub(r'\s+', ' ', desc.upper().strip())
+            key = (desc_base, total)
+            if key in by_desc_total and by_desc_total[key][1] != i:
+                indices_remover.add(i)
+        except:
+            pass
+
+    if indices_remover:
+        resultados = [r for i, r in enumerate(resultados) if i not in indices_remover]
+
     return resultados
 
 
@@ -407,9 +438,11 @@ def extrair_itens_avista(texto, itens_parcelados=None):
         if not comeca_com_data and any(skip in linha_lower for skip in skip_patterns):
             continue
 
-        # Padrão: DD/MM DESCRICAO VALOR (valor no final da linha)
+        # Padrão: DD/MM DESCRICAO VALOR [CATEGORIA] (suporta Itaú multi-coluna)
+        # Usa greedy (.+) para que o valor casado seja o ÚLTIMO padrão numérico
+        # da linha, não um número que faz parte do nome do estabelecimento.
         match = re.match(
-            r'(\d{1,2}/\d{1,2})\s+(.+?)\s+([\d.]+,\d{2})\s*$',
+            r'(\d{1,2}/\d{1,2})\s+(.+)\s+([\d.]+,\d{2})(?:\s+[A-Z].*|\s*)$',
             linha
         )
 
