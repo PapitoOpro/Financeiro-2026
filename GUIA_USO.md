@@ -5,15 +5,16 @@
 ## Primeiro Acesso
 
 1. Abra o sistema no navegador
-2. Clique na aba **Cadastro** e preencha nome, e-mail e senha
+2. Clique no botão **Cadastro** e preencha nome, e-mail e senha
 3. O **primeiro usuário** cadastrado é aprovado automaticamente como administrador
 4. Usuários seguintes precisam de aprovação do admin (menu **Admin → Usuários**)
 5. Após o login, o **Assistente de Configuração** (onboarding) guiará você em 3 passos:
    - **Passo 1:** Escolha um perfil de orçamento (50/30/20, Estudante, Família, etc.)
    - **Passo 2:** Ajuste os percentuais das categorias (devem somar 100%)
    - **Passo 3:** Confirme e salve
+6. Em seguida, o sistema pedirá para **cadastrar pelo menos um banco ou cartão** antes de liberar o acesso completo
 
-> Você pode alterar tudo depois no menu **Cadastros**.
+> Você pode alterar categorias e adicionar mais bancos/cartões depois no menu **Cadastros**.
 
 ---
 

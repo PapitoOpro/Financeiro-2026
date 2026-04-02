@@ -60,6 +60,35 @@ if st.session_state.get('logado'):
         OnboardingManager.renderizar()
         st.stop()
 
+    # Verifica se o usuário tem pelo menos uma conta/cartão cadastrada
+    user_id = st.session_state.get('usuario_id')
+    df_contas_check = db.buscar(
+        f"SELECT id FROM contas WHERE user_id = {user_id} LIMIT 1"
+    )
+    if df_contas_check.empty:
+        st.markdown("---")
+        st.header("Cadastre seu primeiro Banco ou Cartão")
+        st.info(
+            "Para utilizar o sistema, é necessário cadastrar pelo menos "
+            "um banco ou cartão. Você poderá adicionar mais depois em **Cadastros**."
+        )
+        with st.form("form_primeira_conta", clear_on_submit=True):
+            nome_conta = st.text_input(
+                "Nome do Banco/Cartão",
+                placeholder="Ex: Nubank, Itaú, Bradesco..."
+            )
+            if st.form_submit_button("Cadastrar e Continuar", type="primary", use_container_width=True):
+                if (nome_conta or "").strip():
+                    db.executar(
+                        "INSERT INTO contas (nome, user_id) VALUES (%s, %s)",
+                        (nome_conta.strip(), user_id)
+                    )
+                    st.success("Banco/Cartão cadastrado com sucesso!")
+                    st.rerun()
+                else:
+                    st.error("Digite o nome do banco ou cartão.")
+        st.stop()
+
 # ==========================================
 # INTERFACE PRINCIPAL
 # ==========================================
