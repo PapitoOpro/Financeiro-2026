@@ -219,11 +219,18 @@ class ParcelasManager:
                 st.session_state["ocr_dados"] = dados
                 
                 if not dados:
-                    st.warning(" Texto extraído, mas nenhuma parcela detectada pelo padrão (Regex).")
-                    st.info(" Apenas compras parceladas são importadas (ex: 02/10, 03/12). "
-                            "Compras à vista (01/01) e compras sem parcela são ignoradas para não poluir a previsão.")
+                    st.warning(" Texto extraído, mas nenhum item detectado na fatura.")
                 else:
-                    st.success(f" {len(dados)} parcelas encontradas no {banco}!")
+                    n_avista = sum(1 for _, p, _ in dados if p == "1/1")
+                    n_parcelados = len(dados) - n_avista
+                    st.success(
+                        f" {len(dados)} itens encontrados no {banco}! "
+                        f"({n_parcelados} parcelado(s), {n_avista} à vista)"
+                    )
+                    st.info(
+                        " Itens à vista serão lançados na fatura do mês atual. "
+                        "Itens parcelados serão projetados automaticamente nos meses futuros."
+                    )
 
         # 3. Exibição e Confirmação: Lê os dados do session_state
         dados_salvos = st.session_state.get("ocr_dados", [])
@@ -254,17 +261,25 @@ class ParcelasManager:
             dados_editaveis = st.session_state["ocr_dados_editaveis"]
 
             # Cabeçalho da tabela
-            hdr1, hdr2, hdr3, hdr4, hdr5 = st.columns([0.5, 3.5, 1.5, 1.5, 1])
+            hdr1, hdr2, hdr3, hdr4, hdr5, hdr6 = st.columns([0.4, 2.8, 1.0, 1.2, 1.5, 1.0])
             hdr1.markdown("****")
             hdr2.markdown("**Descrição**")
-            hdr3.markdown("**Parcela**")
-            hdr4.markdown("**Valor (R$)**")
-            hdr5.markdown("**Ação**")
+            hdr3.markdown("**Tipo**")
+            hdr4.markdown("**Parcela**")
+            hdr5.markdown("**Valor (R$)**")
+            hdr6.markdown("**Ação**")
 
             itens_para_remover = []
 
             for idx, item in enumerate(dados_editaveis):
-                c_check, c_desc, c_parc, c_val, c_del = st.columns([0.5, 3.5, 1.5, 1.5, 1])
+                c_check, c_desc, c_tipo, c_parc, c_val, c_del = st.columns([0.4, 2.8, 1.0, 1.2, 1.5, 1.0])
+
+                # Determina tipo (à vista ou parcelado)
+                try:
+                    _at, _tot = map(int, item["parc"].split("/"))
+                    is_avista = (_at == _tot)
+                except (ValueError, AttributeError):
+                    is_avista = True
 
                 with c_check:
                     item["importar"] = st.checkbox(
@@ -276,6 +291,19 @@ class ParcelasManager:
                         "Desc", value=item["desc"],
                         key=f"audit_desc_{idx}", label_visibility="collapsed"
                     )
+                with c_tipo:
+                    if is_avista:
+                        st.markdown(
+                            "<span style='background:#3498db; color:white; padding:2px 8px; "
+                            "border-radius:4px; font-size:11px;'>À vista</span>",
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.markdown(
+                            "<span style='background:#e67e22; color:white; padding:2px 8px; "
+                            "border-radius:4px; font-size:11px;'>Parcelado</span>",
+                            unsafe_allow_html=True
+                        )
                 with c_parc:
                     item["parc"] = st.text_input(
                         "Parcela", value=item["parc"],
@@ -306,8 +334,13 @@ class ParcelasManager:
             # Resumo
             selecionados = [d for d in dados_editaveis if d["importar"]]
             total_sel = sum(d["valor"] for d in selecionados)
-            st.markdown(f"**{len(selecionados)}** de **{len(dados_editaveis)}** parcelas selecionadas "
-                        f"— Total: **{moeda(total_sel)}**")
+            n_parc_sel = sum(1 for d in selecionados if d["parc"] != "1/1")
+            n_avista_sel = len(selecionados) - n_parc_sel
+            st.markdown(
+                f"**{len(selecionados)}** de **{len(dados_editaveis)}** itens selecionados "
+                f"({n_parc_sel} parcelado(s), {n_avista_sel} à vista) "
+                f"— Total: **{moeda(total_sel)}**"
+            )
 
             st.markdown("---")
 
@@ -537,13 +570,13 @@ class ParcelasManager:
                     continue
 
             if novos > 0:
-                st.toast(f"{novos} parcelas salvas!")
+                st.toast(f"{novos} itens salvos!")
             if duplicados > 0:
-                st.toast(f"{duplicados} ignoradas (já existiam).")
+                st.toast(f"{duplicados} ignorado(s) (já existiam).")
             if erros > 0:
                 st.toast(f"{erros} com erro.")
             if novos == 0 and duplicados > 0:
-                st.warning(f"Nenhuma parcela nova importada — {duplicados} já existiam no sistema.")
+                st.warning(f"Nenhum item novo importado — {duplicados} já existiam no sistema.")
 
             ParcelasManager._resetar_estado_pdf()
 
@@ -622,6 +655,30 @@ class ParcelasManager:
             c_met2.info("Sem dados por mês para calcular o mês mais pesado.")
 
         st.write("")
+
+        # 1.5 TABELA RESUMO DE PREVISÃO POR MÊS
+        st.markdown("** Previsão Mensal de Parcelados**")
+        preview_data = []
+        for mes_period in agrupado_mes['Mes_Ano']:
+            grupo_mes = df_itens[df_itens['Mes_Ano'] == mes_period]
+            total_mes_val = grupo_mes['valor_abs'].sum()
+            # Top 3 itens do mês
+            top_itens = grupo_mes.nlargest(3, 'valor_abs')
+            desc_itens = ', '.join([
+                f"{r['descricao']} ({int(r['parcela_atual']):02d}/{int(r['parcela_total']):02d})"
+                for _, r in top_itens.iterrows()
+            ])
+            preview_data.append({
+                'Mês': str(mes_period),
+                'Total Parcelado': moeda(total_mes_val),
+                'Principais Itens': desc_itens
+            })
+
+        if preview_data:
+            df_preview_table = pd.DataFrame(preview_data)
+            st.dataframe(df_preview_table, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
 
         # 2. GRÁFICO DE EVOLUÇÃO
         st.markdown("** Evolução do Parcelamento nos Próximos Meses**")

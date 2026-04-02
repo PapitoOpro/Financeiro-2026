@@ -324,10 +324,124 @@ def _is_compra_avista(parc):
 
 
 # ==========================================
+# EXTRAÇÃO DE ITENS À VISTA (SEM PARCELA)
+# ==========================================
+
+def extrair_itens_avista(texto, itens_parcelados=None):
+    """Extrai itens à vista (sem indicador de parcela) de faturas de cartão.
+
+    Captura linhas no formato DD/MM DESCRICAO VALOR que não foram
+    identificadas como parcelas pela função extrair_parcelas().
+
+    Args:
+        texto: Texto normalizado da fatura
+        itens_parcelados: Lista de (desc, parc, val) já extraídos como parcelas
+    Returns:
+        Lista de tuplas (descricao, "1/1", valor)
+    """
+    resultados = []
+    chaves_vistas = set()
+
+    # Normaliza descrições já capturadas como parcelas para evitar duplicatas
+    descs_parceladas = set()
+    if itens_parcelados:
+        for desc, _, _ in itens_parcelados:
+            descs_parceladas.add(re.sub(r'\s+', ' ', desc.upper().strip()))
+
+    # Palavras que indicam linhas de cabeçalho/rodapé (não são itens)
+    skip_patterns = [
+        'total', 'pagamento', 'saldo', 'limite', 'encargos',
+        'vencimento', 'anterior', 'proximo', 'proxima',
+        'fatura', 'minimo', 'cliente', 'cartao', 'banco',
+        'cpf', 'cnpj', 'agencia', 'credito disponivel',
+        'resumo', 'demonstrativo', 'informacoes', 'central',
+        'sac ', 'ouvidoria', 'www.', 'http', '.com',
+        'juros', 'multa', 'mora', 'iof', 'anuidade',
+        'tarifa', 'taxa',
+    ]
+
+    for linha in texto.split('\n'):
+        linha = linha.strip()
+        if not linha or len(linha) < 8:
+            continue
+
+        # Pula linhas de cabeçalho/rodapé
+        linha_lower = linha.lower()
+        if any(skip in linha_lower for skip in skip_patterns):
+            continue
+
+        # Padrão: DD/MM DESCRICAO VALOR (valor no final da linha)
+        match = re.match(
+            r'(\d{1,2}/\d{1,2})\s+(.+?)\s+([\d.]+,\d{2})\s*$',
+            linha
+        )
+
+        if not match:
+            continue
+
+        date_str, desc_raw, valor_str = match.groups()
+
+        # Valida que DD/MM é uma data (dia 1-31, mês 1-12)
+        try:
+            dd, mm = map(int, date_str.split('/'))
+            if not (1 <= dd <= 31 and 1 <= mm <= 12):
+                continue
+        except (ValueError, AttributeError):
+            continue
+
+        desc = desc_raw.strip()
+
+        # Se a descrição contém padrão XX/YY com total > 1, é parcela
+        # → já foi capturada por extrair_parcelas(), pular
+        parc_in_desc = re.search(r'(\d{1,2})/(\d{1,2})', desc)
+        if parc_in_desc:
+            try:
+                a, t = int(parc_in_desc.group(1)), int(parc_in_desc.group(2))
+                if t > 1 and a <= t:
+                    continue
+            except (ValueError, AttributeError):
+                pass
+
+        # Verifica duplicata com itens parcelados (mesma descrição base)
+        desc_norm = re.sub(r'\s+', ' ', desc.upper().strip())
+        is_dup = False
+        for dp in descs_parceladas:
+            if dp in desc_norm or desc_norm in dp:
+                is_dup = True
+                break
+        if is_dup:
+            continue
+
+        try:
+            val = float(valor_str.replace(".", "").replace(",", "."))
+            if abs(val) < 0.01:
+                continue
+
+            chave = (desc_norm, "1/1")
+            if chave not in chaves_vistas:
+                chaves_vistas.add(chave)
+                resultados.append((desc, "1/1", val))
+        except (ValueError, TypeError):
+            continue
+
+    return resultados
+
+
+# ==========================================
 # FUNÇÃO FINAL (USO SIMPLES)
 # ==========================================
 
-def processar_fatura(file, senha_pdf=None):
+def processar_fatura(file, senha_pdf=None, incluir_avista=True):
+    """Processa uma fatura PDF extraindo todos os itens.
+
+    Args:
+        file: Arquivo PDF da fatura
+        senha_pdf: Senha do PDF (se houver)
+        incluir_avista: Se True, inclui itens à vista (sem parcela) além dos parcelados
+    Returns:
+        Tupla (banco_detectado, texto_extraido, lista_de_itens)
+        Cada item é uma tupla (descricao, parcela_str, valor)
+    """
     try:
         # 1. Extrair texto
         texto = extrair_texto_pdf(file, senha_pdf)
@@ -341,8 +455,15 @@ def processar_fatura(file, senha_pdf=None):
         # 3. Detectar banco (usa texto normalizado)
         banco = detectar_banco(texto_norm)
 
-        # 4. Extrair parcelas (usa texto normalizado)
-        dados = extrair_parcelas(texto_norm)
+        # 4. Extrair parcelas (itens com indicador XX/YY)
+        dados_parcelados = extrair_parcelas(texto_norm)
+
+        # 5. Extrair itens à vista (sem indicador de parcela)
+        if incluir_avista:
+            dados_avista = extrair_itens_avista(texto_norm, dados_parcelados)
+            dados = dados_parcelados + dados_avista
+        else:
+            dados = dados_parcelados
 
         return banco, texto, dados
 
