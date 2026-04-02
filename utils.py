@@ -348,16 +348,22 @@ def extrair_itens_avista(texto, itens_parcelados=None):
         for desc, _, _ in itens_parcelados:
             descs_parceladas.add(re.sub(r'\s+', ' ', desc.upper().strip()))
 
-    # Palavras que indicam linhas de cabeçalho/rodapé (não são itens)
+    # Padrões que indicam linhas de cabeçalho/rodapé (NÃO são transações).
+    # Só filtra quando a linha NÃO começa com DD/MM (padrão de transação).
+    # Linhas com DD/MM são sempre processadas (são transações reais).
     skip_patterns = [
-        'total', 'pagamento', 'saldo', 'limite', 'encargos',
-        'vencimento', 'anterior', 'proximo', 'proxima',
-        'fatura', 'minimo', 'cliente', 'cartao', 'banco',
-        'cpf', 'cnpj', 'agencia', 'credito disponivel',
-        'resumo', 'demonstrativo', 'informacoes', 'central',
-        'sac ', 'ouvidoria', 'www.', 'http', '.com',
-        'juros', 'multa', 'mora', 'iof', 'anuidade',
-        'tarifa', 'taxa',
+        'total da fatura', 'total desta fatura', 'total para',
+        'pagamento efetuado', 'pagamento minimo',
+        'saldo financiado', 'saldo anterior',
+        'limite total', 'limite de credito',
+        'encargos (', 'encargos financ',
+        'lancamentos atuais',
+        'credito disponivel',
+        'proxima fatura', 'proximas faturas',
+        'cpf', 'cnpj',
+        'demonstrativo', 'informacoes adicionais',
+        'central de atendimento', 'ouvidoria',
+        'www.', 'http',
     ]
 
     for linha in texto.split('\n'):
@@ -365,9 +371,13 @@ def extrair_itens_avista(texto, itens_parcelados=None):
         if not linha or len(linha) < 8:
             continue
 
-        # Pula linhas de cabeçalho/rodapé
         linha_lower = linha.lower()
-        if any(skip in linha_lower for skip in skip_patterns):
+
+        # Linhas que começam com DD/MM são transações — nunca pular
+        comeca_com_data = re.match(r'^\d{1,2}/\d{1,2}\s', linha)
+
+        # Pula linhas de cabeçalho/rodapé (apenas se NÃO parecem transação)
+        if not comeca_com_data and any(skip in linha_lower for skip in skip_patterns):
             continue
 
         # Padrão: DD/MM DESCRICAO VALOR (valor no final da linha)
