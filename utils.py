@@ -156,10 +156,17 @@ def _cortar_texto_antes_proximas_faturas(texto):
     Essas seções listam parcelas que cairão em faturas FUTURAS e não devem
     ser importadas — o sistema já projeta parcelas futuras automaticamente.
     """
+    # Padrões específicos de seções de parcelas futuras.
+    # Os padrões amplos (ex: 'Proximas faturas') requerem início de linha
+    # para não casar com menções no cabeçalho como 'Data proxima fatura: 15/04'.
     padroes_corte = [
-        r'Compras\s+parceladas\s*[-–—]\s*proximas?\s+faturas?',
-        r'Proximas?\s+faturas?',
-        r'Demais\s+faturas?',
+        # Formato Itaú: "Compras parceladas - próximas faturas"
+        r'Compras\s+parceladas\s*[-–—:]\s*proximas?\s+faturas?',
+        # Seção genérica (somente como título de linha, não no meio de texto)
+        r'(?:^|\n)\s*Proximas?\s+faturas?\s*(?:\n|$)',
+        # Seção "Demais faturas" (somente como título de linha)
+        r'(?:^|\n)\s*Demais\s+faturas?\s*(?:\n|$)',
+        # Formato descritivo
         r'Compras\s+que\s+serao\s+cobradas',
     ]
     for padrao in padroes_corte:
@@ -319,8 +326,9 @@ def extrair_parcelas(texto):
 
     # PADRÃO E: formato relaxado onde o 'xx/yy' cola ao texto
     # Ex: 'AMAZONMKTPLC*FITOW04/05 35,52' ou 'ANUIDADE DIFERENCI05/12 16,65'
+    # Nota: usa [ \t] em vez de \s para NÃO casar quebras de linha (evita falsos positivos)
     regex_relax = re.findall(
-        r'([A-Za-z*][\w\s.*\-]*?)(\d{1,2}/\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
+        r'([A-Za-z*][\w \t.*\-]*?)(\d{1,2}/\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
         texto, re.IGNORECASE
     )
     for desc, parc, valor in regex_relax:
@@ -431,14 +439,9 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             except (ValueError, AttributeError):
                 pass
 
-        # Verifica duplicata com itens parcelados (mesma descrição base)
+        # Verifica duplicata EXATA com itens parcelados
         desc_norm = re.sub(r'\s+', ' ', desc.upper().strip())
-        is_dup = False
-        for dp in descs_parceladas:
-            if dp in desc_norm or desc_norm in dp:
-                is_dup = True
-                break
-        if is_dup:
+        if desc_norm in descs_parceladas:
             continue
 
         try:
@@ -446,7 +449,9 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             if abs(val) < 0.01:
                 continue
 
-            chave = (desc_norm, "1/1")
+            # Chave inclui data + desc + valor para permitir compras repetidas
+            # no mesmo estabelecimento em datas ou valores diferentes
+            chave = (date_str, desc_norm, valor_str)
             if chave not in chaves_vistas:
                 chaves_vistas.add(chave)
                 resultados.append((desc, "1/1", val))
@@ -487,12 +492,21 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
         # 4. Cortar texto ANTES de "próximas faturas" para não importar parcelas futuras
         texto_fatura_atual = _cortar_texto_antes_proximas_faturas(texto_norm)
 
+        # Debug: mostra quantos chars foram cortados
+        chars_cortados = len(texto_norm) - len(texto_fatura_atual)
+        if chars_cortados > 0:
+            print(f"[DEBUG] Texto cortado: {chars_cortados} caracteres removidos (seção de próximas faturas)")
+        else:
+            print(f"[DEBUG] Nenhum corte aplicado — texto completo ({len(texto_norm)} chars)")
+
         # 5. Extrair parcelas (itens com indicador XX/YY) — apenas da fatura atual
         dados_parcelados = extrair_parcelas(texto_fatura_atual)
+        print(f"[DEBUG] Parcelas encontradas: {len(dados_parcelados)}")
 
         # 6. Extrair itens à vista (sem indicador de parcela) — apenas da fatura atual
         if incluir_avista:
             dados_avista = extrair_itens_avista(texto_fatura_atual, dados_parcelados)
+            print(f"[DEBUG] Itens à vista encontrados: {len(dados_avista)}")
             dados = dados_parcelados + dados_avista
         else:
             dados = dados_parcelados

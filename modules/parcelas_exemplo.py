@@ -240,7 +240,15 @@ class ParcelasManager:
         # Expander para ver o texto extraído (debug)
         if texto_extraido:
             with st.expander(" Ver texto extraído do PDF (debug)"):
-                st.text(texto_extraido[:3000])
+                from utils import normalizar_texto, _cortar_texto_antes_proximas_faturas
+                texto_norm = normalizar_texto(texto_extraido)
+                texto_cortado = _cortar_texto_antes_proximas_faturas(texto_norm)
+                chars_cortados = len(texto_norm) - len(texto_cortado)
+                if chars_cortados > 0:
+                    st.info(f"Texto total: {len(texto_norm)} chars | Cortado em 'próximas faturas': {chars_cortados} chars removidos")
+                else:
+                    st.info(f"Texto total: {len(texto_norm)} chars | Nenhum corte aplicado")
+                st.text(texto_cortado[:5000])
         
         if dados_salvos:
             st.markdown(f"### Banco Detectado: **{banco_detectado}**")
