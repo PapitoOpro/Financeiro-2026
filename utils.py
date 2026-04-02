@@ -165,9 +165,9 @@ def _split_multicolunas(texto):
     """
     linhas_out = []
     for linha in texto.split('\n'):
-        # Divide onde um valor monetário (NNN,NN) é seguido por DD/MM (nova transação)
+        # Divide onde um valor monetário (NNN,NN ou -NNN,NN) é seguido por DD/MM (nova transação)
         partes = re.split(
-            r'(\d{1,3}(?:\.\d{3})*,\d{2})\s+(?=\d{1,2}/\d{1,2}\b)',
+            r'(-?\d{1,3}(?:\.\d{3})*,\d{2})\s+(?=\d{1,2}/\d{1,2}\b)',
             linha
         )
 
@@ -313,6 +313,10 @@ def extrair_parcelas(texto):
         for date_str, desc, parc, valor in regex_secao:
             try:
                 val_limpo = float(valor.replace(".", "").replace(",", "."))
+                atual_p, total_p = map(int, parc.split("/"))
+                # Se atual == total e ambos <= 12, é data - pular
+                if atual_p == total_p and atual_p <= 12:
+                    continue
                 if _is_parcela_valida(parc):
                     _add_resultado(desc.strip(), parc, val_limpo)
             except: continue
@@ -362,8 +366,7 @@ def extrair_parcelas(texto):
 
     # PADRÃO D: linhas com data + descrição + parcela + valor
     # Ex: '08/03 VIVO SP LJ N551 12/12 391,74'
-    # Só pega se o segundo XX/YY tem total > 12 (não pode ser mês) OU
-    # se o total > atual (indica parcela, não data)
+    # Quando atual==total e ambos <= 12, é DATA (ex: 02/02 = fev 2), não parcela
     regex_lead = re.findall(
         r'^\s*(\d{1,2}/\d{1,2})\s+(.+?)\s+(\d{1,2}/\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
         texto, re.IGNORECASE | re.MULTILINE
@@ -371,6 +374,10 @@ def extrair_parcelas(texto):
     for date_str, desc, parc, valor in regex_lead:
         try:
             val_limpo = float(valor.replace(".", "").replace(",", "."))
+            atual_p, total_p = map(int, parc.split("/"))
+            # Se atual == total e ambos cabem como dia/mes, é data - pular
+            if atual_p == total_p and atual_p <= 12:
+                continue
             if _is_parcela_valida(parc):
                 _add_resultado(desc.strip(), parc, val_limpo)
         except: continue
@@ -385,6 +392,10 @@ def extrair_parcelas(texto):
     for desc, parc, valor in regex_relax:
         try:
             val_limpo = float(valor.replace(".", "").replace(",", "."))
+            atual_p, total_p = map(int, parc.split("/"))
+            # Se atual == total e ambos <= 12, é data - pular
+            if atual_p == total_p and atual_p <= 12:
+                continue
             if _is_parcela_valida(parc):
                 _add_resultado(desc.strip(), parc, val_limpo)
         except: continue
@@ -490,10 +501,9 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             continue
 
         # Padrão: DD/MM DESCRICAO VALOR [CATEGORIA] (suporta Itaú multi-coluna)
-        # Usa greedy (.+) para que o valor casado seja o ÚLTIMO padrão numérico
-        # da linha, não um número que faz parte do nome do estabelecimento.
+        # Aceita valores negativos (estornos/créditos) com sinal '-'
         match = re.match(
-            r'(\d{1,2}/\d{1,2})\s+(.+)\s+([\d.]+,\d{2})(?:\s+[A-Z].*|\s*)$',
+            r'(\d{1,2}/\d{1,2})\s+(.+)\s+(-?[\d.]+,\d{2})(?:\s+[A-Z].*|\s*)$',
             linha
         )
 
@@ -514,11 +524,12 @@ def extrair_itens_avista(texto, itens_parcelados=None):
 
         # Se a descrição contém padrão XX/YY com total > 1, é parcela
         # → já foi capturada por extrair_parcelas(), pular
+        # EXCEÇÃO: Se atual == total e ambos <= 12, é data (ex: 02/02 = fev 2)
         parc_in_desc = re.search(r'(\d{1,2})/(\d{1,2})', desc)
         if parc_in_desc:
             try:
                 a, t = int(parc_in_desc.group(1)), int(parc_in_desc.group(2))
-                if t > 1 and a <= t:
+                if t > 1 and a <= t and not (a == t and t <= 12):
                     continue
             except (ValueError, AttributeError):
                 pass
