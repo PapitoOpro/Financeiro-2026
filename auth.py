@@ -189,106 +189,105 @@ class AuthManager:
 
             st.markdown('<div class="login-welcome">Seja bem-vindo.</div>', unsafe_allow_html=True)
             st.markdown(
-                "<div style='text-align: center; margin: 6px 0 12px 0;'>"
+                "<div style='text-align: center; margin: 2px 0 16px 0;'>"
                 "<a href='?guia=1' "
                 "target='_blank' style='color: #3498db; font-size: 0.85em; text-decoration: none;'>"
                 "Guia de Uso do Sistema"
                 "</a></div>",
                 unsafe_allow_html=True
             )
-            st.markdown('---')
-            st.markdown(
-                    "<div style='text-align: center; font-size: 1.1em; color: #ffffff;'>"
-                    "Primeira vez aqui? Faça seu cadastro na aba ao lado!"
-                    "</div>",
-                    unsafe_allow_html=True
-                )
 
-            tab1, tab2 = st.tabs([" Login", " Cadastro"])
+            # Botões Login / Cadastro
+            if "login_modo" not in st.session_state:
+                st.session_state.login_modo = "login"
 
-            with tab1:
-                st.subheader("Faça seu Login")
+            bl, br = st.columns(2)
+            if bl.button("Login", use_container_width=True,
+                         type="primary" if st.session_state.login_modo == "login" else "secondary"):
+                st.session_state.login_modo = "login"
+                st.rerun()
+            if br.button("Cadastro", use_container_width=True,
+                         type="primary" if st.session_state.login_modo == "cadastro" else "secondary"):
+                st.session_state.login_modo = "cadastro"
+                st.rerun()
+
+            if st.session_state.login_modo == "login":
 
                 with st.form("login_form"):
                     email = st.text_input(
-                        " E-mail",
+                        "E-mail",
                         placeholder="Digite seu e-mail"
                     )
                     senha = st.text_input(
-                        " Senha",
+                        "Senha",
                         type="password",
                         placeholder="Digite sua senha"
                     )
 
-                    if st.form_submit_button(" Entrar", width='stretch'):
+                    if st.form_submit_button("Entrar", width='stretch'):
                         if email and senha:
                             sucesso, status = AuthManager.fazer_login(email, senha)
 
                             if sucesso:
-                                st.success(" Login realizado com sucesso!")
+                                st.success("Login realizado com sucesso!")
                                 st.rerun()
                             elif status == "pendente":
                                 st.warning(
-                                    " **Usuário Aguardando Aprovação**\n\n"
+                                    "**Usuário Aguardando Aprovação**\n\n"
                                     "Seu cadastro foi recebido com sucesso, mas ainda está "
                                     "aguardando aprovação do administrador. Em breve você "
                                     "receberá acesso ao sistema."
                                 )
                             elif status == "confirmar_email":
                                 st.warning(
-                                    " **Confirme seu e-mail**\n\n"
+                                    "**Confirme seu e-mail**\n\n"
                                     "Verifique sua caixa de entrada e clique no link de "
                                     "confirmação enviado pelo Supabase."
                                 )
                             else:
-                                st.error(f" {status}")
+                                st.error(f"{status}")
                         else:
-                            st.error(" Preencha todos os campos.")
+                            st.error("Preencha todos os campos.")
 
-                st.markdown("---")
-                
-
-            with tab2:
-                st.subheader("Criar Nova Conta")
+            else:
 
                 with st.form("registro_form"):
                     nome = st.text_input(
-                        " Nome Completo",
+                        "Nome Completo",
                         placeholder="Seu nome completo"
                     )
                     email = st.text_input(
-                        " E-mail",
+                        "E-mail",
                         placeholder="seu@email.com"
                     )
 
                     col_pwd1, col_pwd2 = st.columns(2)
                     with col_pwd1:
                         senha = st.text_input(
-                            " Senha",
+                            "Senha",
                             type="password",
                             placeholder="Min. 6 caracteres"
                         )
                     with col_pwd2:
                         confirm_senha = st.text_input(
-                            " Confirmar",
+                            "Confirmar",
                             type="password",
                             placeholder="Digite novamente"
                         )
 
-                    if st.form_submit_button(" Cadastrar", width='stretch'):
+                    if st.form_submit_button("Cadastrar", width='stretch'):
                         if nome and email and senha and confirm_senha:
                             if '@' not in email or '.' not in email:
-                                st.error(" E-mail inválido.")
+                                st.error("E-mail inválido.")
                             elif senha != confirm_senha:
-                                st.error(" As senhas não conferem.")
+                                st.error("As senhas não conferem.")
                             else:
                                 AuthManager.registrar_usuario(nome, email, senha)
                         else:
-                            st.error(" Preencha todos os campos.")
+                            st.error("Preencha todos os campos.")
 
-            st.markdown("---")
             st.markdown(
-                "<div style='text-align: center; font-size: 0.85em; color: #999;'>"
+                "<div style='text-align: center; font-size: 0.85em; color: #999; margin-top: 16px;'>"
                 "Sistema Financeiro 2026 | Desenvolvido com Streamlit"
                 "</div>",
                 unsafe_allow_html=True
