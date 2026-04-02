@@ -540,13 +540,13 @@ class ParcelasManager:
                     continue
 
             if novos > 0:
-                st.toast(f" {novos} parcelas salvas!", icon="")
+                st.toast(f"{novos} parcelas salvas!")
             if duplicados > 0:
-                st.toast(f" {duplicados} ignoradas (já existiam).", icon="")
+                st.toast(f"{duplicados} ignoradas (já existiam).")
             if erros > 0:
-                st.toast(f" {erros} com erro.", icon="")
+                st.toast(f"{erros} com erro.")
             if novos == 0 and duplicados > 0:
-                st.warning(f" Nenhuma parcela nova importada — {duplicados} já existiam no sistema.")
+                st.warning(f"Nenhuma parcela nova importada — {duplicados} já existiam no sistema.")
 
             ParcelasManager._resetar_estado_pdf()
 
