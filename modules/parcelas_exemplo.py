@@ -218,7 +218,12 @@ class ParcelasManager:
                 st.session_state["ocr_texto"] = texto
                 st.session_state["ocr_dados"] = dados
                 
-                if not dados:
+                if banco == "__PDF_PROTEGIDO__":
+                    st.error(
+                        " Este PDF está protegido por senha. "
+                        "Informe a senha no campo acima e tente novamente."
+                    )
+                elif not dados:
                     st.warning(" Texto extraído, mas nenhum item detectado na fatura.")
                 else:
                     n_avista = sum(1 for _, p, _ in dados if p == "1/1")

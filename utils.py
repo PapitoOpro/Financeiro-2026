@@ -26,7 +26,10 @@ def extrair_texto_pdf(file, senha=None):
                 t = pagina.extract_text()
                 if t:
                     texto += t + "\n"
-    except:
+    except Exception as e:
+        erro_str = str(e).lower()
+        if "password" in erro_str or "encrypted" in erro_str or "decrypt" in erro_str:
+            return "__PDF_PROTEGIDO__"
         pass
 
     # FALLBACK OCR (SE TEXTO VEIO RUIM)
@@ -563,6 +566,9 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
 
         if not texto or texto.strip() == "":
             return "DESCONHECIDO", "", []
+
+        if texto.strip() == "__PDF_PROTEGIDO__":
+            return "__PDF_PROTEGIDO__", "", []
 
         # 2. Normalizar texto (remover acentos para regex funcionar)
         texto_norm = normalizar_texto(texto)
