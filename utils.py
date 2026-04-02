@@ -150,6 +150,25 @@ def parser_generico(texto):
 # ORQUESTRADOR PRINCIPAL
 # ==========================================
 
+def _cortar_texto_antes_proximas_faturas(texto):
+    """Remove tudo a partir de 'Compras parceladas - próximas faturas' e seções similares.
+    
+    Essas seções listam parcelas que cairão em faturas FUTURAS e não devem
+    ser importadas — o sistema já projeta parcelas futuras automaticamente.
+    """
+    padroes_corte = [
+        r'Compras\s+parceladas\s*[-–—]\s*proximas?\s+faturas?',
+        r'Proximas?\s+faturas?',
+        r'Demais\s+faturas?',
+        r'Compras\s+que\s+serao\s+cobradas',
+    ]
+    for padrao in padroes_corte:
+        match = re.search(padrao, texto, re.IGNORECASE)
+        if match:
+            return texto[:match.start()]
+    return texto
+
+
 def _extrair_secao_parceladas(texto):
     """Extrai apenas a seção de compras parceladas de faturas Itaú/similares.
     
@@ -465,12 +484,15 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
         # 3. Detectar banco (usa texto normalizado)
         banco = detectar_banco(texto_norm)
 
-        # 4. Extrair parcelas (itens com indicador XX/YY)
-        dados_parcelados = extrair_parcelas(texto_norm)
+        # 4. Cortar texto ANTES de "próximas faturas" para não importar parcelas futuras
+        texto_fatura_atual = _cortar_texto_antes_proximas_faturas(texto_norm)
 
-        # 5. Extrair itens à vista (sem indicador de parcela)
+        # 5. Extrair parcelas (itens com indicador XX/YY) — apenas da fatura atual
+        dados_parcelados = extrair_parcelas(texto_fatura_atual)
+
+        # 6. Extrair itens à vista (sem indicador de parcela) — apenas da fatura atual
         if incluir_avista:
-            dados_avista = extrair_itens_avista(texto_norm, dados_parcelados)
+            dados_avista = extrair_itens_avista(texto_fatura_atual, dados_parcelados)
             dados = dados_parcelados + dados_avista
         else:
             dados = dados_parcelados
