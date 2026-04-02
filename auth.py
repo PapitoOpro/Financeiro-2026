@@ -280,6 +280,14 @@ class AuthManager:
 
             st.markdown("---")
             st.markdown(
+                "<div style='text-align: center; margin: 10px 0;'>"
+                "<a href='https://github.com/PapitoOpro/Financeiro-2026/blob/main/GUIA_USO.md' "
+                "target='_blank' style='color: #3498db; font-size: 1.05em; text-decoration: none;'>"
+                "Guia de Uso do Sistema"
+                "</a></div>",
+                unsafe_allow_html=True
+            )
+            st.markdown(
                 "<div style='text-align: center; font-size: 0.85em; color: #999;'>"
                 "Sistema Financeiro 2026 | Desenvolvido com Streamlit"
                 "</div>",

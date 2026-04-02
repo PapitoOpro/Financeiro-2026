@@ -17,7 +17,7 @@ class CaixaManager:
     @staticmethod
     def renderizar():
         """Renderiza a página de controle de caixa."""
-        st.header("[ $ ] Controle de Caixa Real")
+        st.header("Controle de Caixa Real")
         
         # 1. FILTROS NO TOPO
         mes_nome = st.segmented_control(
@@ -128,7 +128,7 @@ class CaixaManager:
     @staticmethod
     def _renderizar_formulario(df_contas, df_cats, df_subs=None):
         """Renderiza formulário de novo lançamento com seleção por subcategoria."""
-        st.markdown("**[ + ] Novo Lançamento**")
+        st.markdown("**Novo Lançamento**")
         
         # Monta lista de subcategorias agrupadas: "Subcategoria (Categoria)"
         if df_subs is None:
@@ -203,7 +203,7 @@ class CaixaManager:
     @staticmethod
     def _renderizar_extrato(df_caixa, df_contas, df_cats):
         """Renderiza lista de transações com edição inline."""
-        st.markdown("**[ = ] Extrato de Transações**")
+        st.markdown("**Extrato de Transações**")
         
         if df_caixa.empty:
             st.info("Nenhuma movimentação lançada neste mês.")

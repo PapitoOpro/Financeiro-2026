@@ -36,7 +36,7 @@ class AdminManager:
         """Renderiza o painel administrativo."""
         AdminManager.autenticar_admin()
         
-        st.header("[ ] Painel Administrativo")
+        st.header("Painel Administrativo")
         st.markdown("---")
         
         # Botão para sair do admin

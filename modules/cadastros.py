@@ -13,7 +13,7 @@ class CadastrosManager:
     @staticmethod
     def renderizar():
         """Renderiza a página de cadastros."""
-        st.header("[ ] Cadastros do Sistema")
+        st.header("Cadastros do Sistema")
         st.markdown("Gerencie contas bancárias, categorias macro (orçamento) e subcategorias (operacional).")
 
         tab_cats, tab_contas = st.tabs([" Categorias e Subcategorias", " Bancos e Cartões"])
@@ -228,7 +228,7 @@ class CadastrosManager:
     @staticmethod
     def _secao_contas():
         """Seção de gerenciamento de contas/bancos."""
-        st.markdown("### [ ] Bancos e Cartões")
+        st.markdown("### Bancos e Cartões")
         user_id = db.get_user_id()
 
         with st.form("form_novo_banco", clear_on_submit=True):

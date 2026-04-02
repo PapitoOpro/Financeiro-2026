@@ -158,8 +158,14 @@ st.sidebar.markdown(
     unsafe_allow_html=True
 )
 if st.sidebar.button("🚪  Sair", use_container_width=True):
-    AuthManager.fazer_logout()
-
+    AuthManager.fazer_logout()st.sidebar.markdown(
+    "<div style='text-align: center; margin-top: 8px;'>"
+    "<a href='https://github.com/PapitoOpro/Financeiro-2026/blob/main/GUIA_USO.md' "
+    "target='_blank' style='color: #3498db; font-size: 0.95em; text-decoration: none;'>"
+    "Guia de Uso"
+    "</a></div>",
+    unsafe_allow_html=True
+)
 menu = st.session_state.menu_selecionado
 
 # ==========================================
