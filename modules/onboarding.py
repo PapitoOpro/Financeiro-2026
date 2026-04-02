@@ -127,7 +127,7 @@ class OnboardingManager:
                     </div>
                 """, unsafe_allow_html=True)
 
-                if st.button(f"Selecionar", key=f"sel_perfil_{i}", use_container_width=True):
+                if st.button(f"Selecionar", key=f"sel_perfil_{i}", width='stretch'):
                     st.session_state.onboarding_perfil = nome
                     # Inicializa categorias editáveis
                     st.session_state.onboarding_categorias = [
@@ -138,7 +138,7 @@ class OnboardingManager:
         if st.session_state.get('onboarding_perfil'):
             st.success(f"Perfil selecionado: **{st.session_state.onboarding_perfil}**")
 
-            if st.button("Próximo →", type="primary", use_container_width=True):
+            if st.button("Próximo →", type="primary", width='stretch'):
                 st.session_state.onboarding_step = 2
                 st.rerun()
 
@@ -237,16 +237,16 @@ class OnboardingManager:
         st.markdown("---")
         col_back, col_next = st.columns(2)
         with col_back:
-            if st.button("← Voltar", use_container_width=True):
+            if st.button("← Voltar", width='stretch'):
                 st.session_state.onboarding_step = 1
                 st.rerun()
         with col_next:
             if total_pct == 100:
-                if st.button("Próximo →", type="primary", use_container_width=True):
+                if st.button("Próximo →", type="primary", width='stretch'):
                     st.session_state.onboarding_step = 3
                     st.rerun()
             else:
-                st.button("Próximo →", use_container_width=True, disabled=True,
+                st.button("Próximo →", width='stretch', disabled=True,
                            help="Ajuste os percentuais para somar 100%")
 
     @staticmethod
@@ -284,11 +284,11 @@ class OnboardingManager:
 
         col_back, col_save = st.columns(2)
         with col_back:
-            if st.button("← Voltar", use_container_width=True):
+            if st.button("← Voltar", width='stretch'):
                 st.session_state.onboarding_step = 2
                 st.rerun()
         with col_save:
-            if st.button("Salvar e Começar!", type="primary", use_container_width=True, icon=":material/check:"):
+            if st.button("Salvar e Começar!", type="primary", width='stretch', icon=":material/check:"):
                 OnboardingManager._salvar_configuracao(categorias)
 
     @staticmethod

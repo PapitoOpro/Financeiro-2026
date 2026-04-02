@@ -34,7 +34,7 @@ def _confirmar_exclusao_dialog():
     st.markdown("")
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Sim, excluir", use_container_width=True, type="primary", icon=":material/check:"):
+        if st.button("Sim, excluir", width='stretch', type="primary", icon=":material/check:"):
             user_id = db.get_user_id()
             tipo = st.session_state.get('excluir_tipo', 'item_fatura')
             fatura_ids_afetadas = set()
@@ -62,7 +62,7 @@ def _confirmar_exclusao_dialog():
                     del st.session_state[k]
             st.rerun()
     with col2:
-        if st.button("Cancelar", use_container_width=True, icon=":material/close:"):
+        if st.button("Cancelar", width='stretch', icon=":material/close:"):
             st.session_state.pop('ids_para_excluir', None)
             st.session_state.pop('descs_para_excluir', None)
             st.rerun()
@@ -676,7 +676,7 @@ class ParcelasManager:
 
         if preview_data:
             df_preview_table = pd.DataFrame(preview_data)
-            st.dataframe(df_preview_table, use_container_width=True, hide_index=True)
+            st.dataframe(df_preview_table, width='stretch', hide_index=True)
 
         st.markdown("---")
 
@@ -867,7 +867,7 @@ class ParcelasManager:
             with col_bulk_info:
                 st.info(f" **{len(selected_ids)}** item(ns) selecionado(s)")
             with col_bulk_btn:
-                if st.button("Excluir selecionados", type="primary", use_container_width=True, icon=":material/delete:"):
+                if st.button("Excluir selecionados", type="primary", width='stretch', icon=":material/delete:"):
                     descs = []
                     for sid in selected_ids:
                         row_match = df_itens[df_itens['id'] == sid]

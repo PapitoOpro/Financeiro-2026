@@ -202,11 +202,11 @@ class AuthManager:
                 st.session_state.login_modo = "login"
 
             bl, br = st.columns(2)
-            if bl.button("Login", use_container_width=True,
+            if bl.button("Login", width='stretch',
                          type="primary" if st.session_state.login_modo == "login" else "secondary"):
                 st.session_state.login_modo = "login"
                 st.rerun()
-            if br.button("Cadastro", use_container_width=True,
+            if br.button("Cadastro", width='stretch',
                          type="primary" if st.session_state.login_modo == "cadastro" else "secondary"):
                 st.session_state.login_modo = "cadastro"
                 st.rerun()

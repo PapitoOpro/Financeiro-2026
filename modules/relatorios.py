@@ -193,7 +193,7 @@ class RelatoriosManager:
         with t_previa:
             st.subheader("Prévia do Relatório")
             st.caption(f"{len(df_exibir_renomeado)} registros  |  Período: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}")
-            st.dataframe(df_exibir_renomeado.drop(columns=["valor_num"], errors="ignore"), hide_index=True, use_container_width=True)
+            st.dataframe(df_exibir_renomeado.drop(columns=["valor_num"], errors="ignore"), hide_index=True, width='stretch')
 
             # ── 6. Exportação ───────────────────────────────
             st.divider()
@@ -214,7 +214,7 @@ class RelatoriosManager:
                 data=buf_xlsx.getvalue(),
                 file_name=f"relatorio_{d_ini}_{d_fim}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
+                width='stretch',
                 icon=":material/download:",
             )
 
@@ -227,7 +227,7 @@ class RelatoriosManager:
                 data=pdf_bytes,
                 file_name=f"relatorio_{d_ini}_{d_fim}.pdf",
                 mime="application/pdf",
-                use_container_width=True,
+                width='stretch',
                 icon=":material/picture_as_pdf:",
             )
 
@@ -271,7 +271,7 @@ class RelatoriosManager:
 
         cols_abc = ["Classe", "data_vencimento", "descricao", "Valor Absoluto", "% Acumulada"]
         rename_abc = {"data_vencimento": "Data", "descricao": "Descrição"}
-        st.dataframe(df_abc[cols_abc].rename(columns=rename_abc), hide_index=True, use_container_width=True)
+        st.dataframe(df_abc[cols_abc].rename(columns=rename_abc), hide_index=True, width='stretch')
         st.info("DICA: Focar na negociação dos itens da Classe A traz maior impacto na saúde financeira.")
 
     # ─── Gerar PDF ────────────────────────────────────────────

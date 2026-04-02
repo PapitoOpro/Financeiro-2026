@@ -583,7 +583,7 @@ class ConsultorManager:
             )
             fig.update_traces(textposition='inside', textinfo='percent+label')
             fig.update_layout(showlegend=True, margin=dict(t=20, b=20))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
             # Tabela detalhada
             limites = diag['limites']
@@ -647,7 +647,7 @@ class ConsultorManager:
                 legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
                 margin=dict(t=40, b=20),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         else:
             st.info("Dados insuficientes para evolução mensal.")
 
@@ -726,7 +726,7 @@ class ConsultorManager:
                     pct = float(cat.get('percentual_meta', 0) or 0)
                     st.markdown(f"{icone} **{cat['nome']}**: {pct:.0f}%")
 
-            if st.form_submit_button(" Salvar Limites", use_container_width=True):
+            if st.form_submit_button(" Salvar Limites", width='stretch'):
                 # Salva limites gerais
                 updates = {
                     'pct_gasto_maximo': pct_max,

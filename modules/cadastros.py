@@ -149,7 +149,7 @@ class CadastrosManager:
                 novo_icone = c3.text_input("Ícone", value=icone, key=f"ec_cicon_{cat_id}")
 
                 bc1, bc2 = st.columns(2)
-                if bc1.button(" Salvar", key=f"save_cat_{cat_id}", use_container_width=True):
+                if bc1.button(" Salvar", key=f"save_cat_{cat_id}", width='stretch'):
                     db.executar(
                         "UPDATE categorias SET nome=%s, percentual_meta=%s, icone=%s "
                         "WHERE id=%s AND user_id=%s",
@@ -157,7 +157,7 @@ class CadastrosManager:
                     )
                     st.session_state[edit_flag] = False
                     st.rerun()
-                if bc2.button(" Cancelar", key=f"cancel_cat_{cat_id}", use_container_width=True):
+                if bc2.button(" Cancelar", key=f"cancel_cat_{cat_id}", width='stretch'):
                     st.session_state[edit_flag] = False
                     st.rerun()
 

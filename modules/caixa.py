@@ -244,7 +244,7 @@ class CaixaManager:
             with col_info:
                 st.info(f"**{len(selected_comp_ids)}** lançamento(s) selecionado(s) para compensar")
             with col_btn:
-                if st.button("Compensar selecionados", type="primary", use_container_width=True, key="btn_comp_bulk", icon=":material/check_circle:"):
+                if st.button("Compensar selecionados", type="primary", width='stretch', key="btn_comp_bulk", icon=":material/check_circle:"):
                     hoje = datetime.now().date()
                     user_id = db.get_user_id()
                     for sid in selected_comp_ids:
@@ -312,15 +312,15 @@ class CaixaManager:
                 c_pagar, c_excluir = st.columns([1, 1])
                 with c_pagar:
                     if not is_compensado:
-                        if st.button(f"Pagar Fatura", key=f"pagar_fat_{fatura_id_val}", use_container_width=True, icon=":material/check:"):
+                        if st.button(f"Pagar Fatura", key=f"pagar_fat_{fatura_id_val}", width='stretch', icon=":material/check:"):
                             db.pagar_fatura(fatura_id_val, user_id, datetime.now().date())
                             st.rerun()
                     else:
-                        if st.button(f"Reabrir Fatura", key=f"reabrir_fat_{fatura_id_val}", use_container_width=True, icon=":material/undo:"):
+                        if st.button(f"Reabrir Fatura", key=f"reabrir_fat_{fatura_id_val}", width='stretch', icon=":material/undo:"):
                             db.reabrir_fatura(fatura_id_val, user_id)
                             st.rerun()
                 with c_excluir:
-                    if st.button("Excluir Fatura", key=f"del_fat_{fatura_id_val}", use_container_width=True, icon=":material/delete:"):
+                    if st.button("Excluir Fatura", key=f"del_fat_{fatura_id_val}", width='stretch', icon=":material/delete:"):
                         st.session_state[f"confirm_del_fat_{fatura_id_val}"] = True
                         st.rerun()
 
@@ -532,7 +532,7 @@ class CaixaManager:
                     n_compensado = st.checkbox("Compensado", value=is_compensado, key=f"ec_comp_{rid}")
 
                     btn1, btn2 = st.columns(2)
-                    if btn1.button("Salvar", key=f"ec_save_{rid}", use_container_width=True, icon=":material/save:"):
+                    if btn1.button("Salvar", key=f"ec_save_{rid}", width='stretch', icon=":material/save:"):
                         cid = int(df_contas[df_contas.nome == n_conta].id.values[0])
                         ctid = int(df_cats[df_cats.nome == n_cat].id.values[0])
                         v_final = -n_val if n_tipo == "Saída" else n_val
@@ -545,7 +545,7 @@ class CaixaManager:
                         st.session_state.pop(editing_key, None)
                         st.rerun()
 
-                    if btn2.button("Cancelar", key=f"ec_cancel_{rid}", use_container_width=True, icon=":material/close:"):
+                    if btn2.button("Cancelar", key=f"ec_cancel_{rid}", width='stretch', icon=":material/close:"):
                         st.session_state.pop(editing_key, None)
                         st.rerun()
 

@@ -77,7 +77,7 @@ if st.session_state.get('logado'):
                 "Nome do Banco/Cartão",
                 placeholder="Ex: Nubank, Itaú, Bradesco..."
             )
-            if st.form_submit_button("Cadastrar e Continuar", type="primary", use_container_width=True):
+            if st.form_submit_button("Cadastrar e Continuar", type="primary", width='stretch'):
                 if (nome_conta or "").strip():
                     db.executar(
                         "INSERT INTO contas (nome, user_id) VALUES (%s, %s)",
@@ -190,7 +190,7 @@ for icone, label in MENU_ITEMS:
         f"{label}" if not icone else f"{icone}  {label}",
         key=f"menu_{label}",
         type="primary" if is_active else "secondary",
-        use_container_width=True,
+        width='stretch',
     ):
         st.session_state.menu_selecionado = label
         st.rerun()
@@ -202,7 +202,7 @@ st.sidebar.markdown(
     f'<div class="sidebar-user">👤 <span class="sidebar-user-name">{st.session_state.usuario_nome}</span></div>',
     unsafe_allow_html=True
 )
-if st.sidebar.button("🚪  Sair", use_container_width=True):
+if st.sidebar.button("🚪  Sair", width='stretch'):
     AuthManager.fazer_logout()
 st.sidebar.markdown(
     "<div style='text-align: center; margin-top: 8px;'>"
