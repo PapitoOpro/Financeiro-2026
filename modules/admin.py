@@ -40,7 +40,7 @@ class AdminManager:
         st.markdown("---")
         
         # Botão para sair do admin
-        if st.button(" Sair do Painel Admin"):
+        if st.button("Sair do Painel Admin", icon=":material/logout:"):
             st.session_state.admin_autenticado = False
             st.rerun()
         
@@ -114,9 +114,10 @@ class AdminManager:
         )
         
         if st.button(
-            " Deletar Todos os Dados",
+            "Deletar Todos os Dados",
             key="btn_delete_dados",
-            width='stretch'
+            width='stretch',
+            icon=":material/delete:"
         ):
             with st.spinner("Deletando dados..."):
                 AdminManager._deletar_dados()
@@ -131,9 +132,10 @@ class AdminManager:
         )
         
         if st.button(
-            " Deletar Tudo e Recriar",
+            "Deletar Tudo e Recriar",
             key="btn_nuclear",
-            width='stretch'
+            width='stretch',
+            icon=":material/delete_forever:"
         ):
             with st.spinner("Recriando banco..."):
                 AdminManager._recriar_banco()
@@ -216,7 +218,7 @@ class AdminManager:
                     key="delete_user_select"
                 )
                 
-                if st.button(" Deletar Usuário", width='stretch'):
+                if st.button("Deletar Usuário", width='stretch', icon=":material/delete:"):
                     uid_del = ids[sel]
                     db.executar("DELETE FROM usuarios WHERE id = ?", (uid_del,))
                     st.success(f" Usuário deletado!")

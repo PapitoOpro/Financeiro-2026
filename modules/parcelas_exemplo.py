@@ -34,7 +34,7 @@ def _confirmar_exclusao_dialog():
     st.markdown("")
     col1, col2 = st.columns(2)
     with col1:
-        if st.button(" Sim, excluir", use_container_width=True, type="primary"):
+        if st.button("Sim, excluir", use_container_width=True, type="primary", icon=":material/check:"):
             user_id = db.get_user_id()
             tipo = st.session_state.get('excluir_tipo', 'item_fatura')
             fatura_ids_afetadas = set()
@@ -62,7 +62,7 @@ def _confirmar_exclusao_dialog():
                     del st.session_state[k]
             st.rerun()
     with col2:
-        if st.button(" Cancelar", use_container_width=True):
+        if st.button("Cancelar", use_container_width=True, icon=":material/close:"):
             st.session_state.pop('ids_para_excluir', None)
             st.session_state.pop('descs_para_excluir', None)
             st.rerun()
@@ -81,19 +81,15 @@ class ParcelasManager:
         df_contas = db.buscar(f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome")
         df_cats = db.buscar(f"SELECT * FROM categorias WHERE user_id = {user_id} ORDER BY nome")
         
-        # Adicionamos a tab "Importar CSV" aqui
-        tab1, tab2, tab3, tab4 = st.tabs(["Manual", "Importar PDF", "Importar CSV", "Previsão"])
+        tab1, tab2, tab3 = st.tabs(["Manual", "Importações", "Previsão"])
         
         with tab1:
             ParcelasManager._tab_manual(df_contas, df_cats)
         
         with tab2:
-            ParcelasManager._tab_importar_pdf(df_contas, df_cats)
-            
-        with tab3: # Nova aba
-            ParcelasManager._tab_importar_csv(df_contas, df_cats)
+            ParcelasManager._tab_importacoes(df_contas, df_cats)
         
-        with tab4:
+        with tab3:
             ParcelasManager._tab_previsao()
     
     @staticmethod
@@ -185,6 +181,21 @@ class ParcelasManager:
         st.warning("Por favor, atualize a página manualmente (F5) para aplicar as mudanças.")
     
     @staticmethod
+    def _tab_importacoes(df_contas, df_cats):
+        """Aba unificada de importações — o usuário escolhe PDF ou CSV."""
+        tipo = st.radio(
+            "Selecione o tipo de importação:",
+            ["Importar PDF (OCR)", "Importar CSV"],
+            horizontal=True,
+            key="import_tipo"
+        )
+        st.divider()
+        if tipo == "Importar PDF (OCR)":
+            ParcelasManager._tab_importar_pdf(df_contas, df_cats)
+        else:
+            ParcelasManager._tab_importar_csv(df_contas, df_cats)
+
+    @staticmethod
     def _tab_importar_pdf(df_contas, df_cats):
         """Aba para importar faturas PDF via OCR."""
         st.subheader(" Importador de Faturas via OCR")
@@ -198,7 +209,7 @@ class ParcelasManager:
             st.session_state["ocr_file_name"] = file.name
 
         # 2. Botão de Processamento: Apenas extrai e salva no session_state
-        if file and st.button(" Analisar Fatura"):
+        if file and st.button("Analisar Fatura", icon=":material/search:"):
             with st.spinner("Extraindo dados do PDF..."):
                 banco, texto, dados = processar_fatura(file, senha_pdf)
                 
@@ -277,7 +288,7 @@ class ParcelasManager:
                         format="%.2f"
                     )
                 with c_del:
-                    if st.button("", key=f"audit_del_{idx}"):
+                    if st.button("Excluir", key=f"audit_del_{idx}", icon=":material/delete:"):
                         itens_para_remover.append(idx)
 
             # Remover itens excluídos (processa após o loop para não alterar índices durante iteração)
@@ -313,7 +324,7 @@ class ParcelasManager:
                 data_base = col2.date_input("Vencimento da 1ª Parcela do Lote")
                 cat = st.selectbox("Categoria Padrão", lista_cats)
                 
-                if st.form_submit_button(" Salvar no Banco (Aplicar Trava Anti-Duplicidade)", width='stretch'):
+                if st.form_submit_button("Salvar no Banco (Aplicar Trava Anti-Duplicidade)", width='stretch'):
                     # Monta lista final apenas com itens marcados para importar
                     dados_finais = [
                         (d["desc"], d["parc"], d["valor"])
@@ -354,7 +365,7 @@ class ParcelasManager:
                 opcoes_parc = ["Nenhuma (Extrair da Descrição)"] + list(df_csv.columns)
                 col_parc = c3.selectbox("Coluna da Parcela? (Opcional)", opcoes_parc)
 
-                if st.button(" Extrair Dados do CSV", width='stretch'):
+                if st.button("Extrair Dados do CSV", width='stretch', icon=":material/search:"):
                     with st.spinner("Lendo linhas..."):
                         dados_extraidos = []
                         
@@ -456,7 +467,7 @@ class ParcelasManager:
                 data_base = col2.date_input("Vencimento da 1ª Parcela do Lote")
                 cat = st.selectbox("Categoria Padrão", lista_cats)
                 
-                if st.form_submit_button(" Salvar no Banco (Aplicar Trava Anti-Duplicidade)", width='stretch'):
+                if st.form_submit_button("Salvar no Banco (Aplicar Trava Anti-Duplicidade)", width='stretch'):
                     
                     ParcelasManager._importar_pdf_dados(
                         dados=dados_salvos, 
@@ -717,12 +728,12 @@ class ParcelasManager:
                         # Botão pagar fatura
                         fatura_id_val = f_cartao['fatura_id'].iloc[0] if 'fatura_id' in f_cartao.columns else None
                         if fatura_id_val and status_fatura == 'aberta':
-                            if st.button(f" Pagar Fatura {cartao} {mes_atual.strftime('%m/%Y')}", key=f"pagar_{fatura_id_val}"):
+                            if st.button(f"Pagar Fatura {cartao} {mes_atual.strftime('%m/%Y')}", key=f"pagar_{fatura_id_val}", icon=":material/check:"):
                                 db.pagar_fatura(fatura_id_val, user_id)
                                 st.toast(f" Fatura {cartao} {mes_atual.strftime('%m/%Y')} paga!")
                                 st.rerun()
                         elif fatura_id_val and status_fatura == 'paga':
-                            if st.button(f"↩ Reabrir Fatura {cartao} {mes_atual.strftime('%m/%Y')}", key=f"reabrir_{fatura_id_val}"):
+                            if st.button(f"Reabrir Fatura {cartao} {mes_atual.strftime('%m/%Y')}", key=f"reabrir_{fatura_id_val}", icon=":material/undo:"):
                                 db.reabrir_fatura(fatura_id_val, user_id)
                                 st.toast(f"↩ Fatura reaberta!")
                                 st.rerun()
@@ -748,12 +759,12 @@ class ParcelasManager:
                             )
 
                             with c4:
-                                if st.button("", key=f"edit_item_{r['id']}"):
+                                if st.button("Editar", key=f"edit_item_{r['id']}", icon=":material/edit:"):
                                     key_ed = f"editing_item_{r['id']}"
                                     st.session_state[key_ed] = not st.session_state.get(key_ed, False)
 
                             with c5:
-                                if st.button("", key=f"del_item_{r['id']}"):
+                                if st.button("Excluir", key=f"del_item_{r['id']}", icon=":material/delete:"):
                                     st.session_state['ids_para_excluir'] = [int(r['id'])]
                                     st.session_state['descs_para_excluir'] = [f"{r['descricao']} {parc_label} ({moeda(abs(r['valor']))})"]
                                     st.session_state['excluir_tipo'] = 'item_fatura'
@@ -801,7 +812,7 @@ class ParcelasManager:
             with col_bulk_info:
                 st.info(f" **{len(selected_ids)}** item(ns) selecionado(s)")
             with col_bulk_btn:
-                if st.button(" Excluir selecionados", type="primary", use_container_width=True):
+                if st.button("Excluir selecionados", type="primary", use_container_width=True, icon=":material/delete:"):
                     descs = []
                     for sid in selected_ids:
                         row_match = df_itens[df_itens['id'] == sid]

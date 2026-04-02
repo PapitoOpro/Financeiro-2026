@@ -4,6 +4,7 @@
 
 import streamlit as st
 import pandas as pd
+import io
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from database import db
@@ -13,99 +14,126 @@ from modules.consultor import ConsultorManager, ConsultorEngine
 
 
 class RelatoriosManager:
-    """Renderiza relatórios analíticos (Curva ABC, Extrato do Período, Métricas)."""
+    """Renderiza relatórios analíticos dinâmicos com filtros, prévia e exportação."""
 
+    # ─── Colunas disponíveis para seleção ─────────────────────
+    COLUNAS_DISPONIVEIS = {
+        "Data": "data_vencimento",
+        "Descrição": "descricao",
+        "Valor": "valor",
+        "Categoria": "categoria",
+        "Cartão / Banco": "banco",
+    }
+
+    # ─── Renderização principal ───────────────────────────────
     @staticmethod
     def renderizar():
-        st.header(" Relatórios Analíticos")
+        st.header("Relatórios Analíticos")
 
-        c1, c2 = st.columns(2)
+        # ── 1. Filtros ──────────────────────────────────────
+        st.subheader("Filtros")
+
+        # Período
+        col_d1, col_d2 = st.columns(2)
         hoje = datetime.now().date()
         primeiro_dia_mes = hoje.replace(day=1)
-        d_ini = c1.date_input("Data Início", value=primeiro_dia_mes)
-        d_fim = c2.date_input("Data Fim", value=hoje)
+        d_ini = col_d1.date_input("Data Início", value=primeiro_dia_mes)
+        d_fim = col_d2.date_input("Data Fim", value=hoje)
 
         if d_ini > d_fim:
-            st.error(" A data de início não pode ser maior que a data de fim.")
+            st.error("A data de início não pode ser maior que a data de fim.")
             return
 
-        # Query base — transações CAIXA
+        # Colunas a exibir
+        todas_colunas = list(RelatoriosManager.COLUNAS_DISPONIVEIS.keys())
+        colunas_selecionadas = st.multiselect(
+            "Colunas do relatório",
+            todas_colunas,
+            default=todas_colunas,
+            help="Escolha quais colunas deseja no relatório.",
+        )
+
+        if not colunas_selecionadas:
+            st.warning("Selecione ao menos uma coluna.")
+            return
+
+        # ── 2. Buscar dados ─────────────────────────────────
         user_id = db.get_user_id()
-        q = f"""
-            SELECT t.data_vencimento, t.descricao, t.valor, cat.nome AS categoria, c.nome AS banco
+
+        q_caixa = f"""
+            SELECT t.data_vencimento, t.descricao, t.valor,
+                   cat.nome AS categoria, c.nome AS banco
             FROM transacoes t
             LEFT JOIN categorias cat ON t.categoria_id = cat.id
             LEFT JOIN contas c ON t.conta_id = c.id
             WHERE t.user_id = {user_id}
-            AND (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL)
-            AND t.data_vencimento BETWEEN '{d_ini}' AND '{d_fim}'
+              AND (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL)
+              AND t.fatura_id IS NULL
+              AND t.data_vencimento BETWEEN '{d_ini}' AND '{d_fim}'
         """
+        df = db.buscar(q_caixa)
 
-        df_an = db.buscar(q)
-
-        # Inclui itens de fatura (gastos cartão) no relatório
         q_cartao = f"""
-            SELECT f.data_vencimento, i.descricao, -ABS(i.valor) as valor,
+            SELECT f.data_vencimento, i.descricao, -ABS(i.valor) AS valor,
                    cat.nome AS categoria, c.nome AS banco
             FROM itens_fatura i
             JOIN faturas f ON i.fatura_id = f.id
             LEFT JOIN categorias cat ON i.categoria_id = cat.id
             LEFT JOIN contas c ON f.conta_id = c.id
             WHERE i.user_id = {user_id}
-            AND f.data_vencimento BETWEEN '{d_ini}' AND '{d_fim}'
+              AND f.data_vencimento BETWEEN '{d_ini}' AND '{d_fim}'
         """
         df_cartao = db.buscar(q_cartao)
         if not df_cartao.empty and not df_cartao.isna().all(axis=None):
-            df_an = pd.concat([df_an, df_cartao.dropna(how='all')], ignore_index=True)
+            df = pd.concat([df, df_cartao.dropna(how='all')], ignore_index=True)
 
-        if df_an.empty:
-            st.info("ℹ Nenhuma movimentação registrada neste período.")
-            return
-
-        # Map lowercase column -> original to lidar com alias/case diferentes
-        cols_map = {c.lower(): c for c in df_an.columns}
-
-        # Detecta coluna de data de forma resiliente
-        date_col = None
-        for candidate in ('data_vencimento', 'data', 'date', 'data_venc'):
-            if candidate in cols_map:
-                date_col = cols_map[candidate]
-                break
-        if date_col is None:
-            date_col = next((c for c in df_an.columns if 'data' in c.lower() or 'date' in c.lower()), None)
-
-        if date_col is None:
-            # Tenta inferir por conversão
-            for c in df_an.columns:
-                try:
-                    pd.to_datetime(df_an[c].dropna().iloc[:5])
-                    date_col = c
-                    break
-                except Exception:
-                    continue
-
-        if date_col is None:
-            st.warning('Não foi possível identificar a coluna de data. Mostrando dados brutos.')
-            st.dataframe(df_an, width='stretch')
+        if df.empty:
+            st.info("Nenhuma movimentação registrada neste período.")
             return
 
         # Converte coluna de data
-        df_an[date_col] = pd.to_datetime(df_an[date_col])
+        df["data_vencimento"] = pd.to_datetime(df["data_vencimento"])
 
-        # Detecta demais colunas
-        desc_col = cols_map.get('descricao') or next((v for k, v in cols_map.items() if 'descr' in k), None)
-        valor_col = cols_map.get('valor') or next((v for k, v in cols_map.items() if 'valor' in k), None)
-        banco_col = cols_map.get('banco') or next((v for k, v in cols_map.items() if 'banco' in k or 'conta' in k or 'cartao' in k), None)
-        categoria_col = cols_map.get('categoria') or next((v for k, v in cols_map.items() if 'categoria' in k), None)
+        # ── 3. Filtros Adicionais (Categoria / Banco) ───────
+        with st.expander("Filtros adicionais", expanded=False):
+            fc1, fc2, fc3 = st.columns(3)
 
-        if valor_col is None:
-            st.warning('Não foi possível identificar a coluna de valores. Mostrando dados brutos.')
-            st.dataframe(df_an, width='stretch')
+            # Categoria
+            categorias_unicas = sorted(df["categoria"].dropna().unique().tolist())
+            filtro_categorias = fc1.multiselect(
+                "Categorias", categorias_unicas, default=categorias_unicas
+            )
+
+            # Banco / Cartão
+            bancos_unicos = sorted(df["banco"].dropna().unique().tolist())
+            filtro_bancos = fc2.multiselect(
+                "Cartão / Banco", bancos_unicos, default=bancos_unicos
+            )
+
+            # Tipo (Entrada / Saída)
+            tipo_opcoes = ["Todos", "Somente Entradas", "Somente Saídas"]
+            filtro_tipo = fc3.radio("Tipo", tipo_opcoes, horizontal=True)
+
+        # Aplica filtros
+        mask = pd.Series(True, index=df.index)
+        if filtro_categorias:
+            mask &= df["categoria"].isin(filtro_categorias) | df["categoria"].isna()
+        if filtro_bancos:
+            mask &= df["banco"].isin(filtro_bancos) | df["banco"].isna()
+        if filtro_tipo == "Somente Entradas":
+            mask &= df["valor"] > 0
+        elif filtro_tipo == "Somente Saídas":
+            mask &= df["valor"] < 0
+
+        df_filtrado = df[mask].copy()
+
+        if df_filtrado.empty:
+            st.warning("Nenhum registro encontrado com os filtros selecionados.")
             return
 
-        # Métricas
-        ent = df_an[df_an[valor_col] > 0][valor_col].sum() if not df_an.empty else 0
-        sai = abs(df_an[df_an[valor_col] < 0][valor_col].sum()) if not df_an.empty else 0
+        # ── 4. Métricas ─────────────────────────────────────
+        ent = df_filtrado[df_filtrado["valor"] > 0]["valor"].sum()
+        sai = abs(df_filtrado[df_filtrado["valor"] < 0]["valor"].sum())
         bal = ent - sai
 
         st.markdown(f'''
@@ -116,92 +144,81 @@ class RelatoriosManager:
                 <div style="background:#f1f2f6; color:#333333; padding:15px; border-radius:10px; flex:1; border-left:5px solid #e74c3c;">
                     <small>Saídas</small><br><strong style="font-size: 22px; color: #c0392b;">-{moeda(sai)}</strong>
                 </div>
-                <div style="background:{'#2ecc71' if bal >=0 else '#e74c3c'}; color:#ffffff; padding:15px; border-radius:10px; flex:1;">
+                <div style="background:{'#2ecc71' if bal >= 0 else '#e74c3c'}; color:#ffffff; padding:15px; border-radius:10px; flex:1;">
                     <small>Balanço</small><br><strong style="font-size: 22px;">{moeda(bal)}</strong>
                 </div>
             </div>
         ''', unsafe_allow_html=True)
 
-        # Abas
-        t_extrato, t_abc, t_consultor = st.tabs([
-            "[+] Extrato do Período",
-            "[>] Curva ABC (Data e Valor)",
-            "[] Consultor Financeiro",
+        # ── 5. Abas: Prévia / Curva ABC / Consultor ─────────
+        t_previa, t_abc, t_consultor = st.tabs([
+            "Prévia do Relatório",
+            "Curva ABC",
+            "Consultor Financeiro",
         ])
 
-        with t_extrato:
-            df_extrato = df_an.copy()
-            df_extrato[date_col] = pd.to_datetime(df_extrato[date_col]).dt.strftime('%d/%m/%Y')
-            df_extrato[f'{valor_col}_fmt'] = df_extrato[valor_col].apply(moeda)
+        # Monta DataFrame de exibição com colunas selecionadas
+        col_map = RelatoriosManager.COLUNAS_DISPONIVEIS
+        colunas_internas = [col_map[c] for c in colunas_selecionadas]
 
-            visible_cols = [date_col]
-            if desc_col:
-                visible_cols.append(desc_col)
-            if banco_col:
-                visible_cols.append(banco_col)
-            if categoria_col:
-                visible_cols.append(categoria_col)
-            visible_cols.append(f'{valor_col}_fmt')
+        df_exibir = df_filtrado[colunas_internas].copy()
 
-            # Renomeia colunas para exibição amigável
-            rename_map = {
-                date_col: 'Data',
-                f'{valor_col}_fmt': 'Valor',
-            }
-            if desc_col:
-                rename_map[desc_col] = 'Descrição'
-            if banco_col:
-                rename_map[banco_col] = 'Cartão / Banco'
-            if categoria_col:
-                rename_map[categoria_col] = 'Categoria'
+        # Formata para exibição
+        rename = {v: k for k, v in col_map.items() if k in colunas_selecionadas}
 
-            st.dataframe(df_extrato[visible_cols].rename(columns=rename_map), hide_index=True, width='stretch')
+        if "data_vencimento" in df_exibir.columns:
+            df_exibir["data_vencimento"] = df_exibir["data_vencimento"].dt.strftime("%d/%m/%Y")
+        if "valor" in df_exibir.columns:
+            df_exibir["valor_num"] = df_exibir["valor"]  # guarda numérico para export
+            df_exibir["valor"] = df_exibir["valor"].apply(moeda)
+
+        df_exibir_renomeado = df_exibir.rename(columns=rename)
+
+        with t_previa:
+            st.subheader("Prévia do Relatório")
+            st.caption(f"{len(df_exibir_renomeado)} registros  |  Período: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}")
+            st.dataframe(df_exibir_renomeado.drop(columns=["valor_num"], errors="ignore"), hide_index=True, use_container_width=True)
+
+            # ── 6. Exportação ───────────────────────────────
+            st.divider()
+            st.subheader("Exportar Relatório")
+            ec1, ec2 = st.columns(2)
+
+            # --- Excel ---
+            df_export = df_exibir.copy()
+            if "valor_num" in df_export.columns:
+                df_export["valor"] = df_export["valor_num"]
+                df_export.drop(columns=["valor_num"], inplace=True)
+            df_export = df_export.rename(columns=rename)
+
+            buf_xlsx = io.BytesIO()
+            df_export.to_excel(buf_xlsx, index=False, engine="openpyxl")
+            ec1.download_button(
+                "Baixar Excel",
+                data=buf_xlsx.getvalue(),
+                file_name=f"relatorio_{d_ini}_{d_fim}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                icon=":material/download:",
+            )
+
+            # --- PDF ---
+            pdf_bytes = RelatoriosManager._gerar_pdf(
+                df_export, d_ini, d_fim, ent, sai, bal
+            )
+            ec2.download_button(
+                "Baixar PDF",
+                data=pdf_bytes,
+                file_name=f"relatorio_{d_ini}_{d_fim}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                icon=":material/picture_as_pdf:",
+            )
 
         with t_abc:
-            st.markdown("**Curva ABC: Descubra quais despesas consomem mais do seu orçamento.**")
-
-            df_saidas = df_an[df_an[valor_col] < 0].copy()
-            if df_saidas.empty:
-                st.warning("Nenhuma saída (despesa) registrada neste período para gerar a Curva ABC.")
-                return
-
-            df_saidas['Valor Absoluto'] = df_saidas[valor_col].abs()
-            df_abc = df_saidas.sort_values(by='Valor Absoluto', ascending=False).reset_index(drop=True)
-            df_abc['% Acumulada'] = (df_abc['Valor Absoluto'].cumsum() / df_abc['Valor Absoluto'].sum()) * 100
-
-            def classificar_abc(pct):
-                if pct <= 80:
-                    return '[ Classe A ] (Até 80%)'
-                if pct <= 95:
-                    return '[ Classe B ] (80% a 95%)'
-                return '[ Classe C ] (95% a 100%)'
-
-            df_abc['Classe'] = df_abc['% Acumulada'].apply(classificar_abc)
-            if date_col in df_abc.columns:
-                df_abc[date_col] = pd.to_datetime(df_abc[date_col]).dt.strftime('%d/%m/%Y')
-
-            df_abc['Valor Absoluto'] = df_abc['Valor Absoluto'].apply(moeda)
-            df_abc['% Acumulada'] = df_abc['% Acumulada'].apply(lambda x: f"{x:.2f}%")
-
-            cols_abc = ['Classe']
-            if date_col in df_abc.columns:
-                cols_abc.append(date_col)
-            if desc_col:
-                cols_abc.append(desc_col)
-            cols_abc.extend(['Valor Absoluto', '% Acumulada'])
-
-            # Renomeia colunas para exibição amigável
-            rename_abc = {}
-            if date_col in df_abc.columns:
-                rename_abc[date_col] = 'Data'
-            if desc_col:
-                rename_abc[desc_col] = 'Descrição'
-
-            st.dataframe(df_abc[cols_abc].rename(columns=rename_abc), hide_index=True, width='stretch')
-            st.info("[ DICA ] Focar na negociação dos itens da Classe A traz maior impacto na saúde financeira.")
+            RelatoriosManager._render_curva_abc(df_filtrado)
 
         with t_consultor:
-            # Usa o mês do filtro de data início para o diagnóstico
             mes_consultor = d_ini.month
             ano_consultor = d_ini.year
             diag = ConsultorEngine.diagnostico_completo(ano_consultor, mes_consultor)
@@ -209,3 +226,81 @@ class RelatoriosManager:
             ConsultorManager._renderizar_alertas(diag['alertas'])
             st.markdown("---")
             ConsultorManager._renderizar_diagnostico(diag)
+
+    # ─── Curva ABC ────────────────────────────────────────────
+    @staticmethod
+    def _render_curva_abc(df):
+        st.markdown("**Curva ABC: Descubra quais despesas consomem mais do seu orçamento.**")
+
+        df_saidas = df[df["valor"] < 0].copy()
+        if df_saidas.empty:
+            st.warning("Nenhuma saída (despesa) registrada neste período para gerar a Curva ABC.")
+            return
+
+        df_saidas["Valor Absoluto"] = df_saidas["valor"].abs()
+        df_abc = df_saidas.sort_values(by="Valor Absoluto", ascending=False).reset_index(drop=True)
+        df_abc["% Acumulada"] = (df_abc["Valor Absoluto"].cumsum() / df_abc["Valor Absoluto"].sum()) * 100
+
+        def classificar_abc(pct):
+            if pct <= 80:
+                return "Classe A (Até 80%)"
+            if pct <= 95:
+                return "Classe B (80%-95%)"
+            return "Classe C (95%-100%)"
+
+        df_abc["Classe"] = df_abc["% Acumulada"].apply(classificar_abc)
+        df_abc["data_vencimento"] = pd.to_datetime(df_abc["data_vencimento"]).dt.strftime("%d/%m/%Y")
+        df_abc["Valor Absoluto"] = df_abc["Valor Absoluto"].apply(moeda)
+        df_abc["% Acumulada"] = df_abc["% Acumulada"].apply(lambda x: f"{x:.2f}%")
+
+        cols_abc = ["Classe", "data_vencimento", "descricao", "Valor Absoluto", "% Acumulada"]
+        rename_abc = {"data_vencimento": "Data", "descricao": "Descrição"}
+        st.dataframe(df_abc[cols_abc].rename(columns=rename_abc), hide_index=True, use_container_width=True)
+        st.info("DICA: Focar na negociação dos itens da Classe A traz maior impacto na saúde financeira.")
+
+    # ─── Gerar PDF ────────────────────────────────────────────
+    @staticmethod
+    def _gerar_pdf(df, d_ini, d_fim, ent, sai, bal):
+        """Gera PDF do relatório usando fpdf2."""
+        from fpdf import FPDF
+
+        pdf = FPDF(orientation="L", format="A4")
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+
+        # Título
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.cell(0, 10, "Relatorio Financeiro", ln=True, align="C")
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(0, 6, f"Periodo: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}", ln=True, align="C")
+        pdf.ln(4)
+
+        # Resumo
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.cell(90, 8, f"Entradas: {moeda(ent)}")
+        pdf.cell(90, 8, f"Saidas: -{moeda(sai)}")
+        pdf.cell(0, 8, f"Balanco: {moeda(bal)}", ln=True)
+        pdf.ln(4)
+
+        # Tabela
+        colunas = list(df.columns)
+        n_cols = len(colunas)
+        page_w = pdf.w - 20  # margens
+        col_w = page_w / n_cols if n_cols else page_w
+
+        # Cabeçalho
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_fill_color(220, 220, 220)
+        for col in colunas:
+            pdf.cell(col_w, 7, str(col)[:25], border=1, fill=True, align="C")
+        pdf.ln()
+
+        # Dados
+        pdf.set_font("Helvetica", "", 8)
+        for _, row in df.iterrows():
+            for col in colunas:
+                val = str(row[col]) if pd.notna(row[col]) else ""
+                pdf.cell(col_w, 6, val[:30], border=1, align="C")
+            pdf.ln()
+
+        return bytes(pdf.output())

@@ -14,3 +14,5 @@ pdf2image
 pdfplumber
 opencv-python-headless
 sqlalchemy
+openpyxl
+fpdf2
