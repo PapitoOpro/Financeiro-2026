@@ -10,7 +10,7 @@ from dateutil.relativedelta import relativedelta
 from database import db
 import plotly.express as px
 import plotly.graph_objects as go
-from utils import moeda, processar_fatura, get_cor_valor, get_cor_saldo
+from utils import moeda, processar_fatura, processar_texto_colado, get_cor_valor, get_cor_saldo
 from typing import Any, cast
 
 
@@ -265,6 +265,33 @@ class ParcelasManager:
                 else:
                     st.info(f"Texto total: {len(texto_norm)} chars | Nenhum corte aplicado")
                 st.text(texto_processado[:5000])
+
+            # Fallback: colar texto manualmente quando a extração automática falha
+            with st.expander("Colar texto do PDF manualmente (se a extração falhou)"):
+                st.caption(
+                    "Se a extração automática não encontrou todos os itens, "
+                    "abra o PDF, selecione o texto dos lançamentos com o mouse, "
+                    "copie (Ctrl+C) e cole abaixo."
+                )
+                texto_colado = st.text_area(
+                    "Cole o texto dos lançamentos aqui:",
+                    height=200,
+                    key="ocr_texto_colado",
+                )
+                if texto_colado and st.button("Reprocessar com texto colado", icon=":material/refresh:"):
+                    banco_c, texto_c, dados_c, metodo_c = processar_texto_colado(texto_colado)
+                    if dados_c:
+                        st.session_state["ocr_banco"] = banco_c
+                        st.session_state["ocr_texto"] = texto_c
+                        st.session_state["ocr_dados"] = dados_c
+                        st.session_state["ocr_metodo"] = metodo_c
+                        st.session_state.pop("ocr_dados_editaveis", None)
+                        n_av = sum(1 for _, p, _ in dados_c if p == "1/1")
+                        n_pc = len(dados_c) - n_av
+                        st.success(f"{len(dados_c)} itens encontrados! ({n_pc} parcelado(s), {n_av} à vista)")
+                        ParcelasManager._safe_rerun()
+                    else:
+                        st.warning("Nenhum item detectado no texto colado.")
         
         if dados_salvos:
             st.markdown(f"### Banco Detectado: **{banco_detectado}**")

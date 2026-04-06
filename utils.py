@@ -714,6 +714,30 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
         except:
             pass
 
+        # Candidato D: crop por colunas (recorta página em metade esq/dir)
+        # Essencial para Itaú que usa layout 2 colunas onde extract_text()
+        # mescla as colunas e perde transações da coluna esquerda.
+        try:
+            file.seek(0)
+            open_kwargs = {"password": senha_pdf} if senha_pdf else {}
+            texto_crop_raw = ""
+            with pdfplumber.open(file, **open_kwargs) as pdf_crop:
+                for pagina in pdf_crop.pages:
+                    w = pagina.width
+                    h = pagina.height
+                    # Metade esquerda (compras e saques no Itaú)
+                    left = pagina.crop((0, 0, w * 0.52, h))
+                    t_left = left.extract_text() or ""
+                    # Metade direita (produtos e serviços no Itaú)
+                    right = pagina.crop((w * 0.52, 0, w, h))
+                    t_right = right.extract_text() or ""
+                    texto_crop_raw += t_left + "\n" + t_right + "\n"
+            if texto_crop_raw.strip():
+                texto_d = _preparar_candidato(texto_crop_raw)
+                candidatos.append(("crop_columns", texto_d, _contar_transacoes(texto_d)))
+        except:
+            pass
+
         # 5. Escolhe o candidato com MAIS transações DD/MM
         candidatos.sort(key=lambda c: c[2], reverse=True)
         melhor_nome, texto_fatura_atual, n_tx = candidatos[0]
@@ -737,6 +761,34 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
     except Exception as e:
         print("Erro ao processar fatura:", e)
         return "ERRO", "", [], ""
+
+
+def processar_texto_colado(texto_raw, incluir_avista=True):
+    """Processa texto colado manualmente (copiado do PDF pelo usuário).
+
+    Quando a extração automática falha em PDFs multi-coluna, o usuário
+    pode selecionar e copiar o texto do PDF e colar aqui.
+
+    Returns:
+        Tupla (banco_detectado, texto_normalizado, lista_de_itens, metodo)
+    """
+    if not texto_raw or not texto_raw.strip():
+        return "DESCONHECIDO", "", [], "texto_colado"
+
+    texto_norm = normalizar_texto(texto_raw)
+    banco = detectar_banco(texto_norm)
+    texto_cortado = _cortar_texto_antes_proximas_faturas(texto_norm)
+    texto_processado = _split_multicolunas(texto_cortado)
+
+    dados_parcelados = extrair_parcelas(texto_processado)
+
+    if incluir_avista:
+        dados_avista = extrair_itens_avista(texto_processado, dados_parcelados)
+        dados = dados_parcelados + dados_avista
+    else:
+        dados = dados_parcelados
+
+    return banco, texto_norm, dados, "texto_colado"
 
 
 # ==========================================
