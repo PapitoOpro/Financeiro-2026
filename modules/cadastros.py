@@ -209,14 +209,14 @@ class CadastrosManager:
                                 "Nome", value=sub['nome'], key=f"es_name_{sub_id}"
                             )
                             bs1, bs2 = st.columns(2)
-                            if bs1.button("", key=f"save_sub_{sub_id}"):
+                            if bs1.button("", key=f"save_sub_{sub_id}", icon=":material/check:", help="Salvar"):
                                 db.executar(
                                     "UPDATE subcategorias SET nome=%s WHERE id=%s AND user_id=%s",
                                     (novo_sub_nome.strip(), sub_id, user_id)
                                 )
                                 st.session_state[edit_sub_flag] = False
                                 st.rerun()
-                            if bs2.button("", key=f"cancel_sub_{sub_id}"):
+                            if bs2.button("", key=f"cancel_sub_{sub_id}", icon=":material/close:", help="Cancelar"):
                                 st.session_state[edit_sub_flag] = False
                                 st.rerun()
                         else:
