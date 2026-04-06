@@ -174,7 +174,7 @@ class CadastrosManager:
                     "Nova subcategoria", placeholder="Ex: Padaria, Uber, Netflix...",
                     key=f"new_sub_{cat_id}", label_visibility="collapsed"
                 )
-                if col_sub_btn.button("", key=f"add_sub_{cat_id}"):
+                if col_sub_btn.button("", key=f"add_sub_{cat_id}", icon=":material/add:", help="Inserir subcategoria"):
                     if (nova_sub or "").strip():
                         db.executar(
                             "INSERT INTO subcategorias (nome, categoria_id, ativa, user_id) "
