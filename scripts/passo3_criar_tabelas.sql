@@ -21,6 +21,7 @@ CREATE TABLE categorias (
     nome TEXT NOT NULL,
     percentual_meta NUMERIC DEFAULT 0,
     icone TEXT DEFAULT '📁',
+    tipo TEXT DEFAULT 'saida',
     ativa BOOLEAN DEFAULT TRUE,
     user_id INTEGER REFERENCES usuarios(id)
 );

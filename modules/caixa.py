@@ -47,7 +47,8 @@ class CaixaManager:
         
         # Carrega todas as subcategorias ativas
         df_subs = db.buscar(f"""
-            SELECT s.id, s.nome, s.categoria_id, c.nome as categoria_nome
+            SELECT s.id, s.nome, s.categoria_id, c.nome as categoria_nome,
+                   COALESCE(c.tipo, 'saida') as categoria_tipo
             FROM subcategorias s
             JOIN categorias c ON s.categoria_id = c.id
             WHERE s.user_id = {user_id} AND s.ativa = TRUE
@@ -133,15 +134,29 @@ class CaixaManager:
         # Monta lista de subcategorias agrupadas: "Subcategoria (Categoria)"
         if df_subs is None:
             df_subs = pd.DataFrame()
-        tem_subs = not df_subs.empty
         
+        # Tipo FORA do form para permitir filtragem dinâmica de subcategorias
+        c_tipo1, c_tipo2 = st.columns(2)
+        tipo = c_tipo1.radio("Tipo", ["Entrada", "Saída"], key="caixa_tipo_lancamento")
+        data_pg = c_tipo2.date_input("Data", datetime.now(), key="caixa_data_lancamento")
+
+        # Filtra subcategorias pelo tipo selecionado
+        tipo_filtro = "entrada" if tipo == "Entrada" else "saida"
+        if not df_subs.empty and 'categoria_tipo' in df_subs.columns:
+            df_subs_filtrado = df_subs[df_subs['categoria_tipo'] == tipo_filtro].reset_index(drop=True)
+        else:
+            df_subs_filtrado = df_subs
+        tem_subs = not df_subs_filtrado.empty
+
+        # Filtra categorias pelo tipo selecionado
+        if not df_cats.empty and 'tipo' in df_cats.columns:
+            df_cats_filtrado = df_cats[df_cats['tipo'] == tipo_filtro].reset_index(drop=True)
+        else:
+            df_cats_filtrado = df_cats
+
         with st.form("form_caixa", clear_on_submit=True):
             desc_r = st.text_input("Descrição")
             val_r = st.number_input("Valor (R$)", min_value=0.0)
-            
-            c_tipo1, c_tipo2 = st.columns(2)
-            tipo = c_tipo1.radio("Tipo", ["Entrada", "Saída"])
-            data_pg = c_tipo2.date_input("Data", datetime.now())
             
             conta_r = st.selectbox(
                 "Conta / Banco",
@@ -153,7 +168,7 @@ class CaixaManager:
             cat_id_sel = None
             
             if tem_subs:
-                opcoes_sub = df_subs.apply(
+                opcoes_sub = df_subs_filtrado.apply(
                     lambda r: f"{r['nome']} ({r['categoria_nome']})", axis=1
                 ).tolist()
                 # Adiciona opção de "Sem subcategoria"
@@ -164,15 +179,15 @@ class CaixaManager:
                 
                 if sel_sub != "(Selecionar categoria diretamente)":
                     idx = opcoes_sub.index(sel_sub)
-                    sub_id_sel = int(df_subs.iloc[idx]['id'])
-                    cat_id_sel = int(df_subs.iloc[idx]['categoria_id'])
-                    st.caption(f"→ Categoria: **{df_subs.iloc[idx]['categoria_nome']}**")
+                    sub_id_sel = int(df_subs_filtrado.iloc[idx]['id'])
+                    cat_id_sel = int(df_subs_filtrado.iloc[idx]['categoria_id'])
+                    st.caption(f"→ Categoria: **{df_subs_filtrado.iloc[idx]['categoria_nome']}**")
             
             # Fallback: seleção direta de categoria (se não tem subs ou escolheu "direto")
             if cat_id_sel is None:
                 cat_r = st.selectbox(
                     "Categoria",
-                    df_cats['nome'] if not df_cats.empty else [""]
+                    df_cats_filtrado['nome'] if not df_cats_filtrado.empty else [""]
                 )
             else:
                 cat_r = None
@@ -188,7 +203,7 @@ class CaixaManager:
                     if cat_id_sel is not None:
                         ctid = cat_id_sel
                     else:
-                        ctid = int(df_cats[df_cats.nome == cat_r].id.values[0])
+                        ctid = int(df_cats_filtrado[df_cats_filtrado.nome == cat_r].id.values[0])
                     
                     valor_final = -val_r if "Saída" in tipo else val_r
                     data_comp = data_pg if compensado_r else None

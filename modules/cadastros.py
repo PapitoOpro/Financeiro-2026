@@ -60,20 +60,22 @@ class CadastrosManager:
         # Nova Categoria Macro 
         st.markdown("### Categorias Macro (Orçamento)")
         with st.form("form_nova_cat_macro", clear_on_submit=True):
-            c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
+            c1, c2, c3, c_tipo, c4 = st.columns([3, 1, 1, 1.2, 1])
             n_nome = c1.text_input("Nome da Categoria", placeholder="Ex: Moradia, Lazer...",
                                    label_visibility="collapsed")
             n_pct = c2.number_input("Meta %", min_value=0, max_value=100, value=0,
                                     label_visibility="collapsed")
             n_icone = c3.text_input("Ícone", value="", label_visibility="collapsed")
+            n_tipo = c_tipo.selectbox("Tipo", ["Saída", "Entrada"], label_visibility="collapsed")
 
             if c4.form_submit_button("Adicionar"):
                 if (n_nome or "").strip():
+                    tipo_val = "entrada" if n_tipo == "Entrada" else "saida"
                     db.executar(
-                        "INSERT INTO categorias (nome, percentual_meta, icone, ativa, user_id) "
-                        "VALUES (%s, %s, %s, TRUE, %s) ON CONFLICT (nome, user_id) DO UPDATE "
-                        "SET percentual_meta = EXCLUDED.percentual_meta, icone = EXCLUDED.icone",
-                        (n_nome.strip(), n_pct, n_icone.strip(), user_id)
+                        "INSERT INTO categorias (nome, percentual_meta, icone, tipo, ativa, user_id) "
+                        "VALUES (%s, %s, %s, %s, TRUE, %s) ON CONFLICT (nome, user_id) DO UPDATE "
+                        "SET percentual_meta = EXCLUDED.percentual_meta, icone = EXCLUDED.icone, tipo = EXCLUDED.tipo",
+                        (n_nome.strip(), n_pct, n_icone.strip(), tipo_val, user_id)
                     )
                     st.rerun()
                 else:
@@ -115,13 +117,22 @@ class CadastrosManager:
             if edit_flag not in st.session_state:
                 st.session_state[edit_flag] = False
 
+            tipo_cat = cat.get('tipo', 'saida') or 'saida'
+            tipo_label = "Entrada" if tipo_cat == 'entrada' else "Saída"
+            tipo_cor = "#2ecc71" if tipo_cat == 'entrada' else "#e74c3c"
+
             # Header da Categoria 
             if not st.session_state[edit_flag]:
-                col_icon, col_nome, col_pct, col_edit, col_archive = st.columns([0.5, 3, 1.5, 0.5, 0.5])
+                col_icon, col_nome, col_tipo_badge, col_pct, col_edit, col_archive = st.columns([0.5, 2.5, 1, 1.5, 0.5, 0.5])
 
                 col_icon.markdown(f"<div style='font-size:22px; padding-top:5px;'>{icone}</div>",
                                   unsafe_allow_html=True)
                 col_nome.markdown(f"**{cat['nome']}**")
+                col_tipo_badge.markdown(
+                    f"<span style='background:{tipo_cor}; color:white; padding:2px 8px; "
+                    f"border-radius:4px; font-size:11px;'>{tipo_label}</span>",
+                    unsafe_allow_html=True
+                )
                 col_pct.markdown(
                     f"<div style='background:#e0e0e0; border-radius:6px; height:20px; margin-top:5px;'>"
                     f"<div style='background:#3498db; width:{min(pct_meta, 100)}%; height:20px; "
@@ -142,18 +153,21 @@ class CadastrosManager:
                         st.rerun()
             else:
                 # Modo edição da Categoria 
-                c1, c2, c3 = st.columns([3, 1, 1])
+                c1, c2, c3, c_tipo_edit = st.columns([3, 1, 1, 1.2])
                 novo_nome = c1.text_input("Nome", value=cat['nome'], key=f"ec_cname_{cat_id}")
                 novo_pct = c2.number_input("Meta %", value=int(pct_meta), min_value=0,
                                            max_value=100, key=f"ec_cpct_{cat_id}")
                 novo_icone = c3.text_input("Ícone", value=icone, key=f"ec_cicon_{cat_id}")
+                idx_tipo = 0 if tipo_cat == 'saida' else 1
+                novo_tipo = c_tipo_edit.selectbox("Tipo", ["Saída", "Entrada"], index=idx_tipo, key=f"ec_ctipo_{cat_id}")
 
                 bc1, bc2 = st.columns(2)
                 if bc1.button(" Salvar", key=f"save_cat_{cat_id}", width='stretch'):
+                    tipo_val_edit = "entrada" if novo_tipo == "Entrada" else "saida"
                     db.executar(
-                        "UPDATE categorias SET nome=%s, percentual_meta=%s, icone=%s "
+                        "UPDATE categorias SET nome=%s, percentual_meta=%s, icone=%s, tipo=%s "
                         "WHERE id=%s AND user_id=%s",
-                        (novo_nome.strip(), novo_pct, novo_icone.strip(), cat_id, user_id)
+                        (novo_nome.strip(), novo_pct, novo_icone.strip(), tipo_val_edit, cat_id, user_id)
                     )
                     st.session_state[edit_flag] = False
                     st.rerun()

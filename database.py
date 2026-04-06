@@ -333,6 +333,10 @@ class DatabaseManager:
         except Exception:
             pass
         try:
+            self.executar("ALTER TABLE categorias ADD COLUMN IF NOT EXISTS tipo TEXT DEFAULT 'saida'")
+        except Exception:
+            pass
+        try:
             self.executar('''CREATE TABLE IF NOT EXISTS subcategorias (
                 id SERIAL PRIMARY KEY,
                 nome TEXT NOT NULL,
