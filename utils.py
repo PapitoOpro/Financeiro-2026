@@ -198,7 +198,7 @@ def _split_multicolunas(texto):
         # Ex: "10/12 DROGRARIA SAO 04/04 51,87 L Total dos lancamentos atuais 1.579,37"
         # → "10/12 DROGRARIA SAO 04/04 51,87" (descarta o resto que é resumo)
         linha_split_marker = re.sub(
-            r'(\d{1,3}(?:\.\d{3})*,\d{2})\s+[LSEP]\s+(?:Total|Lancamentos|Credito)',
+            r'(\d{1,3}(?:\.\d{3})*,\d{2})\s+[LSEP]\s+(?:Total|Lancamentos|Credito).*',
             r'\1',
             linha, flags=re.IGNORECASE
         )
@@ -610,6 +610,68 @@ def extrair_itens_avista(texto, itens_parcelados=None):
 
 
 # ==========================================
+# EXTRAÇÃO VIA COORDENADAS (MULTI-COLUNA)
+# ==========================================
+
+def _extrair_texto_words_pdf(file, senha=None):
+    """Extrai texto via extract_words() com separação por colunas.
+
+    Reconstrói linhas a partir das coordenadas de cada palavra no PDF.
+    Mais robusto que extract_text() para layouts multi-coluna (ex: Itaú)
+    onde extract_text() mescla ou perde transações inteiras.
+    """
+    texto = ""
+    open_kwargs = {}
+    if senha:
+        open_kwargs["password"] = senha
+
+    try:
+        file.seek(0)
+        with pdfplumber.open(file, **open_kwargs) as pdf:
+            for pagina in pdf.pages:
+                words = pagina.extract_words(
+                    keep_blank_chars=True,
+                    use_text_flow=False,
+                    x_tolerance=3,
+                    y_tolerance=3,
+                )
+                if not words:
+                    continue
+
+                # Agrupa palavras por posição Y (mesma linha visual)
+                linhas = {}
+                for w in words:
+                    y_key = round(w['top'] / 3) * 3
+                    if y_key not in linhas:
+                        linhas[y_key] = []
+                    linhas[y_key].append(w)
+
+                for y_key in sorted(linhas.keys()):
+                    row = sorted(linhas[y_key], key=lambda w: w['x0'])
+
+                    # Separa segmentos em gaps horizontais grandes (>30pt = coluna)
+                    segments = []
+                    seg = [row[0]]
+                    for i in range(1, len(row)):
+                        gap = row[i]['x0'] - row[i - 1]['x1']
+                        if gap > 30:
+                            segments.append(seg)
+                            seg = [row[i]]
+                        else:
+                            seg.append(row[i])
+                    segments.append(seg)
+
+                    for s in segments:
+                        line_text = ' '.join(w['text'] for w in s)
+                        if line_text.strip():
+                            texto += line_text.strip() + "\n"
+    except:
+        pass
+
+    return texto
+
+
+# ==========================================
 # FUNÇÃO FINAL (USO SIMPLES)
 # ==========================================
 
@@ -625,7 +687,7 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
         Cada item é uma tupla (descricao, parcela_str, valor)
     """
     try:
-        # 1. Extrair texto
+        # 1. Extrair texto (para exibição debug e detecção de banco)
         texto = extrair_texto_pdf(file, senha_pdf)
 
         if not texto or texto.strip() == "":
@@ -640,11 +702,31 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
         # 3. Detectar banco (usa texto normalizado)
         banco = detectar_banco(texto_norm)
 
-        # 4. Cortar texto ANTES de "próximas faturas" para não importar parcelas futuras
-        texto_fatura_atual = _cortar_texto_antes_proximas_faturas(texto_norm)
+        # 4a. Preparar texto padrão (extract_text)
+        texto_fatura_padrao = _cortar_texto_antes_proximas_faturas(texto_norm)
+        texto_fatura_padrao = _split_multicolunas(texto_fatura_padrao)
 
-        # 5. Dividir linhas multi-coluna (Itaú extrai 2 transações por linha)
-        texto_fatura_atual = _split_multicolunas(texto_fatura_atual)
+        # 4b. Preparar texto via extract_words() (robusto para multi-coluna)
+        texto_words_raw = _extrair_texto_words_pdf(file, senha_pdf)
+        texto_fatura_words = ""
+        if texto_words_raw.strip():
+            texto_words_norm = normalizar_texto(texto_words_raw)
+            texto_fatura_words = _cortar_texto_antes_proximas_faturas(texto_words_norm)
+            texto_fatura_words = _split_multicolunas(texto_fatura_words)
+
+        # 5. Escolhe a melhor fonte: a que tem MAIS linhas DD/MM (transações)
+        def _contar_transacoes(t):
+            return len(re.findall(r'^\d{1,2}/\d{1,2}\s+\S', t, re.MULTILINE))
+
+        n_padrao = _contar_transacoes(texto_fatura_padrao)
+        n_words = _contar_transacoes(texto_fatura_words)
+
+        if n_words > n_padrao:
+            texto_fatura_atual = texto_fatura_words
+            print(f"[DEBUG] Usando extract_words() ({n_words} transações vs {n_padrao} no padrão)")
+        else:
+            texto_fatura_atual = texto_fatura_padrao
+            print(f"[DEBUG] Usando extract_text() padrão ({n_padrao} transações vs {n_words} via words)")
 
         # Debug: mostra quantos chars foram cortados
         chars_cortados = len(texto_norm) - len(_cortar_texto_antes_proximas_faturas(texto_norm))
