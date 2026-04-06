@@ -266,19 +266,19 @@ class ParcelasManager:
                     st.info(f"Texto total: {len(texto_norm)} chars | Nenhum corte aplicado")
                 st.text(texto_processado[:5000])
 
-            # Fallback: colar texto manualmente quando a extração automática falha
-            with st.expander("Colar texto do PDF manualmente (se a extração falhou)"):
-                st.caption(
-                    "Se a extração automática não encontrou todos os itens, "
-                    "abra o PDF, selecione o texto dos lançamentos com o mouse, "
-                    "copie (Ctrl+C) e cole abaixo."
-                )
-                texto_colado = st.text_area(
-                    "Cole o texto dos lançamentos aqui:",
-                    height=200,
-                    key="ocr_texto_colado",
-                )
-                if texto_colado and st.button("Reprocessar com texto colado", icon=":material/refresh:"):
+            # Fallback: colar texto manualmente (fora do expander para ficar acessível)
+            st.markdown("##### Texto manual (se a extração não pegou tudo)")
+            st.caption(
+                "Abra o PDF, selecione os lançamentos com o mouse, "
+                "copie (Ctrl+C) e cole abaixo."
+            )
+            texto_colado = st.text_area(
+                "Cole o texto dos lançamentos aqui:",
+                height=150,
+                key="ocr_texto_colado",
+            )
+            if texto_colado:
+                if st.button("Reprocessar com texto colado", icon=":material/refresh:"):
                     banco_c, texto_c, dados_c, metodo_c = processar_texto_colado(texto_colado)
                     if dados_c:
                         st.session_state["ocr_banco"] = banco_c
@@ -292,6 +292,7 @@ class ParcelasManager:
                         ParcelasManager._safe_rerun()
                     else:
                         st.warning("Nenhum item detectado no texto colado.")
+            st.divider()
         
         if dados_salvos:
             st.markdown(f"### Banco Detectado: **{banco_detectado}**")
@@ -367,7 +368,7 @@ class ParcelasManager:
                         format="%.2f"
                     )
                 with c_del:
-                    if st.button("\u200b", key=f"audit_del_{idx}", help="Excluir", icon=":material/delete:"):
+                    if st.button("Excluir", key=f"audit_del_{idx}", icon=":material/delete:", type="tertiary"):
                         itens_para_remover.append(idx)
 
             # Remover itens excluídos (processa após o loop para não alterar índices durante iteração)
