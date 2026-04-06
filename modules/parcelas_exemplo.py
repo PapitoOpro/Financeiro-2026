@@ -160,6 +160,8 @@ class ParcelasManager:
         st.session_state.pop("ocr_dados_editaveis", None)
         st.session_state.pop("ocr_manual_itens", None)
         st.session_state.pop("ocr_metodo", None)
+        # Incrementa versão para invalidar widgets antigos
+        st.session_state["ocr_version"] = st.session_state.get("ocr_version", 0) + 1
 
     @staticmethod
     def _safe_rerun():
@@ -286,6 +288,8 @@ class ParcelasManager:
                         st.session_state["ocr_dados"] = dados_c
                         st.session_state["ocr_metodo"] = metodo_c
                         st.session_state.pop("ocr_dados_editaveis", None)
+                        # Incrementa versão para widgets serem recriados
+                        st.session_state["ocr_version"] = st.session_state.get("ocr_version", 0) + 1
                         n_av = sum(1 for _, p, _ in dados_c if p == "1/1")
                         n_pc = len(dados_c) - n_av
                         st.success(f"{len(dados_c)} itens encontrados! ({n_pc} parcelado(s), {n_av} à vista)")
@@ -307,16 +311,14 @@ class ParcelasManager:
             def _excluir_item(idx_to_del):
                 eds = st.session_state.get("ocr_dados_editaveis", [])
                 svd = list(st.session_state.get("ocr_dados", []))
-                # Limpa TODAS as chaves de widget para evitar dados obsoletos
-                for i in range(len(eds)):
-                    for prefix in ("audit_check_", "audit_desc_", "audit_parc_", "audit_val_", "audit_del_"):
-                        st.session_state.pop(f"{prefix}{i}", None)
                 if 0 <= idx_to_del < len(eds):
                     eds.pop(idx_to_del)
                 if 0 <= idx_to_del < len(svd):
                     svd.pop(idx_to_del)
                 st.session_state["ocr_dados_editaveis"] = eds
                 st.session_state["ocr_dados"] = svd
+                # Incrementa versão → todos os widgets são recriados com chaves novas
+                st.session_state["ocr_version"] = st.session_state.get("ocr_version", 0) + 1
 
             # Inicializa dados editáveis no session_state (só na primeira vez)
             if "ocr_dados_editaveis" not in st.session_state or len(st.session_state["ocr_dados_editaveis"]) != len(dados_salvos):
@@ -326,6 +328,7 @@ class ParcelasManager:
                 ]
 
             dados_editaveis = st.session_state["ocr_dados_editaveis"]
+            _v = st.session_state.get("ocr_version", 0)  # versão para chaves únicas
 
             # Cabeçalho da tabela
             hdr1, hdr2, hdr3, hdr4, hdr5, hdr6 = st.columns([0.4, 2.8, 1.0, 1.2, 1.5, 1.0])
@@ -349,12 +352,12 @@ class ParcelasManager:
                 with c_check:
                     item["importar"] = st.checkbox(
                         "Importar", value=item["importar"],
-                        key=f"audit_check_{idx}", label_visibility="collapsed"
+                        key=f"audit_check_{_v}_{idx}", label_visibility="collapsed"
                     )
                 with c_desc:
                     item["desc"] = st.text_input(
                         "Desc", value=item["desc"],
-                        key=f"audit_desc_{idx}", label_visibility="collapsed"
+                        key=f"audit_desc_{_v}_{idx}", label_visibility="collapsed"
                     )
                 with c_tipo:
                     if is_avista:
@@ -372,17 +375,17 @@ class ParcelasManager:
                 with c_parc:
                     item["parc"] = st.text_input(
                         "Parcela", value=item["parc"],
-                        key=f"audit_parc_{idx}", label_visibility="collapsed"
+                        key=f"audit_parc_{_v}_{idx}", label_visibility="collapsed"
                     )
                 with c_val:
                     item["valor"] = st.number_input(
                         "Valor", value=max(0.0, float(item["valor"])), min_value=0.0,
-                        key=f"audit_val_{idx}", label_visibility="collapsed",
+                        key=f"audit_val_{_v}_{idx}", label_visibility="collapsed",
                         format="%.2f"
                     )
                 with c_del:
                     st.button(
-                        "Excluir", key=f"audit_del_{idx}",
+                        "Excluir", key=f"audit_del_{_v}_{idx}",
                         icon=":material/delete:",
                         on_click=_excluir_item, args=(idx,),
                     )
@@ -415,6 +418,8 @@ class ParcelasManager:
                         dados_salvos_list = list(st.session_state.get("ocr_dados", []))
                         dados_salvos_list.append((novo_item["desc"], novo_item["parc"], novo_item["valor"]))
                         st.session_state["ocr_dados"] = dados_salvos_list
+                        # Incrementa versão para widgets serem recriados
+                        st.session_state["ocr_version"] = st.session_state.get("ocr_version", 0) + 1
                         st.toast(f"✅ \"{manual_desc.strip()}\" adicionado!")
                         ParcelasManager._safe_rerun()
 
