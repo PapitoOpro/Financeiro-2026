@@ -325,7 +325,7 @@ class ParcelasManager:
                     )
                 with c_val:
                     item["valor"] = st.number_input(
-                        "Valor", value=float(item["valor"]), min_value=0.0,
+                        "Valor", value=max(0.0, float(item["valor"])), min_value=0.0,
                         key=f"audit_val_{idx}", label_visibility="collapsed",
                         format="%.2f"
                     )
