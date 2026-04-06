@@ -27,34 +27,6 @@ def extrair_texto_pdf(file, senha=None):
                 t = pagina.extract_text()
                 if t:
                     texto += t + "\n"
-
-            # Extração via tabelas (essencial para Itaú multi-coluna)
-            # pdfplumber.extract_tables() captura dados tabulares que
-            # extract_text() perde em layouts de 2+ colunas
-            file.seek(0)
-            with pdfplumber.open(file, **open_kwargs) as pdf2:
-                texto_tabelas = ""
-                for pagina in pdf2.pages:
-                    tables = pagina.extract_tables()
-                    for table in tables:
-                        for row in table:
-                            if row:
-                                cells = [str(c).strip() for c in row if c and str(c).strip()]
-                                if cells:
-                                    texto_tabelas += ' '.join(cells) + "\n"
-                if texto_tabelas:
-                    texto = texto + "\n" + texto_tabelas
-
-            # Extração com layout=True (preserva colunas)
-            file.seek(0)
-            with pdfplumber.open(file, **open_kwargs) as pdf3:
-                texto_layout = ""
-                for pagina in pdf3.pages:
-                    t2 = pagina.extract_text(layout=True)
-                    if t2:
-                        texto_layout += t2 + "\n"
-                if texto_layout:
-                    texto = texto + "\n" + texto_layout
     except Exception as e:
         erro_str = str(e).lower()
         if "password" in erro_str or "encrypted" in erro_str or "decrypt" in erro_str:
@@ -687,14 +659,14 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
         Cada item é uma tupla (descricao, parcela_str, valor)
     """
     try:
-        # 1. Extrair texto (para exibição debug e detecção de banco)
+        # 1. Extrair texto básico (para exibição debug e detecção de banco)
         texto = extrair_texto_pdf(file, senha_pdf)
 
         if not texto or texto.strip() == "":
-            return "DESCONHECIDO", "", []
+            return "DESCONHECIDO", "", [], ""
 
         if texto.strip() == "__PDF_PROTEGIDO__":
-            return "__PDF_PROTEGIDO__", "", []
+            return "__PDF_PROTEGIDO__", "", [], ""
 
         # 2. Normalizar texto (remover acentos para regex funcionar)
         texto_norm = normalizar_texto(texto)
@@ -702,38 +674,51 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
         # 3. Detectar banco (usa texto normalizado)
         banco = detectar_banco(texto_norm)
 
-        # 4a. Preparar texto padrão (extract_text)
-        texto_fatura_padrao = _cortar_texto_antes_proximas_faturas(texto_norm)
-        texto_fatura_padrao = _split_multicolunas(texto_fatura_padrao)
+        # 4. Preparar candidatos de extração — cada um com pipeline independente
+        #    (normalizar → cortar próximas faturas → split multicolunas)
+        #    Antes, concatenávamos tudo e o corte "próximas faturas" eliminava
+        #    dados de outros métodos de extração.
+        def _preparar_candidato(texto_raw):
+            tn = normalizar_texto(texto_raw)
+            tc = _cortar_texto_antes_proximas_faturas(tn)
+            return _split_multicolunas(tc)
 
-        # 4b. Preparar texto via extract_words() (robusto para multi-coluna)
-        texto_words_raw = _extrair_texto_words_pdf(file, senha_pdf)
-        texto_fatura_words = ""
-        if texto_words_raw.strip():
-            texto_words_norm = normalizar_texto(texto_words_raw)
-            texto_fatura_words = _cortar_texto_antes_proximas_faturas(texto_words_norm)
-            texto_fatura_words = _split_multicolunas(texto_fatura_words)
-
-        # 5. Escolhe a melhor fonte: a que tem MAIS linhas DD/MM (transações)
         def _contar_transacoes(t):
             return len(re.findall(r'^\d{1,2}/\d{1,2}\s+\S', t, re.MULTILINE))
 
-        n_padrao = _contar_transacoes(texto_fatura_padrao)
-        n_words = _contar_transacoes(texto_fatura_words)
+        candidatos = []
 
-        if n_words > n_padrao:
-            texto_fatura_atual = texto_fatura_words
-            print(f"[DEBUG] Usando extract_words() ({n_words} transações vs {n_padrao} no padrão)")
-        else:
-            texto_fatura_atual = texto_fatura_padrao
-            print(f"[DEBUG] Usando extract_text() padrão ({n_padrao} transações vs {n_words} via words)")
+        # Candidato A: extract_text() padrão
+        texto_a = _preparar_candidato(texto)
+        candidatos.append(("extract_text", texto_a, _contar_transacoes(texto_a)))
 
-        # Debug: mostra quantos chars foram cortados
-        chars_cortados = len(texto_norm) - len(_cortar_texto_antes_proximas_faturas(texto_norm))
-        if chars_cortados > 0:
-            print(f"[DEBUG] Texto cortado: {chars_cortados} caracteres removidos (seção de próximas faturas)")
-        else:
-            print(f"[DEBUG] Nenhum corte aplicado — texto completo ({len(texto_norm)} chars)")
+        # Candidato B: extract_words() (separação por coordenadas — multi-coluna)
+        texto_words_raw = _extrair_texto_words_pdf(file, senha_pdf)
+        if texto_words_raw.strip():
+            texto_b = _preparar_candidato(texto_words_raw)
+            candidatos.append(("extract_words", texto_b, _contar_transacoes(texto_b)))
+
+        # Candidato C: extract_text(layout=True) (preserva posição de colunas)
+        try:
+            file.seek(0)
+            open_kwargs = {"password": senha_pdf} if senha_pdf else {}
+            texto_layout_raw = ""
+            with pdfplumber.open(file, **open_kwargs) as pdf_l:
+                for pagina in pdf_l.pages:
+                    tl = pagina.extract_text(layout=True)
+                    if tl:
+                        texto_layout_raw += tl + "\n"
+            if texto_layout_raw.strip():
+                texto_c = _preparar_candidato(texto_layout_raw)
+                candidatos.append(("layout", texto_c, _contar_transacoes(texto_c)))
+        except:
+            pass
+
+        # 5. Escolhe o candidato com MAIS transações DD/MM
+        candidatos.sort(key=lambda c: c[2], reverse=True)
+        melhor_nome, texto_fatura_atual, n_tx = candidatos[0]
+        print(f"[DEBUG] Candidatos: {[(c[0], c[2]) for c in candidatos]}")
+        print(f"[DEBUG] Usando {melhor_nome} ({n_tx} transações)")
 
         # 6. Extrair parcelas (itens com indicador XX/YY) — apenas da fatura atual
         dados_parcelados = extrair_parcelas(texto_fatura_atual)
@@ -747,11 +732,11 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
         else:
             dados = dados_parcelados
 
-        return banco, texto, dados
+        return banco, texto, dados, melhor_nome
 
     except Exception as e:
         print("Erro ao processar fatura:", e)
-        return "ERRO", "", []
+        return "ERRO", "", [], ""
 
 
 # ==========================================

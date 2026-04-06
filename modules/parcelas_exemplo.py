@@ -159,6 +159,7 @@ class ParcelasManager:
         st.session_state["ocr_dados"] = []
         st.session_state.pop("ocr_dados_editaveis", None)
         st.session_state.pop("ocr_manual_itens", None)
+        st.session_state.pop("ocr_metodo", None)
 
     @staticmethod
     def _safe_rerun():
@@ -216,12 +217,13 @@ class ParcelasManager:
         # 2. Botão de Processamento: Apenas extrai e salva no session_state
         if file and st.button("Analisar Fatura", icon=":material/search:"):
             with st.spinner("Extraindo dados do PDF..."):
-                banco, texto, dados = processar_fatura(file, senha_pdf)
+                banco, texto, dados, metodo = processar_fatura(file, senha_pdf)
                 
                 # Salva o resultado no estado para que sobreviva a recarregamentos da tela
                 st.session_state["ocr_banco"] = banco
                 st.session_state["ocr_texto"] = texto
                 st.session_state["ocr_dados"] = dados
+                st.session_state["ocr_metodo"] = metodo
                 
                 if banco == "__PDF_PROTEGIDO__":
                     st.error(
@@ -255,6 +257,9 @@ class ParcelasManager:
                 texto_cortado = _cortar_texto_antes_proximas_faturas(texto_norm)
                 texto_processado = _split_multicolunas(texto_cortado)
                 chars_cortados = len(texto_norm) - len(texto_cortado)
+                metodo = st.session_state.get("ocr_metodo", "")
+                if metodo:
+                    st.info(f"Método de extração: **{metodo}**")
                 if chars_cortados > 0:
                     st.info(f"Texto total: {len(texto_norm)} chars | Cortado em 'próximas faturas': {chars_cortados} chars removidos")
                 else:
