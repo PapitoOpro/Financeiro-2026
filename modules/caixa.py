@@ -171,26 +171,19 @@ class CaixaManager:
                 opcoes_sub = df_subs_filtrado.apply(
                     lambda r: f"{r['nome']} ({r['categoria_nome']})", axis=1
                 ).tolist()
-                # Adiciona opção de "Sem subcategoria"
-                opcoes_completas = ["(Selecionar categoria diretamente)"] + opcoes_sub
                 
-                sel_sub = st.selectbox("Subcategoria", opcoes_completas,
+                sel_sub = st.selectbox("Subcategoria", opcoes_sub,
                                        help="Escolha a subcategoria e a categoria será associada automaticamente.")
                 
-                if sel_sub != "(Selecionar categoria diretamente)":
+                if sel_sub:
                     idx = opcoes_sub.index(sel_sub)
                     sub_id_sel = int(df_subs_filtrado.iloc[idx]['id'])
                     cat_id_sel = int(df_subs_filtrado.iloc[idx]['categoria_id'])
                     st.caption(f"→ Categoria: **{df_subs_filtrado.iloc[idx]['categoria_nome']}**")
             
-            # Fallback: seleção direta de categoria (se não tem subs ou escolheu "direto")
-            if cat_id_sel is None:
-                cat_r = st.selectbox(
-                    "Categoria",
-                    df_cats_filtrado['nome'] if not df_cats_filtrado.empty else [""]
-                )
-            else:
-                cat_r = None
+            # Fallback oculto: se não há subcategorias, usa primeira categoria disponível
+            if cat_id_sel is None and not df_cats_filtrado.empty:
+                cat_id_sel = int(df_cats_filtrado.iloc[0]['id'])
 
             compensado_r = st.checkbox("Já compensado", value=False)
             
@@ -199,11 +192,7 @@ class CaixaManager:
                     st.error("Preencha descrição e valor!")
                 else:
                     cid = int(df_contas[df_contas.nome == conta_r].id.values[0])
-                    
-                    if cat_id_sel is not None:
-                        ctid = cat_id_sel
-                    else:
-                        ctid = int(df_cats_filtrado[df_cats_filtrado.nome == cat_r].id.values[0])
+                    ctid = cat_id_sel
                     
                     valor_final = -val_r if "Saída" in tipo else val_r
                     data_comp = data_pg if compensado_r else None
