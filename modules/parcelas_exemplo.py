@@ -755,28 +755,6 @@ class ParcelasManager:
 
         st.write("")
 
-        # 1.5 TABELA RESUMO DE PREVISÃO POR MÊS
-        st.markdown("** Previsão Mensal de Parcelados**")
-        preview_data = []
-        for mes_period in agrupado_mes['Mes_Ano']:
-            grupo_mes = df_itens[df_itens['Mes_Ano'] == mes_period]
-            total_mes_val = grupo_mes['valor_abs'].sum()
-            # Top 3 itens do mês
-            top_itens = grupo_mes.nlargest(3, 'valor_abs')
-            desc_itens = ', '.join([
-                f"{r['descricao']} ({int(r['parcela_atual']):02d}/{int(r['parcela_total']):02d})"
-                for _, r in top_itens.iterrows()
-            ])
-            preview_data.append({
-                'Mês': str(mes_period),
-                'Total Parcelado': moeda(total_mes_val),
-                'Principais Itens': desc_itens
-            })
-
-        if preview_data:
-            df_preview_table = pd.DataFrame(preview_data)
-            st.dataframe(df_preview_table, width='stretch', hide_index=True)
-
         st.markdown("---")
 
         # 2. GRÁFICO DE EVOLUÇÃO
