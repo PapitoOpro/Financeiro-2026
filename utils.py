@@ -460,7 +460,6 @@ def extrair_itens_avista(texto, itens_parcelados=None):
         Lista de tuplas (descricao, "1/1", valor)
     """
     resultados = []
-    chaves_vistas = set()
 
     # Normaliza descrições já capturadas como parcelas para evitar duplicatas
     descs_parceladas = set()
@@ -495,6 +494,16 @@ def extrair_itens_avista(texto, itens_parcelados=None):
 
         # Linhas que começam com DD/MM são transações — nunca pular
         comeca_com_data = re.match(r'^\d{1,2}/\d{1,2}\s', linha)
+
+        # Pula taxas bancárias mesmo que comecem com DD/MM
+        # (ENCARGOS, JUROS DE MORA, MULTA, IOF não são compras)
+        taxas_bancarias = [
+            'encargos refin', 'encargos financ', 'juros de mora',
+            'multa por atraso', 'multa ', 'iof ', 'iof\t',
+            'juros rotativo', 'juros do rotativo',
+        ]
+        if comeca_com_data and any(taxa in linha_lower.split(None, 1)[-1].lower() if len(linha_lower.split(None, 1)) > 1 else '' for taxa in taxas_bancarias):
+            continue
 
         # Pula linhas de cabeçalho/rodapé (apenas se NÃO parecem transação)
         if not comeca_com_data and any(skip in linha_lower for skip in skip_patterns):
@@ -547,12 +556,9 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             if val < 0:
                 continue
 
-            # Chave inclui data + desc + valor para permitir compras repetidas
-            # no mesmo estabelecimento em datas ou valores diferentes
-            chave = (date_str, desc_norm, valor_str)
-            if chave not in chaves_vistas:
-                chaves_vistas.add(chave)
-                resultados.append((desc, "1/1", val))
+            # Permite múltiplas compras idênticas (mesma data, desc, valor)
+            # Ex: 3x TagItau 50,00 no mesmo dia são cobranças reais
+            resultados.append((desc, "1/1", val))
         except (ValueError, TypeError):
             continue
 
