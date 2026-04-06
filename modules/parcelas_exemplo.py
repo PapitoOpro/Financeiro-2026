@@ -201,6 +201,10 @@ class ParcelasManager:
         """Aba para importar faturas PDF via OCR."""
         st.subheader(" Importador de Faturas via OCR")
         
+        # Exibe mensagem de sucesso da última importação (se houver)
+        if 'parcela_msg_sucesso' in st.session_state:
+            st.success(st.session_state.pop('parcela_msg_sucesso'))
+
         senha_pdf = st.text_input("Senha do PDF (Se houver)", type="password")
         file = st.file_uploader("Envie a fatura PDF", type="pdf")
 
@@ -627,15 +631,20 @@ class ParcelasManager:
                     continue
 
             if novos > 0:
-                st.toast(f"{novos} itens salvos!")
+                st.session_state['parcela_msg_sucesso'] = f"✅ {novos} itens salvos!"
             if duplicados > 0:
-                st.toast(f"{duplicados} ignorado(s) (já existiam).")
+                st.session_state['parcela_msg_sucesso'] = st.session_state.get('parcela_msg_sucesso', '') + f" | {duplicados} ignorado(s) (já existiam)."
             if erros > 0:
-                st.toast(f"{erros} com erro.")
+                st.session_state['parcela_msg_sucesso'] = st.session_state.get('parcela_msg_sucesso', '') + f" | {erros} com erro."
             if novos == 0 and duplicados > 0:
-                st.warning(f"Nenhum item novo importado — {duplicados} já existiam no sistema.")
+                st.session_state['parcela_msg_sucesso'] = f"⚠️ Nenhum item novo importado — {duplicados} já existiam no sistema."
 
             ParcelasManager._resetar_estado_pdf()
+            # Limpa widget keys da auditoria para não manter dados obsoletos
+            for k in list(st.session_state.keys()):
+                if isinstance(k, str) and (k.startswith("audit_") or k.startswith("manual_")):
+                    del st.session_state[k]
+            ParcelasManager._safe_rerun()
 
         except Exception as e:
             st.error(f"Erro fatal na importação: {e}")
