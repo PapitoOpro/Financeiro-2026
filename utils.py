@@ -195,7 +195,7 @@ def _split_multicolunas(texto):
         else:
             # Sem split multi-coluna — verifica se há transação DD/MM embarcada
             # Ex: "RAFAELRODRIGUES(final8122) 04/03 BURGERKING 118,30"
-            stripped = linha.strip()
+            stripped = linha_split_marker.strip()
             if stripped and not re.match(r'\d{1,2}/\d{1,2}\b', stripped):
                 m = re.search(
                     r'(\d{1,2}/\d{1,2}\s+\S.*?\s+\d{1,3}(?:\.\d{3})*,\d{2})\s*$',
@@ -204,9 +204,9 @@ def _split_multicolunas(texto):
                 if m:
                     linhas_out.append(m.group(1))
                 else:
-                    linhas_out.append(linha)
+                    linhas_out.append(linha_split_marker)
             else:
-                linhas_out.append(linha)
+                linhas_out.append(linha_split_marker)
 
     return '\n'.join(linhas_out)
 
@@ -756,11 +756,28 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
         else:
             dados = dados_parcelados
 
-        return banco, texto, dados, melhor_nome
+        return banco, texto, _dedup_itens(dados), melhor_nome
 
     except Exception as e:
         print("Erro ao processar fatura:", e)
         return "ERRO", "", [], ""
+
+
+def _dedup_itens(dados):
+    """Remove duplicatas de parcelas (mesma desc + mesma parcela).
+    
+    Itens à vista (1/1) são mantidos mesmo que tenham mesma descrição
+    (ex: 3x TagItau 50,00 são cobranças reais distintas).
+    """
+    seen = set()
+    resultado = []
+    for desc, parc, val in dados:
+        key = (re.sub(r'\s+', ' ', desc.upper().strip()), parc)
+        if parc != "1/1" and key in seen:
+            continue  # Parcela duplicada — pular
+        seen.add(key)
+        resultado.append((desc, parc, val))
+    return resultado
 
 
 def processar_texto_colado(texto_raw, incluir_avista=True):
@@ -788,7 +805,7 @@ def processar_texto_colado(texto_raw, incluir_avista=True):
     else:
         dados = dados_parcelados
 
-    return banco, texto_norm, dados, "texto_colado"
+    return banco, texto_norm, _dedup_itens(dados), "texto_colado"
 
 
 # ==========================================
