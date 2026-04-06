@@ -23,9 +23,22 @@ def extrair_texto_pdf(file, senha=None):
             open_kwargs["password"] = senha
         with pdfplumber.open(file, **open_kwargs) as pdf:
             for pagina in pdf.pages:
+                # Extração padrão
                 t = pagina.extract_text()
                 if t:
                     texto += t + "\n"
+
+            # Para Itaú (multi-coluna): extrai novamente com layout=True
+            # que preserva a separação das colunas, gerando linhas mais limpas
+            file.seek(0)
+            with pdfplumber.open(file, **open_kwargs) as pdf2:
+                texto_layout = ""
+                for pagina in pdf2.pages:
+                    t2 = pagina.extract_text(layout=True)
+                    if t2:
+                        texto_layout += t2 + "\n"
+                if texto_layout:
+                    texto = texto + "\n" + texto_layout
     except Exception as e:
         erro_str = str(e).lower()
         if "password" in erro_str or "encrypted" in erro_str or "decrypt" in erro_str:
@@ -165,10 +178,19 @@ def _split_multicolunas(texto):
     """
     linhas_out = []
     for linha in texto.split('\n'):
+        # Primeiro: separa quando um valor é seguido por marcador Itaú (L, S, E, P)
+        # Ex: "10/12 DROGRARIA SAO 04/04 51,87 L Total dos lancamentos atuais 1.579,37"
+        # → "10/12 DROGRARIA SAO 04/04 51,87" (descarta o resto que é resumo)
+        linha_split_marker = re.sub(
+            r'(\d{1,3}(?:\.\d{3})*,\d{2})\s+[LSEP]\s+(?:Total|Lancamentos|Credito)',
+            r'\1',
+            linha, flags=re.IGNORECASE
+        )
+
         # Divide onde um valor monetário (NNN,NN ou -NNN,NN) é seguido por DD/MM (nova transação)
         partes = re.split(
             r'(-?\d{1,3}(?:\.\d{3})*,\d{2})\s+(?=\d{1,2}/\d{1,2}\b)',
-            linha
+            linha_split_marker
         )
 
         if len(partes) >= 3:
@@ -472,13 +494,18 @@ def extrair_itens_avista(texto, itens_parcelados=None):
     # Linhas com DD/MM são sempre processadas (são transações reais).
     skip_patterns = [
         'total da fatura', 'total desta fatura', 'total para',
-        'pagamento efetuado', 'pagamento minimo',
+        'total dos lancamentos', 'total dos pagamentos',
+        'lancamentos no cartao', 'lancamentos produtos',
+        'pagamento efetuado', 'pagamento minimo', 'pagamento pix',
         'saldo financiado', 'saldo anterior',
         'limite total', 'limite de credito',
-        'encargos (', 'encargos financ',
+        'encargos (', 'encargos financ', 'encargos cobrados',
+        'encargos refin', 'juros de mora', 'juros do rotativo',
+        'multa por atraso', 'iof de financ',
         'lancamentos atuais',
         'credito disponivel',
         'proxima fatura', 'proximas faturas',
+        'principal (r$', 'principal(r$',
         'cpf', 'cnpj',
         'demonstrativo', 'informacoes adicionais',
         'central de atendimento', 'ouvidoria',
@@ -499,11 +526,15 @@ def extrair_itens_avista(texto, itens_parcelados=None):
         # (ENCARGOS, JUROS DE MORA, MULTA, IOF não são compras)
         taxas_bancarias = [
             'encargos refin', 'encargos financ', 'juros de mora',
-            'multa por atraso', 'multa ', 'iof ', 'iof\t',
+            'multa por atraso', 'multa ', 'iof ',
             'juros rotativo', 'juros do rotativo',
+            'pagamento pix', 'pagamento efetuado',
         ]
-        if comeca_com_data and any(taxa in linha_lower.split(None, 1)[-1].lower() if len(linha_lower.split(None, 1)) > 1 else '' for taxa in taxas_bancarias):
-            continue
+        if comeca_com_data:
+            # Pega o texto após a data (DD/MM)
+            resto = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', linha_lower)
+            if any(resto.startswith(taxa) for taxa in taxas_bancarias):
+                continue
 
         # Pula linhas de cabeçalho/rodapé (apenas se NÃO parecem transação)
         if not comeca_com_data and any(skip in linha_lower for skip in skip_patterns):
