@@ -381,8 +381,9 @@ def extrair_parcelas(texto):
     # Ex: '10/02 CARREFOUR COM 02/10 CAJAMAR BR 125,62' (cidade entre parcela e valor)
     # Nota: como a linha já começa com DD/MM (data da compra),
     # o segundo XX/YY é SEMPRE a parcela (nunca uma data).
+    # IMPORTANTE: usar [ \t] em vez de \s para NÃO cruzar linhas!
     regex_lead = re.findall(
-        r'^\s*(\d{1,2}/\d{1,2})\s+(.+?)\s+(\d{1,2}/\d{1,2})\s+.*?(\d{1,3}(?:\.\d{3})*,\d{2})\s*$',
+        r'^[ \t]*(\d{1,2}/\d{1,2})[ \t]+(.+?)[ \t]+(\d{1,2}/\d{1,2})[ \t]+.*?(\d{1,3}(?:\.\d{3})*,\d{2})[ \t]*$',
         texto, re.IGNORECASE | re.MULTILINE
     )
     for date_str, desc, parc, valor in regex_lead:
