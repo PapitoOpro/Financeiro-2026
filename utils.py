@@ -285,26 +285,31 @@ def _is_parcela_valida(parc_str):
 def extrair_parcelas(texto):
     import re
     resultados = []
-    chaves_vistas = set() # (desc_normalizada, parcela) para evitar duplicatas reais
+    chaves_vistas = set() # (desc_normalizada, parcela, valor) para evitar duplicatas reais
 
     # 1. Limpeza de ruídos comuns de OCR
     texto = texto.replace("R4", "R$").replace("I0F", "IOF")
 
     def _add_resultado(desc, parc, val):
-        """Adiciona resultado evitando duplicatas reais (mesma desc + mesma parcela)."""
+        """Adiciona resultado evitando duplicatas reais (mesma desc + mesma parcela + mesmo valor).
+        
+        Duas compras no mesmo estabelecimento com mesma parcela mas valores
+        diferentes são transações distintas (ex: 2x ATACADAO 02/02).
+        """
         # Normaliza a descrição removendo datas iniciais, "Parcela" e espaços extras
         desc_norm = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', desc.strip()).strip()
         desc_norm = re.sub(r'\s*Parcela\s*$', '', desc_norm, flags=re.IGNORECASE).strip()
         desc_upper = desc_norm.upper()
+        val_round = round(val, 2)
         
-        # Verifica se já existe uma parcela com mesma numeração e descrição similar
-        for existing_desc, _ in chaves_vistas:
+        # Verifica se já existe uma parcela com mesma numeração, valor e descrição similar
+        for existing_desc, existing_parc, existing_val in chaves_vistas:
+            if existing_parc != parc or existing_val != val_round:
+                continue
             if existing_desc in desc_upper or desc_upper in existing_desc:
-                # Mesma parcela, descrição é substring - duplicata
-                if (existing_desc, parc) in chaves_vistas or (desc_upper, parc) in chaves_vistas:
-                    return False
+                return False
         
-        chave = (desc_upper, parc)
+        chave = (desc_upper, parc, val_round)
         if chave not in chaves_vistas:
             chaves_vistas.add(chave)
             resultados.append((desc_norm, parc, val))
@@ -403,10 +408,6 @@ def extrair_parcelas(texto):
     for desc, parc, valor in regex_relax:
         try:
             val_limpo = float(valor.replace(".", "").replace(",", "."))
-            atual_p, total_p = map(int, parc.split("/"))
-            # Se atual == total e ambos <= 12, é data - pular
-            if atual_p == total_p and atual_p <= 12:
-                continue
             if _is_parcela_valida(parc):
                 _add_resultado(desc.strip(), parc, val_limpo)
         except: continue
@@ -417,12 +418,12 @@ def extrair_parcelas(texto):
     # no corpo da fatura. Manter apenas a de MENOR número — o sistema
     # projeta as futuras automaticamente ao importar.
     # ================================================================
-    by_desc_total = {}  # (desc_base, total) -> (menor_atual, indice)
+    by_desc_total = {}  # (desc_base, total, valor) -> (menor_atual, indice)
     for i, (desc, parc, val) in enumerate(resultados):
         try:
             atual, total = map(int, parc.split("/"))
             desc_base = re.sub(r'\s+', ' ', desc.upper().strip())
-            key = (desc_base, total)
+            key = (desc_base, total, round(val, 2))
             if key not in by_desc_total or atual < by_desc_total[key][0]:
                 by_desc_total[key] = (atual, i)
         except:
@@ -433,7 +434,7 @@ def extrair_parcelas(texto):
         try:
             atual, total = map(int, parc.split("/"))
             desc_base = re.sub(r'\s+', ' ', desc.upper().strip())
-            key = (desc_base, total)
+            key = (desc_base, total, round(val, 2))
             if key in by_desc_total and by_desc_total[key][1] != i:
                 indices_remover.add(i)
         except:
@@ -516,7 +517,8 @@ def extrair_itens_avista(texto, itens_parcelados=None):
         # Pula taxas bancárias mesmo que comecem com DD/MM
         # (ENCARGOS, JUROS DE MORA, MULTA, IOF não são compras)
         taxas_bancarias = [
-            'encargos refin', 'encargos financ', 'juros de mora',
+            'encargos refin', 'encargos financ', 'encargos de',
+            'encargos pix', 'juros de mora',
             'multa por atraso', 'multa ', 'iof ',
             'juros rotativo', 'juros do rotativo',
             'pagamento pix', 'pagamento efetuado',
@@ -774,33 +776,31 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
 
 
 def _dedup_itens(dados):
-    """Remove duplicatas de parcelas (mesma desc + mesma parcela).
+    """Remove duplicatas de parcelas (mesma desc + mesma parcela + mesmo valor).
     
     Itens à vista (1/1) são mantidos mesmo que tenham mesma descrição
     (ex: 3x TagItau 50,00 são cobranças reais distintas).
+    
+    Duas compras no mesmo estabelecimento com mesma parcela mas valores
+    diferentes são transações distintas (ex: 2x ATACADAO 02/02).
     """
-    seen_desc_parc = set()  # (desc_norm, parc)
-    seen_val_parc = set()   # (valor, parc) — para cross-check
+    seen_desc_parc = set()  # (desc_norm, parc, valor)
     resultado = []
     for desc, parc, val in dados:
         desc_norm = re.sub(r'\s+', ' ', desc.upper().strip())
         # Remove XX/YY residual do desc para normalização mais agressiva
         desc_base = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', ' ', desc_norm).strip()
-        key = (desc_norm, parc)
-        key_base = (desc_base, parc)
-        val_key = (round(val, 2), parc)
+        val_round = round(val, 2)
+        key = (desc_norm, parc, val_round)
+        key_base = (desc_base, parc, val_round)
 
         if parc != "1/1":
-            # Para parcelados: dedup por (desc, parc) ou (desc_base, parc)
+            # Para parcelados: dedup por (desc, parc, valor) ou (desc_base, parc, valor)
             if key in seen_desc_parc or key_base in seen_desc_parc:
-                continue
-            # Dedup por (valor, parc) — mesmo valor + mesma parcela = duplicata
-            if val_key in seen_val_parc:
                 continue
 
         seen_desc_parc.add(key)
         seen_desc_parc.add(key_base)
-        seen_val_parc.add(val_key)
         resultado.append((desc, parc, val))
     return resultado
 
