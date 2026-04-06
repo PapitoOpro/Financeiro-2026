@@ -470,9 +470,11 @@ def extrair_itens_avista(texto, itens_parcelados=None):
 
     # Normaliza descrições já capturadas como parcelas para evitar duplicatas
     descs_parceladas = set()
+    vals_parceladas = set()  # (valor) para cross-check
     if itens_parcelados:
-        for desc, _, _ in itens_parcelados:
+        for desc, parc, val in itens_parcelados:
             descs_parceladas.add(re.sub(r'\s+', ' ', desc.upper().strip()))
+            vals_parceladas.add((round(val, 2), parc))
 
     # Padrões que indicam linhas de cabeçalho/rodapé (NÃO são transações).
     # Só filtra quando a linha NÃO começa com DD/MM (padrão de transação).
@@ -549,19 +551,23 @@ def extrair_itens_avista(texto, itens_parcelados=None):
 
         # Se a descrição contém padrão XX/YY com total > 1, é parcela
         # → já foi capturada por extrair_parcelas(), pular
-        # EXCEÇÃO: Se atual == total e ambos <= 12, é data (ex: 02/02 = fev 2)
         parc_in_desc = re.search(r'(\d{1,2})/(\d{1,2})', desc)
         if parc_in_desc:
             try:
                 a, t = int(parc_in_desc.group(1)), int(parc_in_desc.group(2))
-                if t > 1 and a <= t and not (a == t and t <= 12):
-                    continue
+                if t > 1 and a <= t:
+                    continue  # Qualquer XX/YY com total>1 é parcela
             except (ValueError, AttributeError):
                 pass
 
-        # Verifica duplicata EXATA com itens parcelados
+        # Verifica duplicata com itens parcelados (exata OU substring)
         desc_norm = re.sub(r'\s+', ' ', desc.upper().strip())
-        if desc_norm in descs_parceladas:
+        # Remove qualquer XX/YY residual do desc para comparar base
+        desc_base = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', ' ', desc_norm).strip()
+        if desc_norm in descs_parceladas or desc_base in descs_parceladas:
+            continue
+        # Verifica se algum parcelado é substring do desc ou vice-versa
+        if any(dp in desc_norm or desc_norm in dp for dp in descs_parceladas):
             continue
 
         try:
@@ -726,10 +732,10 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
                     w = pagina.width
                     h = pagina.height
                     # Metade esquerda (compras e saques no Itaú)
-                    left = pagina.crop((0, 0, w * 0.52, h))
+                    left = pagina.crop((0, 0, w * 0.48, h))
                     t_left = left.extract_text() or ""
                     # Metade direita (produtos e serviços no Itaú)
-                    right = pagina.crop((w * 0.52, 0, w, h))
+                    right = pagina.crop((w * 0.48, 0, w, h))
                     t_right = right.extract_text() or ""
                     texto_crop_raw += t_left + "\n" + t_right + "\n"
             if texto_crop_raw.strip():
@@ -769,13 +775,28 @@ def _dedup_itens(dados):
     Itens à vista (1/1) são mantidos mesmo que tenham mesma descrição
     (ex: 3x TagItau 50,00 são cobranças reais distintas).
     """
-    seen = set()
+    seen_desc_parc = set()  # (desc_norm, parc)
+    seen_val_parc = set()   # (valor, parc) — para cross-check
     resultado = []
     for desc, parc, val in dados:
-        key = (re.sub(r'\s+', ' ', desc.upper().strip()), parc)
-        if parc != "1/1" and key in seen:
-            continue  # Parcela duplicada — pular
-        seen.add(key)
+        desc_norm = re.sub(r'\s+', ' ', desc.upper().strip())
+        # Remove XX/YY residual do desc para normalização mais agressiva
+        desc_base = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', ' ', desc_norm).strip()
+        key = (desc_norm, parc)
+        key_base = (desc_base, parc)
+        val_key = (round(val, 2), parc)
+
+        if parc != "1/1":
+            # Para parcelados: dedup por (desc, parc) ou (desc_base, parc)
+            if key in seen_desc_parc or key_base in seen_desc_parc:
+                continue
+            # Dedup por (valor, parc) — mesmo valor + mesma parcela = duplicata
+            if val_key in seen_val_parc:
+                continue
+
+        seen_desc_parc.add(key)
+        seen_desc_parc.add(key_base)
+        seen_val_parc.add(val_key)
         resultado.append((desc, parc, val))
     return resultado
 
