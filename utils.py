@@ -28,12 +28,28 @@ def extrair_texto_pdf(file, senha=None):
                 if t:
                     texto += t + "\n"
 
-            # Para Itaú (multi-coluna): extrai novamente com layout=True
-            # que preserva a separação das colunas, gerando linhas mais limpas
+            # Extração via tabelas (essencial para Itaú multi-coluna)
+            # pdfplumber.extract_tables() captura dados tabulares que
+            # extract_text() perde em layouts de 2+ colunas
             file.seek(0)
             with pdfplumber.open(file, **open_kwargs) as pdf2:
-                texto_layout = ""
+                texto_tabelas = ""
                 for pagina in pdf2.pages:
+                    tables = pagina.extract_tables()
+                    for table in tables:
+                        for row in table:
+                            if row:
+                                cells = [str(c).strip() for c in row if c and str(c).strip()]
+                                if cells:
+                                    texto_tabelas += ' '.join(cells) + "\n"
+                if texto_tabelas:
+                    texto = texto + "\n" + texto_tabelas
+
+            # Extração com layout=True (preserva colunas)
+            file.seek(0)
+            with pdfplumber.open(file, **open_kwargs) as pdf3:
+                texto_layout = ""
+                for pagina in pdf3.pages:
                     t2 = pagina.extract_text(layout=True)
                     if t2:
                         texto_layout += t2 + "\n"
@@ -388,7 +404,8 @@ def extrair_parcelas(texto):
 
     # PADRÃO D: linhas com data + descrição + parcela + valor
     # Ex: '08/03 VIVO SP LJ N551 12/12 391,74'
-    # Quando atual==total e ambos <= 12, é DATA (ex: 02/02 = fev 2), não parcela
+    # Nota: como a linha já começa com DD/MM (data da compra),
+    # o segundo XX/YY é SEMPRE a parcela (nunca uma data).
     regex_lead = re.findall(
         r'^\s*(\d{1,2}/\d{1,2})\s+(.+?)\s+(\d{1,2}/\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
         texto, re.IGNORECASE | re.MULTILINE
@@ -396,10 +413,6 @@ def extrair_parcelas(texto):
     for date_str, desc, parc, valor in regex_lead:
         try:
             val_limpo = float(valor.replace(".", "").replace(",", "."))
-            atual_p, total_p = map(int, parc.split("/"))
-            # Se atual == total e ambos cabem como dia/mes, é data - pular
-            if atual_p == total_p and atual_p <= 12:
-                continue
             if _is_parcela_valida(parc):
                 _add_resultado(desc.strip(), parc, val_limpo)
         except: continue
