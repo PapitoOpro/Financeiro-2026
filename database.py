@@ -627,7 +627,7 @@ class DatabaseManager:
             "(fatura_id, descricao, valor, data_compra, parcela_atual, parcela_total, "
             " categoria_id, subcategoria_id, user_id) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            (fatura_id, descricao, abs(valor), data_compra, parcela_atual,
+            (fatura_id, descricao, valor, data_compra, parcela_atual,
              parcela_total, categoria_id, subcategoria_id, user_id)
         )
 

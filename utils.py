@@ -473,13 +473,14 @@ def extrair_itens_avista(texto, itens_parcelados=None):
     """
     resultados = []
 
-    # Normaliza descrições já capturadas como parcelas para evitar duplicatas
-    descs_parceladas = set()
-    vals_parceladas = set()  # (valor) para cross-check
+    # Normaliza itens já capturados como parcelas para evitar duplicatas
+    # Armazena (desc_normalizada, valor) para detecção precisa:
+    # mesma loja com valor diferente é transação DISTINTA (ex: 2x Atacadão)
+    parcelados_desc_val = set()  # (desc_normalizada, valor_round)
     if itens_parcelados:
         for desc, parc, val in itens_parcelados:
-            descs_parceladas.add(re.sub(r'\s+', ' ', desc.upper().strip()))
-            vals_parceladas.add((round(val, 2), parc))
+            desc_norm = re.sub(r'\s+', ' ', desc.upper().strip())
+            parcelados_desc_val.add((desc_norm, round(val, 2)))
 
     # Padrões que indicam linhas de cabeçalho/rodapé (NÃO são transações).
     # Só filtra quando a linha NÃO começa com DD/MM (padrão de transação).
@@ -566,29 +567,34 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             except (ValueError, AttributeError):
                 pass
 
-        # Verifica duplicata com itens parcelados (exata OU substring)
-        desc_norm = re.sub(r'\s+', ' ', desc.upper().strip())
-        # Remove qualquer XX/YY residual do desc para comparar base
-        desc_base = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', ' ', desc_norm).strip()
-        if desc_norm in descs_parceladas or desc_base in descs_parceladas:
-            continue
-        # Verifica se algum parcelado é substring do desc ou vice-versa
-        if any(dp in desc_norm or desc_norm in dp for dp in descs_parceladas):
-            continue
-
+        # Parse valor ANTES da verificação de duplicatas
         try:
             val = float(valor_str.replace(".", "").replace(",", "."))
             if abs(val) < 0.01:
                 continue
-            # Desconsiderar estornos/créditos (valores negativos)
-            if val < 0:
-                continue
-
-            # Permite múltiplas compras idênticas (mesma data, desc, valor)
-            # Ex: 3x TagItau 50,00 no mesmo dia são cobranças reais
-            resultados.append((desc, "1/1", val))
         except (ValueError, TypeError):
             continue
+
+        # Verifica duplicata com itens parcelados (descrição + MESMO VALOR)
+        # Mesma loja com valor diferente é transação DISTINTA
+        desc_norm = re.sub(r'\s+', ' ', desc.upper().strip())
+        # Remove qualquer XX/YY residual do desc para comparar base
+        desc_base = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', ' ', desc_norm).strip()
+        val_round = round(val, 2)
+        # Só pula se descrição E valor coincidem (mesma transação)
+        if (desc_norm, val_round) in parcelados_desc_val or (desc_base, val_round) in parcelados_desc_val:
+            continue
+        # Substring check: também exige mesmo valor
+        if any(
+            (dp in desc_norm or desc_norm in dp) and v == val_round
+            for dp, v in parcelados_desc_val
+        ):
+            continue
+
+        # Permite múltiplas compras idênticas (mesma data, desc, valor)
+        # Ex: 3x TagItau 50,00 no mesmo dia são cobranças reais
+        # Também permite créditos/estornos (valores negativos)
+        resultados.append((desc, "1/1", val))
 
     return resultados
 
