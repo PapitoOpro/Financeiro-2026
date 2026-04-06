@@ -846,19 +846,6 @@ class ParcelasManager:
                             unsafe_allow_html=True
                         )
 
-                        # Botão pagar fatura
-                        fatura_id_val = f_cartao['fatura_id'].iloc[0] if 'fatura_id' in f_cartao.columns else None
-                        if fatura_id_val and status_fatura == 'aberta':
-                            if st.button(f"Pagar Fatura {cartao} {mes_atual.strftime('%m/%Y')}", key=f"pagar_{fatura_id_val}", icon=":material/check:"):
-                                db.pagar_fatura(fatura_id_val, user_id)
-                                st.toast(f" Fatura {cartao} {mes_atual.strftime('%m/%Y')} paga!")
-                                st.rerun()
-                        elif fatura_id_val and status_fatura == 'paga':
-                            if st.button(f"Reabrir Fatura {cartao} {mes_atual.strftime('%m/%Y')}", key=f"reabrir_{fatura_id_val}", icon=":material/undo:"):
-                                db.reabrir_fatura(fatura_id_val, user_id)
-                                st.toast(f"↩ Fatura reaberta!")
-                                st.rerun()
-
                         for _, r in f_cartao.iterrows():
                             c_sel, c1, c2, c3, c4, c5 = st.columns([0.4, 1.3, 3.0, 2.3, 0.7, 0.7])
 
