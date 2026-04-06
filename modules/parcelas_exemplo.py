@@ -158,6 +158,7 @@ class ParcelasManager:
         st.session_state["ocr_texto"] = ""
         st.session_state["ocr_dados"] = []
         st.session_state.pop("ocr_dados_editaveis", None)
+        st.session_state.pop("ocr_manual_itens", None)
 
     @staticmethod
     def _safe_rerun():
@@ -344,6 +345,44 @@ class ParcelasManager:
                         st.session_state["ocr_dados"] = dados_salvos_list
                 st.session_state["ocr_dados_editaveis"] = dados_editaveis
                 ParcelasManager._safe_rerun()
+
+            # ============================================================
+            # ADICIONAR COMPRAS MANUAIS (não capturadas pelo OCR)
+            # ============================================================
+            with st.expander("➕ Adicionar compras não detectadas pelo OCR", expanded=False):
+                st.caption("Insira compras que não apareceram na leitura automática para acertar o valor total da fatura.")
+                
+                # Inicializa lista de itens manuais pendentes no session_state
+                if "ocr_manual_itens" not in st.session_state:
+                    st.session_state["ocr_manual_itens"] = []
+
+                m_c1, m_c2, m_c3 = st.columns([3, 1.2, 1.5])
+                manual_desc = m_c1.text_input("Descrição da compra", key="manual_desc_input", placeholder="Ex: Farmácia Droga Raia")
+                manual_parc = m_c2.text_input("Parcela (Ex: 1/1 ou 2/6)", key="manual_parc_input", value="1/1")
+                manual_valor = m_c3.number_input("Valor (R$)", min_value=0.01, value=0.01, format="%.2f", key="manual_valor_input")
+
+                if st.button("Adicionar à lista", icon=":material/add:", key="btn_add_manual"):
+                    if not manual_desc.strip():
+                        st.error("Informe a descrição da compra.")
+                    elif not re.match(r'^\d{1,2}/\d{1,2}$', manual_parc.strip()):
+                        st.error("Parcela deve estar no formato X/Y (ex: 1/1, 3/10).")
+                    else:
+                        novo_item = {"desc": manual_desc.strip(), "parc": manual_parc.strip(), "valor": manual_valor, "importar": True}
+                        dados_editaveis.append(novo_item)
+                        st.session_state["ocr_dados_editaveis"] = dados_editaveis
+                        # Sincroniza ocr_dados também
+                        dados_salvos_list = list(st.session_state.get("ocr_dados", []))
+                        dados_salvos_list.append((novo_item["desc"], novo_item["parc"], novo_item["valor"]))
+                        st.session_state["ocr_dados"] = dados_salvos_list
+                        st.toast(f"✅ \"{manual_desc.strip()}\" adicionado!")
+                        ParcelasManager._safe_rerun()
+
+                # Mostra itens manuais já adicionados que não vieram do OCR original
+                itens_manuais = [d for d in dados_editaveis if d.get("manual")]
+                if itens_manuais:
+                    st.markdown("**Itens adicionados manualmente:**")
+                    for mi in itens_manuais:
+                        st.markdown(f"- {mi['desc']} | {mi['parc']} | {moeda(mi['valor'])}")
 
             # Resumo
             selecionados = [d for d in dados_editaveis if d["importar"]]
