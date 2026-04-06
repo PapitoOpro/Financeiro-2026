@@ -343,9 +343,10 @@ class ParcelasManager:
                 c_check, c_desc, c_tipo, c_parc, c_val, c_del = st.columns([0.4, 2.8, 1.0, 1.2, 1.5, 1.0])
 
                 # Determina tipo (à vista ou parcelado)
+                # Só é "à vista" se parcela == 1/1. Ex: 02/02 é a última parcela, não à vista.
                 try:
                     _at, _tot = map(int, item["parc"].split("/"))
-                    is_avista = (_at == _tot)
+                    is_avista = (_at == _tot and _tot == 1)
                 except (ValueError, AttributeError):
                     is_avista = True
 
