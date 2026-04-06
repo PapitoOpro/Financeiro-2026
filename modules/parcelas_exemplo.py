@@ -303,6 +303,21 @@ class ParcelasManager:
             st.markdown("#### Auditoria — Revise antes de importar")
             st.caption("Edite descrições, corrija parcelas ou desmarque itens que não deseja importar.")
 
+            # Callback para excluir item (executa ANTES do rerun)
+            def _excluir_item(idx_to_del):
+                eds = st.session_state.get("ocr_dados_editaveis", [])
+                svd = list(st.session_state.get("ocr_dados", []))
+                # Limpa TODAS as chaves de widget para evitar dados obsoletos
+                for i in range(len(eds)):
+                    for prefix in ("audit_check_", "audit_desc_", "audit_parc_", "audit_val_", "audit_del_"):
+                        st.session_state.pop(f"{prefix}{i}", None)
+                if 0 <= idx_to_del < len(eds):
+                    eds.pop(idx_to_del)
+                if 0 <= idx_to_del < len(svd):
+                    svd.pop(idx_to_del)
+                st.session_state["ocr_dados_editaveis"] = eds
+                st.session_state["ocr_dados"] = svd
+
             # Inicializa dados editáveis no session_state (só na primeira vez)
             if "ocr_dados_editaveis" not in st.session_state or len(st.session_state["ocr_dados_editaveis"]) != len(dados_salvos):
                 st.session_state["ocr_dados_editaveis"] = [
@@ -320,8 +335,6 @@ class ParcelasManager:
             hdr4.markdown("**Parcela**")
             hdr5.markdown("**Valor (R$)**")
             hdr6.markdown("**Ação**")
-
-            itens_para_remover = []
 
             for idx, item in enumerate(dados_editaveis):
                 c_check, c_desc, c_tipo, c_parc, c_val, c_del = st.columns([0.4, 2.8, 1.0, 1.2, 1.5, 1.0])
@@ -368,24 +381,11 @@ class ParcelasManager:
                         format="%.2f"
                     )
                 with c_del:
-                    if st.button("Excluir", key=f"audit_del_{idx}", icon=":material/delete:", type="tertiary"):
-                        itens_para_remover.append(idx)
-
-            # Remover itens excluídos (processa após o loop para não alterar índices durante iteração)
-            if itens_para_remover:
-                # Limpa chaves de widget do Streamlit para evitar dados obsoletos após reindexação
-                for i in range(len(dados_editaveis)):
-                    for prefix in ("audit_check_", "audit_desc_", "audit_parc_", "audit_val_", "audit_del_"):
-                        st.session_state.pop(f"{prefix}{i}", None)
-                for idx in sorted(itens_para_remover, reverse=True):
-                    dados_editaveis.pop(idx)
-                    # Também remove do ocr_dados para manter sincronizado
-                    dados_salvos_list = list(st.session_state.get("ocr_dados", []))
-                    if idx < len(dados_salvos_list):
-                        dados_salvos_list.pop(idx)
-                        st.session_state["ocr_dados"] = dados_salvos_list
-                st.session_state["ocr_dados_editaveis"] = dados_editaveis
-                ParcelasManager._safe_rerun()
+                    st.button(
+                        "Excluir", key=f"audit_del_{idx}",
+                        icon=":material/delete:",
+                        on_click=_excluir_item, args=(idx,),
+                    )
 
             # ============================================================
             # ADICIONAR COMPRAS MANUAIS (não capturadas pelo OCR)
