@@ -536,8 +536,9 @@ def extrair_itens_avista(texto, itens_parcelados=None):
 
         # Padrão: DD/MM DESCRICAO VALOR [CATEGORIA] (suporta Itaú multi-coluna)
         # Aceita valores negativos (estornos/créditos) com sinal '-'
+        # O sinal '-' pode estar colado ao valor ou separado por espaço
         match = re.match(
-            r'(\d{1,2}/\d{1,2})\s+(.+)\s+(-?[\d.]+,\d{2})(?:\s+[A-Z].*|\s*)$',
+            r'(\d{1,2}/\d{1,2})\s+(.+?)\s+(-?\s*[\d.]+,\d{2})(?:\s+[A-Z].*|\s*)$',
             linha
         )
 
@@ -545,6 +546,9 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             continue
 
         date_str, desc_raw, valor_str = match.groups()
+
+        # Limpa espaço entre '-' e dígitos (ex: "- 0,01" → "-0,01")
+        valor_str = re.sub(r'-\s+', '-', valor_str.strip())
 
         # Valida que DD/MM é uma data (dia 1-31, mês 1-12)
         try:
