@@ -543,6 +543,9 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             val = float(valor_str.replace(".", "").replace(",", "."))
             if abs(val) < 0.01:
                 continue
+            # Desconsiderar estornos/créditos (valores negativos)
+            if val < 0:
+                continue
 
             # Chave inclui data + desc + valor para permitir compras repetidas
             # no mesmo estabelecimento em datas ou valores diferentes

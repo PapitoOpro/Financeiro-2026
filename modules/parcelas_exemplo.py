@@ -336,6 +336,10 @@ class ParcelasManager:
 
             # Remover itens excluídos (processa após o loop para não alterar índices durante iteração)
             if itens_para_remover:
+                # Limpa chaves de widget do Streamlit para evitar dados obsoletos após reindexação
+                for i in range(len(dados_editaveis)):
+                    for prefix in ("audit_check_", "audit_desc_", "audit_parc_", "audit_val_", "audit_del_"):
+                        st.session_state.pop(f"{prefix}{i}", None)
                 for idx in sorted(itens_para_remover, reverse=True):
                     dados_editaveis.pop(idx)
                     # Também remove do ocr_dados para manter sincronizado
