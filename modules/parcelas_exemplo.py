@@ -380,7 +380,7 @@ class ParcelasManager:
                     )
                 with c_val:
                     item["valor"] = st.number_input(
-                        "Valor", value=max(0.0, float(item["valor"])), min_value=0.0,
+                        "Valor", value=float(item["valor"]),
                         key=f"audit_val_{_v}_{idx}", label_visibility="collapsed",
                         format="%.2f"
                     )
@@ -633,7 +633,9 @@ class ParcelasManager:
             duplicados = 0
             erros = 0
 
+            print(f"[IMPORT] Iniciando importação de {len(dados)} itens...")
             for desc, parc, val in dados:
+                print(f"[IMPORT] Item: desc={desc!r}, parc={parc}, val={val}")
                 try:
                     atual, total = map(int, parc.split("/"))
 
