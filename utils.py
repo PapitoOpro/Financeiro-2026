@@ -89,6 +89,8 @@ def detectar_banco(texto):
 
     if "mercado pago" in t:
         return "MERCADO_PAGO"
+    elif "porto bank" in t or "portobank" in t or "portoseg" in t or "porto seguro" in t or "cartaoportoseguro" in t:
+        return "PORTO_BANK"
     elif "nubank" in t:
         return "NUBANK"
     elif "banco itau" in t or "itau s.a" in t or "financeira itau" in t:
@@ -376,10 +378,11 @@ def extrair_parcelas(texto):
 
     # PADRÃO D: linhas com data + descrição + parcela + valor
     # Ex: '08/03 VIVO SP LJ N551 12/12 391,74'
+    # Ex: '10/02 CARREFOUR COM 02/10 CAJAMAR BR 125,62' (cidade entre parcela e valor)
     # Nota: como a linha já começa com DD/MM (data da compra),
     # o segundo XX/YY é SEMPRE a parcela (nunca uma data).
     regex_lead = re.findall(
-        r'^\s*(\d{1,2}/\d{1,2})\s+(.+?)\s+(\d{1,2}/\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
+        r'^\s*(\d{1,2}/\d{1,2})\s+(.+?)\s+(\d{1,2}/\d{1,2})\s+.*?(\d{1,3}(?:\.\d{3})*,\d{2})\s*$',
         texto, re.IGNORECASE | re.MULTILINE
     )
     for date_str, desc, parc, valor in regex_lead:
