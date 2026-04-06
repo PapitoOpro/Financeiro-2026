@@ -566,7 +566,7 @@ class ParcelasManager:
                                 except (ValueError, AttributeError):
                                     continue
                                 
-                                dados_extraidos.append((desc_limpa, parc_formatada, abs(val)))
+                                dados_extraidos.append((desc_limpa, parc_formatada, val))
                                     
                             except Exception:
                                 continue # Pula linhas inválidas
@@ -654,7 +654,7 @@ class ParcelasManager:
 
                         if not check:
                             db.adicionar_item_fatura(
-                                fatura_id, desc, abs(val), data_base,
+                                fatura_id, desc, val, data_base,
                                 num_parc_atual, total, ctid, user_id
                             )
                             novos += 1
