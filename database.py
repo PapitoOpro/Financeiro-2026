@@ -5,16 +5,20 @@
 import streamlit as st
 import pandas as pd
 import psycopg2
+import psycopg2.pool
+import atexit
 from contextlib import contextmanager
 from supabase import create_client
 
 # Optional SQLAlchemy import for pandas.read_sql engine-backed execution
 try:
     from sqlalchemy import create_engine
+    from sqlalchemy.pool import NullPool
     from sqlalchemy.engine import URL
     SQLALCHEMY_AVAILABLE = True
 except Exception:
     create_engine = None
+    NullPool = None
     URL = None
     SQLALCHEMY_AVAILABLE = False
 
@@ -49,10 +53,10 @@ class DatabaseManager:
             return None
     
     def conectar(self):
-        """Cria uma conexão com o banco de dados (não cacheada).
+        """Cria uma conexão com o banco de dados.
 
-        Observação: não cacheamos o objeto de conexão para permitir que
-        reconexões sejam feitas quando o servidor encerrar a sessão.
+        Usa keepalives TCP para detectar conexões mortas rapidamente
+        e evitar que fiquem presas no pool do Supabase.
         """
         try:
             conn = psycopg2.connect(
@@ -61,7 +65,14 @@ class DatabaseManager:
                 user=st.secrets["db_user"],
                 password=st.secrets["db_password"],
                 port=st.secrets["db_port"],
-                connect_timeout=10
+                connect_timeout=10,
+                # TCP keepalives: detecta conexão morta em ~30s
+                keepalives=1,
+                keepalives_idle=30,
+                keepalives_interval=10,
+                keepalives_count=3,
+                # Fecha conexões ociosas no servidor após 5 min
+                options="-c idle_in_transaction_session_timeout=300000"
             )
             return conn
         except Exception as e:
@@ -72,9 +83,23 @@ class DatabaseManager:
         """Retorna a conexão atual, reconectando se necessário."""
         try:
             if self.conn is not None and getattr(self.conn, "closed", 1) == 0:
-                if not self._skip_rls:
-                    self._set_rls_user(self.conn)
-                return self.conn
+                # Testa se a conexão ainda está viva com query leve
+                try:
+                    with self.conn.cursor() as cur:
+                        cur.execute("SELECT 1")
+                    self.conn.commit()
+                except Exception:
+                    # Conexão morta — fecha e reconecta
+                    try:
+                        self.conn.close()
+                    except Exception:
+                        pass
+                    self.conn = None
+
+                if self.conn is not None:
+                    if not self._skip_rls:
+                        self._set_rls_user(self.conn)
+                    return self.conn
         except Exception:
             # Qualquer problema ao checar a conexão força reconexão
             pass
@@ -84,6 +109,21 @@ class DatabaseManager:
         if self.conn is not None and not self._skip_rls:
             self._set_rls_user(self.conn)
         return self.conn
+
+    def fechar(self):
+        """Fecha a conexão e o engine, liberando recursos no pool do Supabase."""
+        if self.conn is not None:
+            try:
+                self.conn.close()
+            except Exception:
+                pass
+            self.conn = None
+        if self.engine is not None:
+            try:
+                self.engine.dispose()
+            except Exception:
+                pass
+            self.engine = None
 
     def _set_rls_user(self, conn):
         """Define app.current_user_id na sessão do PostgreSQL para RLS."""
@@ -99,9 +139,9 @@ class DatabaseManager:
     def get_engine(self):
         """Retorna um SQLAlchemy Engine criado a partir de `st.secrets`.
 
-        Retorna `None` se o SQLAlchemy não estiver disponível ou ocorrer erro
-        na criação do engine. A criação é feita de forma preguiçosa e o
-        engine é cacheado em `self.engine`.
+        Usa NullPool para não manter conexões extras abertas — cada
+        operação abre e fecha sua própria conexão, evitando esgotamento
+        do pool do Supabase.
         """
         if getattr(self, "engine", None) is not None:
             return self.engine
@@ -118,7 +158,8 @@ class DatabaseManager:
                 port=st.secrets["db_port"],
                 database=st.secrets["db_name"],
             )
-            self.engine = create_engine(url)
+            self.engine = create_engine(url, poolclass=NullPool)
+            return self.engine
             return self.engine
         except Exception as e:
             # Não é erro fatal — apenas retornamos None e deixamos o caller
@@ -853,3 +894,5 @@ class DatabaseManager:
 
 # Instância global
 db = DatabaseManager()
+# Garante que conexões sejam liberadas quando o processo encerrar
+atexit.register(db.fechar)
