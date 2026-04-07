@@ -6,6 +6,28 @@ import streamlit as st
 from database import db
 
 class AdminManager:
+        @staticmethod
+        def limpar_residuos_e_sincronizar():
+            """Remove resíduos de transações e itens órfãos e sincroniza faturas."""
+            user_id = db.get_user_id()
+            # Remove transações do caixa que referenciam faturas inexistentes
+            db.executar("""
+                DELETE FROM transacoes
+                WHERE fatura_id IS NOT NULL
+                AND fatura_id NOT IN (SELECT id FROM faturas)
+                AND user_id = %s
+            """, (user_id,))
+            # Remove itens de fatura órfãos
+            db.executar("""
+                DELETE FROM itens_fatura
+                WHERE fatura_id NOT IN (SELECT id FROM faturas)
+                AND user_id = %s
+            """, (user_id,))
+            # Recalcula totais e sincroniza transações para todas as faturas do usuário
+            faturas = db.buscar("SELECT id FROM faturas WHERE user_id = %s", (user_id,))
+            for _, row in faturas.iterrows():
+                db.atualizar_total_fatura(row['id'])
+                db.sincronizar_transacao_fatura(row['id'], user_id)
     """Gerenciador de funções administrativas."""
     
     SENHA_ADMIN = "05072019" # MUDE ISSO em produção!
@@ -46,6 +68,23 @@ class AdminManager:
         
         st.markdown("---")
         
+
+        st.markdown("---")
+        # Opção 3: Recalcular/Sincronizar Faturas
+        st.markdown("### Opção 3: Recalcular/Sincronizar Faturas e Caixa")
+        st.markdown(
+            "Remove resíduos de exclusões e sincroniza totais de faturas e transações do caixa. "
+            "Use se os valores do consultor ou caixa parecerem incorretos após muitos testes."
+        )
+        if st.button(
+            "Recalcular/Sincronizar Faturas",
+            key="btn_recalcular_faturas",
+            width='stretch',
+            icon=":material/refresh:"
+        ):
+            with st.spinner("Limpando resíduos e sincronizando faturas/caixa..."):
+                AdminManager.limpar_residuos_e_sincronizar()
+            st.success("Recalculo e sincronização concluídos!")
         # Seções do admin
         tab1, tab2, tab3 = st.tabs(["Estatísticas", "Resetar Dados", "Usuários"])
         
