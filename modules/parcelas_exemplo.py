@@ -663,12 +663,9 @@ class ParcelasManager:
                             novos += 1
                             print(f"[IMPORT]   ✅ NOVO: parc {num_parc_atual}/{total} comp={competencia} fatura_id={fatura_id}")
                         else:
-                            db.update_item_fatura(
-                                fatura_id, desc, val, data_base,
-                                num_parc_atual, total, ctid, user_id
-                            )
+                            # Apenas conta como duplicado, não tenta atualizar
                             duplicados += 1
-                            print(f"[IMPORT]   🔄 ATUALIZADO: parc {num_parc_atual}/{total} comp={competencia} fatura_id={fatura_id}")
+                            print(f"[IMPORT]   🔄 DUPLICADO: parc {num_parc_atual}/{total} comp={competencia} fatura_id={fatura_id}")
 
                         db.atualizar_total_fatura(fatura_id)
                         db.sincronizar_transacao_fatura(fatura_id, user_id)
