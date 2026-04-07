@@ -535,20 +535,24 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             continue
 
         # Padrão: DD/MM DESCRICAO VALOR [CATEGORIA] (suporta Itaú multi-coluna)
-        # Aceita valores negativos (estornos/créditos) com sinal '-'
-        # O sinal '-' pode estar colado ao valor ou separado por espaço
+        # Aceita valores negativos (estornos/créditos):
+        #   - Sinal antes: '-118,13' (Nubank, etc)
+        #   - Sinal depois: '118,13-' (Itaú)
         match = re.match(
-            r'(\d{1,2}/\d{1,2})\s+(.+?)\s+(-?\s*[\d.]+,\d{2})(?:\s+[A-Z].*|\s*)$',
+            r'(\d{1,2}/\d{1,2})\s+(.+?)\s+(-?\s*[\d.]+,\d{2})\s*(-)?(?:\s+[A-Z].*|\s*)$',
             linha
         )
 
         if not match:
             continue
 
-        date_str, desc_raw, valor_str = match.groups()
+        date_str, desc_raw, valor_str, sinal_pos = match.groups()
 
         # Limpa espaço entre '-' e dígitos (ex: "- 0,01" → "-0,01")
         valor_str = re.sub(r'-\s+', '-', valor_str.strip())
+        # Se o sinal '-' está pós-fixado (formato Itaú), move para prefixo
+        if sinal_pos == '-' and not valor_str.startswith('-'):
+            valor_str = '-' + valor_str
 
         # Valida que DD/MM é uma data (dia 1-31, mês 1-12)
         try:
