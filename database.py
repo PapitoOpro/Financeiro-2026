@@ -772,12 +772,14 @@ class DatabaseManager:
             (fatura_id, user_id)
         )
 
+        # O valor da fatura deve ser sempre negativo (saída), exceto se for crédito puro
+        valor_caixa = valor_total if valor_total > 0 else -abs(valor_total)
         if existente:
             # Atualiza valor (pode ter mudado se itens foram editados/excluídos)
             self.executar(
                 "UPDATE transacoes SET descricao = %s, valor = %s, data_vencimento = %s, conta_id = %s "
                 "WHERE fatura_id = %s AND user_id = %s",
-                (descricao, valor_total, data_venc, conta_id, fatura_id, user_id)
+                (descricao, valor_caixa, data_venc, conta_id, fatura_id, user_id)
             )
         else:
             # Cria transação pendente (não compensada) no caixa
@@ -786,7 +788,7 @@ class DatabaseManager:
                 "(descricao, valor, data_vencimento, conta_id, tipo_fluxo, user_id, "
                 " compensado, data_compensacao, fatura_id) "
                 "VALUES (%s, %s, %s, %s, 'CAIXA', %s, %s, %s, %s)",
-                (descricao, valor_total, data_venc, conta_id, user_id,
+                (descricao, valor_caixa, data_venc, conta_id, user_id,
                  is_paga, data_venc if is_paga else None, fatura_id)
             )
 
