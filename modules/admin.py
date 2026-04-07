@@ -109,10 +109,10 @@ class AdminManager:
         transacoes = db.buscar("SELECT COUNT(*) as total FROM transacoes")
         
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric(" Usuários", usuarios['total'].values[0])
-        col2.metric(" Contas", contas['total'].values[0])
-        col3.metric(" Categorias", categorias['total'].values[0])
-        col4.metric(" Transações", transacoes['total'].values[0])
+        col1.metric(" Usuários", usuarios['total'].values[0] if 'total' in usuarios.columns and not usuarios.empty else 0)
+        col2.metric(" Contas", contas['total'].values[0] if 'total' in contas.columns and not contas.empty else 0)
+        col3.metric(" Categorias", categorias['total'].values[0] if 'total' in categorias.columns and not categorias.empty else 0)
+        col4.metric(" Transações", transacoes['total'].values[0] if 'total' in transacoes.columns and not transacoes.empty else 0)
         
         st.markdown("---")
         
