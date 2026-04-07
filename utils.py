@@ -808,23 +808,12 @@ def _dedup_itens(dados):
         key = (desc_norm, parc, val_round)
         key_base = (desc_base, parc, val_round)
 
-        if parc != "1/1":
-            # Para parcelados: dedup por (desc, parc, valor) ou (desc_base, parc, valor)
-            if key in seen_desc_parc or key_base in seen_desc_parc:
-                continue
-
+        if key in seen_desc_parc or key_base in seen_desc_parc:
+            continue
         seen_desc_parc.add(key)
         seen_desc_parc.add(key_base)
         resultado.append((desc, parc, val))
     return resultado
-            # Permite itens com mesmo nome/parcela mas valores diferentes
-            # Só considera duplicado se desc/parc/valor forem idênticos
-            if key in seen_desc_parc or key_base in seen_desc_parc:
-                continue
-            seen_desc_parc.add(key)
-            seen_desc_parc.add(key_base)
-            resultado.append((desc, parc, val))
-        return resultado
 
 
 def processar_texto_colado(texto_raw, incluir_avista=True):
