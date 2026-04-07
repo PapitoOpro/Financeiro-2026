@@ -777,7 +777,7 @@ class DatabaseManager:
             self.executar(
                 "UPDATE transacoes SET descricao = %s, valor = %s, data_vencimento = %s, conta_id = %s "
                 "WHERE fatura_id = %s AND user_id = %s",
-                (descricao, -abs(valor_total), data_venc, conta_id, fatura_id, user_id)
+                (descricao, valor_total, data_venc, conta_id, fatura_id, user_id)
             )
         else:
             # Cria transação pendente (não compensada) no caixa
@@ -786,7 +786,7 @@ class DatabaseManager:
                 "(descricao, valor, data_vencimento, conta_id, tipo_fluxo, user_id, "
                 " compensado, data_compensacao, fatura_id) "
                 "VALUES (%s, %s, %s, %s, 'CAIXA', %s, %s, %s, %s)",
-                (descricao, -abs(valor_total), data_venc, conta_id, user_id,
+                (descricao, valor_total, data_venc, conta_id, user_id,
                  is_paga, data_venc if is_paga else None, fatura_id)
             )
 
