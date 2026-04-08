@@ -556,14 +556,10 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             print(f"[DESCARTADO - CABEÇALHO/RODAPÉ] {linha}")
             continue
 
-        # Regex para DD/MM DESCRICAO VALOR (valor pode ser negativo, pode ter espaços)
-        match = re.match(
-            r'(\d{1,2}/\d{1,2})\s+(.+?)\s+(-?\s*[\d.]+,\d{2})\s*$',
-            linha
-        )
-
+        # Regex permissivo: DD/MM <texto> <valor decimal no final>
+        match = re.match(r'^(\d{1,2}/\d{1,2})\s+(.+?)\s+(-?\d+[.,]\d{2})\s*$', linha)
         if not match:
-            # Tenta pegar valor colado ao final
+            # Tenta pegar valor colado ao final (ex: texto com valor grudado)
             match_valor = re.search(r'(-?\d+[.,]\d{2})$', linha)
             if not match_valor:
                 print(f"[DESCARTADO - SEM VALOR] {linha}")
@@ -576,7 +572,6 @@ def extrair_itens_avista(texto, itens_parcelados=None):
                 continue
             descricao = linha[:match_valor.start()].strip()
             descricao = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', descricao)
-            # Não descarta se houver XX/YY na descrição, apenas se já foi capturado como parcela
             desc_norm = re.sub(r'\s+', ' ', descricao.upper().strip())
             desc_base = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', ' ', desc_norm).strip()
             val_round = round(valor, 2)
@@ -593,9 +588,6 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             continue
 
         date_str, desc_raw, valor_str = match.groups()
-
-        valor_str = re.sub(r'-\s+', '-', valor_str.strip())
-
         try:
             dd, mm = map(int, date_str.split('/'))
             if not (1 <= dd <= 31 and 1 <= mm <= 12):
@@ -606,8 +598,6 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             continue
 
         desc = desc_raw.strip()
-
-        # Não descarta se houver XX/YY na descrição, apenas se já foi capturado como parcela
         try:
             val = float(valor_str.replace(".", "").replace(",", "."))
             if abs(val) < 0.01:
