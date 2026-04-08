@@ -314,7 +314,10 @@ def extrair_parcelas(texto):
     texto = texto.replace("R4", "R$").replace("I0F", "IOF")
 
     def _add_resultado(desc, parc, val):
-        """Adiciona resultado SEM deduplicação: permite lançamentos repetidos (mesmo desc/parc/valor)."""
+        """Adiciona resultado SEM deduplicação: permite lançamentos repetidos (mesmo desc/parc/valor). Ignora valores negativos (estornos)."""
+        if val < 0:
+            # Ignora estornos
+            return False
         desc_norm = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', desc.strip()).strip()
         desc_norm = re.sub(r'\s*Parcela\s*$', '', desc_norm, flags=re.IGNORECASE).strip()
         resultados.append((desc_norm, parc, val))
@@ -570,6 +573,9 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             ):
                 print(f"[DESCARTADO - DUPLICATA SUBSTRING] {linha}")
                 continue
+            if valor < 0:
+                print(f"[DESCARTADO - ESTORNO] {linha}")
+                continue
             print(f"[ACEITO - AVISTA] {descricao} | {valor}")
             resultados.append((descricao, "1/1", valor))
             continue
@@ -589,6 +595,9 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             val = float(valor_str.replace(".", "").replace(",", "."))
             if abs(val) < 0.01:
                 print(f"[DESCARTADO - VALOR MUITO PEQUENO] {linha}")
+                continue
+            if val < 0:
+                print(f"[DESCARTADO - ESTORNO] {linha}")
                 continue
         except (ValueError, TypeError):
             print(f"[DESCARTADO - VALOR INVÁLIDO] {linha}")
