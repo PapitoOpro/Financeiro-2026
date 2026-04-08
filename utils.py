@@ -492,6 +492,9 @@ def extrair_itens_avista(texto, itens_parcelados=None):
     Returns:
         Lista de tuplas (descricao, "1/1", valor)
     """
+
+    if not texto:
+        return []
     resultados = []
 
     # Normaliza itens já capturados como parcelas para evitar duplicatas
