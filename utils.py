@@ -1,4 +1,3 @@
-    print(f"[DEBUG] processar_texto_colado chamado. Texto recebido (primeiros 200 chars): {str(texto)[:200]}")
 # utils.py
 
 import re
