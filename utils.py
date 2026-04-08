@@ -529,13 +529,13 @@ def extrair_itens_avista(texto, itens_parcelados=None):
         'www.', 'http',
     ]
 
+
     for linha in texto.split('\n'):
         linha = linha.strip()
         if not linha or len(linha) < 8:
             continue
 
         linha_lower = linha.lower()
-
         comeca_com_data = re.match(r'^\d{1,2}/\d{1,2}\s', linha)
 
         taxas_bancarias = [
@@ -555,13 +555,15 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             print(f"[DESCARTADO - CABEÇALHO/RODAPÉ] {linha}")
             continue
 
+        # Regex para DD/MM DESCRICAO VALOR (valor pode ser negativo, pode ter espaços)
         match = re.match(
-            r'(\d{1,2}/\d{1,2})\s+(.+?)\s+(-?\s*[\d.]+,\d{2})\s*(-)?(?:\s+[A-Z].*|\s*)$',
+            r'(\d{1,2}/\d{1,2})\s+(.+?)\s+(-?\s*[\d.]+,\d{2})\s*$',
             linha
         )
 
         if not match:
-            match_valor = re.search(r'(\d+,\d{2})$', linha)
+            # Tenta pegar valor colado ao final
+            match_valor = re.search(r'(-?\d+[.,]\d{2})$', linha)
             if not match_valor:
                 print(f"[DESCARTADO - SEM VALOR] {linha}")
                 continue
@@ -573,14 +575,25 @@ def extrair_itens_avista(texto, itens_parcelados=None):
                 continue
             descricao = linha[:match_valor.start()].strip()
             descricao = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', descricao)
+            # Não descarta se houver XX/YY na descrição, apenas se já foi capturado como parcela
+            desc_norm = re.sub(r'\s+', ' ', descricao.upper().strip())
+            desc_base = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', ' ', desc_norm).strip()
+            val_round = round(valor, 2)
+            if (desc_norm, val_round) in parcelados_desc_val or (desc_base, val_round) in parcelados_desc_val:
+                print(f"[DESCARTADO - DUPLICATA PARCELADO] {linha}")
+                continue
+            if any(
+                (dp in desc_norm or desc_norm in dp) and v == val_round
+                for dp, v in parcelados_desc_val
+            ):
+                print(f"[DESCARTADO - DUPLICATA SUBSTRING] {linha}")
+                continue
             resultados.append((descricao, "1/1", valor))
             continue
 
-        date_str, desc_raw, valor_str, sinal_pos = match.groups()
+        date_str, desc_raw, valor_str = match.groups()
 
         valor_str = re.sub(r'-\s+', '-', valor_str.strip())
-        if sinal_pos == '-' and not valor_str.startswith('-'):
-            valor_str = '-' + valor_str
 
         try:
             dd, mm = map(int, date_str.split('/'))
@@ -593,16 +606,7 @@ def extrair_itens_avista(texto, itens_parcelados=None):
 
         desc = desc_raw.strip()
 
-        parc_in_desc = re.search(r'(\d{1,2})/(\d{1,2})', desc)
-        if parc_in_desc:
-            try:
-                a, t = int(parc_in_desc.group(1)), int(parc_in_desc.group(2))
-                if t > 1 and a <= t:
-                    print(f"[DESCARTADO - PARCELA NA DESCRIÇÃO] {linha}")
-                    continue
-            except (ValueError, AttributeError):
-                pass
-
+        # Não descarta se houver XX/YY na descrição, apenas se já foi capturado como parcela
         try:
             val = float(valor_str.replace(".", "").replace(",", "."))
             if abs(val) < 0.01:
