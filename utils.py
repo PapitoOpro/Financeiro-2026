@@ -170,7 +170,9 @@ def _split_multicolunas(texto):
     """
     linhas_out = []
     for linha in texto.split('\n'):
-        import re
+        # Função placeholder: retorna as linhas como estão
+        linhas_out.append(linha)
+    return '\n'.join(linhas_out)
 
 def limpar_linha(linha):
     linha = linha.strip()
