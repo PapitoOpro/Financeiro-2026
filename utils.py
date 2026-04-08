@@ -303,6 +303,8 @@ def _is_parcela_valida(parc_str):
 
 def extrair_parcelas(texto):
     import re
+    if not texto:
+        return []
     resultados = []
     chaves_vistas = set() # (desc_normalizada, parcela, valor) para evitar duplicatas reais
 
