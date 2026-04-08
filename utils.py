@@ -533,7 +533,9 @@ def extrair_itens_avista(texto, itens_parcelados=None):
 
     for linha in texto.split('\n'):
         linha = linha.strip()
+        print(f"[DEBUG] Processando linha: {linha}")
         if not linha or len(linha) < 8:
+            print(f"[DESCARTADO - LINHA CURTA OU VAZIA] {linha}")
             continue
 
         linha_lower = linha.lower()
@@ -584,6 +586,7 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             ):
                 print(f"[DESCARTADO - DUPLICATA SUBSTRING] {linha}")
                 continue
+            print(f"[ACEITO - AVISTA] {descricao} | {valor}")
             resultados.append((descricao, "1/1", valor))
             continue
 
@@ -620,6 +623,7 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             print(f"[DESCARTADO - DUPLICATA SUBSTRING] {linha}")
             continue
 
+        print(f"[ACEITO - AVISTA] {desc} | {val}")
         resultados.append((desc, "1/1", val))
 
     return resultados
