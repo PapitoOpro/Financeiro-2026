@@ -72,26 +72,25 @@ class CaixaManager:
         # Calcula resumo
         ent = df_caixa[df_caixa['valor'] > 0]['valor'].sum() if not df_caixa.empty else 0
         sai = abs(df_caixa[df_caixa['valor'] < 0]['valor'].sum()) if not df_caixa.empty else 0
-        bal = ent - sai
 
-            # LOG DE AUDITORIA DO EXTRATO
-            log_extrato = []
-            for _, row in df_caixa.iterrows():
-                log_extrato.append({
-                    'id': int(row['id']),
-                    'data': str(row['data']),
-                    'descricao': str(row['descricao']),
-                    'valor': float(row['valor']),
-                    'categoria': str(row['categoria']),
-                    'banco': str(row['banco']),
-                    'subcategoria': str(row['subcategoria']),
-                    'compensado': bool(row['compensado']),
-                    'data_compensacao': str(row['data_compensacao']) if row['data_compensacao'] else None,
-                    'fatura_id': int(row['fatura_id']) if row['fatura_id'] else None
-                })
-            st.session_state['log_extrato'] = log_extrato
-            if st.checkbox('Exibir log do extrato do caixa (auditoria)', value=False, key='show_log_extrato'):
-                st.code(str(log_extrato), language='python')
+        # LOG DE AUDITORIA DO EXTRATO
+        log_extrato = []
+        for _, row in df_caixa.iterrows():
+            log_extrato.append({
+                'id': int(row['id']),
+                'data': str(row['data']),
+                'descricao': str(row['descricao']),
+                'valor': float(row['valor']),
+                'categoria': str(row['categoria']),
+                'banco': str(row['banco']),
+                'subcategoria': str(row['subcategoria']),
+                'compensado': bool(row['compensado']),
+                'data_compensacao': str(row['data_compensacao']) if row['data_compensacao'] else None,
+                'fatura_id': int(row['fatura_id']) if row['fatura_id'] else None
+            })
+        st.session_state['log_extrato'] = log_extrato
+        if st.checkbox('Exibir log do extrato do caixa (auditoria)', value=False, key='show_log_extrato'):
+            st.code(str(log_extrato), language='python')
 
         # Compensação stats
         if not df_caixa.empty:
