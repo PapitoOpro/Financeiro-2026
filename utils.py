@@ -8,6 +8,7 @@ import pytesseract
 import numpy as np
 import cv2
 
+
 # ==========================================
 # EXTRAÇÃO INTELIGENTE (PDF → TEXTO)
 # ==========================================
@@ -125,7 +126,7 @@ def parser_mercado_pago(texto):
             valor = float(valor.replace('.', '').replace(',', '.'))
             dados.append((desc.strip(), f"{atual}/{total}", valor))
         except:
-            continue
+            return
 
     return dados
 
@@ -168,22 +169,41 @@ def _split_multicolunas(texto):
     """
     linhas_out = []
     for linha in texto.split('\n'):
+        import re
+
+def limpar_linha(linha):
+    linha = linha.strip()
+
+    # remove parênteses quebrados
+    linha = linha.replace("(", "").replace(")", "")
+
+    # corrige texto colado (DIFERENCI04/12 → DIFERENCI 04/12)
+    linha = re.sub(r'([A-Z])(\d{2}/\d{2})', r'\1 \2', linha)
+
+    # corrige "- 0,01" → "-0,01"
+    linha = re.sub(r'-\s+(\d)', r'-\1', linha)
+
+    # remove múltiplos espaços
+    linha = re.sub(r'\s+', ' ', linha)
+
+    return linha
+    linha = limpar_linha(linha)
         # Primeiro: separa quando um valor é seguido por marcador Itaú (L, S, E, P)
         # Ex: "10/12 DROGRARIA SAO 04/04 51,87 L Total dos lancamentos atuais 1.579,37"
         # → "10/12 DROGRARIA SAO 04/04 51,87" (descarta o resto que é resumo)
-        linha_split_marker = re.sub(
+    linha_split_marker = re.sub(
             r'(\d{1,3}(?:\.\d{3})*,\d{2})\s+[LSEP]\s+(?:Total|Lancamentos|Credito).*',
             r'\1',
             linha, flags=re.IGNORECASE
         )
 
         # Divide onde um valor monetário (NNN,NN ou -NNN,NN) é seguido por DD/MM (nova transação)
-        partes = re.split(
+    partes = re.split(
             r'(-?\d{1,3}(?:\.\d{3})*,\d{2})\s+(?=\d{1,2}/\d{1,2}\b)',
             linha_split_marker
         )
 
-        if len(partes) >= 3:
+    if len(partes) >= 3:
             # partes alternadas: [texto0, valor0, texto1, valor1, ..., textoN]
             i = 0
             while i < len(partes) - 1:
@@ -194,7 +214,7 @@ def _split_multicolunas(texto):
             # Último segmento (última transação da linha)
             if i < len(partes) and partes[i].strip():
                 linhas_out.append(partes[i].strip())
-        else:
+    else:
             # Sem split multi-coluna — verifica se há transação DD/MM embarcada
             # Ex: "RAFAELRODRIGUES(final8122) 04/03 BURGERKING 118,30"
             stripped = linha_split_marker.strip()
@@ -211,8 +231,18 @@ def _split_multicolunas(texto):
                 linhas_out.append(linha_split_marker)
 
     return '\n'.join(linhas_out)
-
-
+if any(p in linha.lower() for p in [
+"limite", "juros", "encargos", "simulacao",
+"credito", "fatura", "total"]):
+    pass
+if any(p in linha.lower() for p in [
+    "limite", "juros", "encargos", "simulacao",
+    "credito", "fatura", "total"
+]):
+    pass
+if not match:
+    print(f"[FALLBACK] {linha}")
+    
 def _cortar_texto_antes_proximas_faturas(texto):
     """Remove tudo a partir de 'Compras parceladas - próximas faturas' e seções similares.
     
@@ -543,7 +573,20 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             linha
         )
 
+
         if not match:
+            # 🔥 FALLBACK INTELIGENTE
+            match_valor = re.search(r'(\d+,\d{2})$', linha)
+            if not match_valor:
+                continue
+            valor_str = match_valor.group(1)
+            try:
+                valor = float(valor_str.replace(".", "").replace(",", "."))
+            except Exception:
+                continue
+            descricao = linha[:match_valor.start()].strip()
+            descricao = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', descricao)
+            resultados.append((descricao, "1/1", valor))
             continue
 
         date_str, desc_raw, valor_str, sinal_pos = match.groups()
