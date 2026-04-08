@@ -12,9 +12,6 @@ from utils import moeda, get_cor_saldo, get_cor_valor
 from modules.consultor import ConsultorManager
 
 class CaixaManager:
-            # DEBUG: Exibir todas as transações carregadas do banco antes de qualquer filtro
-            if st.checkbox('DEBUG: Exibir todas as transações do banco (sem filtro)', value=False, key='show_all_db_transacoes'):
-                st.dataframe(df_caixa)
     """Gerenciador do Controle de Caixa."""
     
     @staticmethod
@@ -71,6 +68,10 @@ class CaixaManager:
             AND t.data_vencimento BETWEEN '{data_inicio}' AND '{data_fim}' 
             ORDER BY t.data_vencimento DESC
         """)
+
+        # DEBUG: Exibir todas as transações carregadas do banco antes de qualquer filtro
+        if st.checkbox('DEBUG: Exibir todas as transações do banco (sem filtro)', value=False, key='show_all_db_transacoes'):
+            st.dataframe(df_caixa)
         
         # Calcula resumo
 
