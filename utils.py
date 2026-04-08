@@ -34,26 +34,26 @@ def extrair_texto_pdf(file, senha=None):
             return "__PDF_PROTEGIDO__"
         pass
 
-    # FALLBACK OCR (SE TEXTO VEIO RUIM)
-    if len(texto) < 1000:
-        try:
-            file.seek(0)
-            pdf2image_kwargs = {}
-            if senha:
-                pdf2image_kwargs["userpw"] = senha
-            images = convert_from_bytes(file.read(), dpi=300, **pdf2image_kwargs)
-
-            for img in images:
-                img_np = np.array(img)
-
-                gray = cv2.cvtColor(img_np, cv2.COLOR_BGR2GRAY)
-                _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
-
-                custom_config = r'--oem 3 --psm 6 -l por'
-                texto += pytesseract.image_to_string(thresh, config=custom_config)
-
-        except:
-            pass
+    # OCR desabilitado por solicitação do usuário
+    # if len(texto) < 1000:
+    #     try:
+    #         file.seek(0)
+    #         pdf2image_kwargs = {}
+    #         if senha:
+    #             pdf2image_kwargs["userpw"] = senha
+    #         images = convert_from_bytes(file.read(), dpi=300, **pdf2image_kwargs)
+    #
+    #         for img in images:
+    #             img_np = np.array(img)
+    #
+    #             gray = cv2.cvtColor(img_np, cv2.COLOR_BGR2GRAY)
+    #             _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+    #
+    #             custom_config = r'--oem 3 --psm 6 -l por'
+    #             texto += pytesseract.image_to_string(thresh, config=custom_config)
+    #
+    #     except:
+    #         pass
 
     return texto
 

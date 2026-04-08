@@ -203,113 +203,43 @@ class ParcelasManager:
 
     @staticmethod
     def _tab_importar_pdf(df_contas, df_cats):
-        """Aba para importar faturas PDF via OCR."""
-        st.subheader(" Importador de Faturas via OCR")
-        
-        # Exibe mensagem de sucesso da última importação (se houver)
-        if 'parcela_msg_sucesso' in st.session_state:
-            st.success(st.session_state.pop('parcela_msg_sucesso'))
-
-        senha_pdf = st.text_input("Senha do PDF (Se houver)", type="password")
-        file = st.file_uploader("Envie a fatura PDF", type="pdf")
-
-        # 1. Limpa o estado se o usuário enviar um arquivo diferente
-        if file and st.session_state.get("ocr_file_name") != file.name:
-            ParcelasManager._resetar_estado_pdf()
-            st.session_state["ocr_file_name"] = file.name
-
-        # 2. Botão de Processamento: Apenas extrai e salva no session_state
-        if file and st.button("Analisar Fatura", icon=":material/search:"):
-            with st.spinner("Extraindo dados do PDF..."):
-                banco, texto, dados, metodo = processar_fatura(file, senha_pdf)
-                
-                # Salva o resultado no estado para que sobreviva a recarregamentos da tela
-                st.session_state["ocr_banco"] = banco
-                st.session_state["ocr_texto"] = texto
-                st.session_state["ocr_dados"] = dados
-                st.session_state["ocr_metodo"] = metodo
-                
-                if banco == "__PDF_PROTEGIDO__":
-                    st.error(
-                        " Este PDF está protegido por senha. "
-                        "Informe a senha no campo acima e tente novamente."
-                    )
-                elif not dados:
-                    st.warning(" Texto extraído, mas nenhum item detectado na fatura.")
+        """Aba para importar faturas apenas via texto manual."""
+        st.subheader(" Importador de Faturas (Texto Manual)")
+        st.markdown("##### Cole o texto dos lançamentos da fatura abaixo:")
+        st.caption(
+            "Abra o PDF, selecione os lançamentos com o mouse, "
+            "copie (Ctrl+C) e cole abaixo. Não é mais necessário enviar o PDF."
+        )
+        texto_colado = st.text_area(
+            "Cole o texto dos lançamentos aqui:",
+            height=200,
+            key="ocr_texto_colado",
+        )
+        if texto_colado:
+            if st.button("Processar texto colado", icon=":material/refresh:"):
+                banco_c, texto_c, dados_c, metodo_c = processar_texto_colado(texto_colado)
+                if dados_c:
+                    st.session_state["ocr_banco"] = banco_c
+                    st.session_state["ocr_texto"] = texto_c
+                    st.session_state["ocr_dados"] = dados_c
+                    st.session_state["ocr_metodo"] = metodo_c
+                    st.session_state.pop("ocr_dados_editaveis", None)
+                    st.session_state["ocr_version"] = st.session_state.get("ocr_version", 0) + 1
+                    n_av = sum(1 for _, p, _ in dados_c if p == "1/1")
+                    n_pc = len(dados_c) - n_av
+                    st.success(f"{len(dados_c)} itens encontrados! ({n_pc} parcelado(s), {n_av} à vista)")
+                    ParcelasManager._safe_rerun()
                 else:
-                    n_avista = sum(1 for _, p, _ in dados if p == "1/1")
-                    n_parcelados = len(dados) - n_avista
-                    st.success(
-                        f" {len(dados)} itens encontrados no {banco}! "
-                        f"({n_parcelados} parcelado(s), {n_avista} à vista)"
-                    )
-                    st.info(
-                        " Itens à vista serão lançados na fatura do mês atual. "
-                        "Itens parcelados serão projetados automaticamente nos meses futuros."
-                    )
+                    st.warning("Nenhum item detectado no texto colado.")
+        st.divider()
 
-        # 3. Exibição e Confirmação: Lê os dados do session_state
         dados_salvos = st.session_state.get("ocr_dados", [])
         banco_detectado = st.session_state.get("ocr_banco", "Desconhecido")
-        texto_extraido = st.session_state.get("ocr_texto", "")
-        
-        # Expander para ver o texto extraído (debug)
-        if texto_extraido:
-            with st.expander(" Ver texto extraído do PDF (debug)"):
-                from utils import normalizar_texto, _cortar_texto_antes_proximas_faturas, _split_multicolunas
-                texto_norm = normalizar_texto(texto_extraido)
-                texto_cortado = _cortar_texto_antes_proximas_faturas(texto_norm)
-                texto_processado = _split_multicolunas(texto_cortado)
-                chars_cortados = len(texto_norm) - len(texto_cortado)
-                metodo = st.session_state.get("ocr_metodo", "")
-                if metodo:
-                    st.info(f"Método de extração: **{metodo}**")
-                if chars_cortados > 0:
-                    st.info(f"Texto total: {len(texto_norm)} chars | Cortado em 'próximas faturas': {chars_cortados} chars removidos")
-                else:
-                    st.info(f"Texto total: {len(texto_norm)} chars | Nenhum corte aplicado")
-                st.text(texto_processado[:5000])
-
-            # Fallback: colar texto manualmente (fora do expander para ficar acessível)
-            st.markdown("##### Texto manual (se a extração não pegou tudo)")
-            st.caption(
-                "Abra o PDF, selecione os lançamentos com o mouse, "
-                "copie (Ctrl+C) e cole abaixo."
-            )
-            texto_colado = st.text_area(
-                "Cole o texto dos lançamentos aqui:",
-                height=150,
-                key="ocr_texto_colado",
-            )
-            if texto_colado:
-                if st.button("Reprocessar com texto colado", icon=":material/refresh:"):
-                    banco_c, texto_c, dados_c, metodo_c = processar_texto_colado(texto_colado)
-                    if dados_c:
-                        st.session_state["ocr_banco"] = banco_c
-                        st.session_state["ocr_texto"] = texto_c
-                        st.session_state["ocr_dados"] = dados_c
-                        st.session_state["ocr_metodo"] = metodo_c
-                        st.session_state.pop("ocr_dados_editaveis", None)
-                        # Incrementa versão para widgets serem recriados
-                        st.session_state["ocr_version"] = st.session_state.get("ocr_version", 0) + 1
-                        n_av = sum(1 for _, p, _ in dados_c if p == "1/1")
-                        n_pc = len(dados_c) - n_av
-                        st.success(f"{len(dados_c)} itens encontrados! ({n_pc} parcelado(s), {n_av} à vista)")
-                        ParcelasManager._safe_rerun()
-                    else:
-                        st.warning("Nenhum item detectado no texto colado.")
-            st.divider()
-        
         if dados_salvos:
             st.markdown(f"### Banco Detectado: **{banco_detectado}**")
-            
-            # ============================================================
-            # AUDITORIA: Editar, corrigir ou excluir parcelas antes de importar
-            # ============================================================
             st.markdown("#### Auditoria — Revise antes de importar")
             st.caption("Edite descrições, corrija parcelas ou desmarque itens que não deseja importar.")
 
-            # Callback para excluir item (executa ANTES do rerun)
             def _excluir_item(idx_to_del):
                 eds = st.session_state.get("ocr_dados_editaveis", [])
                 svd = list(st.session_state.get("ocr_dados", []))
