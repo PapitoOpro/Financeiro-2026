@@ -70,8 +70,10 @@ class CaixaManager:
         """)
         
         # Calcula resumo
+
         ent = df_caixa[df_caixa['valor'] > 0]['valor'].sum() if not df_caixa.empty else 0
         sai = abs(df_caixa[df_caixa['valor'] < 0]['valor'].sum()) if not df_caixa.empty else 0
+        bal = ent - sai
 
         # LOG DE AUDITORIA DO EXTRATO
         log_extrato = []
