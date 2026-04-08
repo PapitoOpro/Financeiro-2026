@@ -340,7 +340,7 @@ class CaixaManager:
                 with c_pagar:
                     if not is_compensado:
                         if st.button(f"Pagar Fatura", key=f"pagar_fat_{fatura_id_val}", width='stretch', icon=":material/check:"):
-                                db.pagar_fatura(int(fatura_id_val), user_id, datetime.now().date())
+                            db.pagar_fatura(int(fatura_id_val), user_id, datetime.now().date())
                             st.rerun()
                     else:
                         if st.button(f"Reabrir Fatura", key=f"reabrir_fat_{fatura_id_val}", width='stretch', icon=":material/undo:"):
