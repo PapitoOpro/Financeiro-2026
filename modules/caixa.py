@@ -93,12 +93,13 @@ class CaixaManager:
             st.code(str(log_extrato), language='python')
 
         # Compensação stats
+        compensados = 0
+        pendentes = 0
+        total_itens = 0
         if not df_caixa.empty:
             total_itens = len(df_caixa)
             compensados = df_caixa['compensado'].sum() if 'compensado' in df_caixa.columns else 0
             pendentes = total_itens - compensados
-        else:
-            total_itens = compensados = pendentes = 0
         
         # 2. CARDS DE RESUMO
         CaixaManager._renderizar_cards(ent, sai, bal, compensados, pendentes)
