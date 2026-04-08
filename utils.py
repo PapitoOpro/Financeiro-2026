@@ -308,36 +308,17 @@ def extrair_parcelas(texto):
     if not texto:
         return []
     resultados = []
-    chaves_vistas = set() # (desc_normalizada, parcela, valor) para evitar duplicatas reais
+    # Removido: deduplicação por (desc, parcela, valor) para permitir lançamentos repetidos
 
     # 1. Limpeza de ruídos comuns de OCR
     texto = texto.replace("R4", "R$").replace("I0F", "IOF")
 
     def _add_resultado(desc, parc, val):
-        """Adiciona resultado evitando duplicatas reais (mesma desc + mesma parcela + mesmo valor).
-        
-        Duas compras no mesmo estabelecimento com mesma parcela mas valores
-        diferentes são transações distintas (ex: 2x ATACADAO 02/02).
-        """
-        # Normaliza a descrição removendo datas iniciais, "Parcela" e espaços extras
+        """Adiciona resultado SEM deduplicação: permite lançamentos repetidos (mesmo desc/parc/valor)."""
         desc_norm = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', desc.strip()).strip()
         desc_norm = re.sub(r'\s*Parcela\s*$', '', desc_norm, flags=re.IGNORECASE).strip()
-        desc_upper = desc_norm.upper()
-        val_round = round(val, 2)
-        
-        # Verifica se já existe uma parcela com mesma numeração, valor e descrição similar
-        for existing_desc, existing_parc, existing_val in chaves_vistas:
-            if existing_parc != parc or existing_val != val_round:
-                continue
-            if existing_desc in desc_upper or desc_upper in existing_desc:
-                return False
-        
-        chave = (desc_upper, parc, val_round)
-        if chave not in chaves_vistas:
-            chaves_vistas.add(chave)
-            resultados.append((desc_norm, parc, val))
-            return True
-        return False
+        resultados.append((desc_norm, parc, val))
+        return True
 
     # ==============================================================
     # PASSO 1: Tentar extrair da seção "Compras parceladas" (Itaú)
