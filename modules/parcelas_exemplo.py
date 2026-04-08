@@ -42,18 +42,19 @@ def _confirmar_exclusao_dialog():
             fatura_ids_afetadas = set()
 
             for rid in ids:
+                rid = int(rid)
                 if tipo == 'item_fatura':
                     # Busca fatura_id antes de excluir
                     row = db.buscar_um("SELECT fatura_id FROM itens_fatura WHERE id=? AND user_id=?", (rid, user_id))
                     if row:
-                        fatura_ids_afetadas.add(row[0])
+                        fatura_ids_afetadas.add(int(row[0]))
                     db.executar("DELETE FROM itens_fatura WHERE id=? AND user_id=?", (rid, user_id))
                 else:
                     db.executar("DELETE FROM transacoes WHERE id=? AND user_id=?", (rid, user_id))
 
             # Recalcula totais das faturas afetadas
             for fid in fatura_ids_afetadas:
-                db.atualizar_total_fatura(fid)
+                db.atualizar_total_fatura(int(fid))
 
             st.session_state['parcela_msg_sucesso'] = f" {len(ids)} item(ns) excluído(s) com sucesso!"
             st.session_state.pop('ids_para_excluir', None)
@@ -143,8 +144,8 @@ class ParcelasManager:
                     fatura_id, desc, float(val), dt_ini,
                     num_parc, int(p_total), ctid, user_id
                 )
-                db.atualizar_total_fatura(fatura_id)
-                db.sincronizar_transacao_fatura(fatura_id, user_id)
+                db.atualizar_total_fatura(int(fatura_id))
+                db.sincronizar_transacao_fatura(int(fatura_id), user_id)
 
             st.success(f" {parcelas_lancar} parcelas lançadas com sucesso!")
             ParcelasManager._resetar_estado_pdf()
@@ -608,8 +609,8 @@ class ParcelasManager:
                             duplicados += 1
                             print(f"[IMPORT]   🔄 DUPLICADO: parc {num_parc_atual}/{total} comp={competencia} fatura_id={fatura_id}")
 
-                        db.atualizar_total_fatura(fatura_id)
-                        db.sincronizar_transacao_fatura(fatura_id, user_id)
+                        db.atualizar_total_fatura(int(fatura_id))
+                        db.sincronizar_transacao_fatura(int(fatura_id), user_id)
 
                 except Exception as inner_e:
                     st.warning(f"Erro ao processar linha '{desc}': {inner_e}")

@@ -291,7 +291,7 @@ class CaixaManager:
 
             # Pré-carrega todos os itens de todas as faturas do mês (1 query só)
             fatura_ids_list = [int(x) for x in df_faturas['fatura_id'].unique()]
-            fatura_ids_str = ','.join(str(x) for x in fatura_ids_list)
+            fatura_ids_str = ','.join(str(int(x)) for x in fatura_ids_list)
             df_all_itens = db.buscar(f"""
                 SELECT i.id, i.fatura_id, i.descricao, i.valor, i.data_compra,
                        i.parcela_atual, i.parcela_total,
@@ -340,7 +340,7 @@ class CaixaManager:
                 with c_pagar:
                     if not is_compensado:
                         if st.button(f"Pagar Fatura", key=f"pagar_fat_{fatura_id_val}", width='stretch', icon=":material/check:"):
-                            db.pagar_fatura(fatura_id_val, user_id, datetime.now().date())
+                                db.pagar_fatura(int(fatura_id_val), user_id, datetime.now().date())
                             st.rerun()
                     else:
                         if st.button(f"Reabrir Fatura", key=f"reabrir_fat_{fatura_id_val}", width='stretch', icon=":material/undo:"):
@@ -356,7 +356,7 @@ class CaixaManager:
                     st.warning(f"Excluir fatura **{row['descricao']}** e todos os seus itens?")
                     cc1, cc2 = st.columns(2)
                     if cc1.button("Sim, excluir", key=f"yes_del_fat_{fatura_id_val}", icon=":material/check:"):
-                        db.excluir_fatura(fatura_id_val, user_id)
+                        db.excluir_fatura(int(fatura_id_val), user_id)
                         st.session_state.pop(f"confirm_del_fat_{fatura_id_val}", None)
                         st.rerun()
                     if cc2.button("Não", key=f"no_del_fat_{fatura_id_val}", icon=":material/close:"):
@@ -364,7 +364,7 @@ class CaixaManager:
                         st.rerun()
 
                 # Expander com itens da fatura (usa dados pré-carregados)
-                df_itens_fat = df_all_itens[df_all_itens['fatura_id'] == fatura_id_val] if not df_all_itens.empty else pd.DataFrame()
+                df_itens_fat = df_all_itens[df_all_itens['fatura_id'] == int(fatura_id_val)] if not df_all_itens.empty else pd.DataFrame()
                 n_itens = len(df_itens_fat)
 
                 with st.expander(f"Ver itens da fatura ({n_itens} itens)", expanded=False):
@@ -444,8 +444,8 @@ class CaixaManager:
                                                 "UPDATE itens_fatura SET descricao=?, valor=?, categoria_id=? WHERE id=? AND user_id=?",
                                                 (d_desc, abs(float(d_val)), ctid, item_id, user_id)
                                             )
-                                            db.atualizar_total_fatura(fatura_id_val)
-                                            db.sincronizar_transacao_fatura(fatura_id_val, user_id)
+                                            db.atualizar_total_fatura(int(fatura_id_val))
+                                            db.sincronizar_transacao_fatura(int(fatura_id_val), user_id)
                                         except Exception as e:
                                             st.error(f"Erro ao atualizar item: {e}")
                                         st.session_state[editing_item_key] = False
