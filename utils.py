@@ -231,17 +231,6 @@ def limpar_linha(linha):
                 linhas_out.append(linha_split_marker)
 
     return '\n'.join(linhas_out)
-if any(p in linha.lower() for p in [
-"limite", "juros", "encargos", "simulacao",
-"credito", "fatura", "total"]):
-    pass
-if any(p in linha.lower() for p in [
-    "limite", "juros", "encargos", "simulacao",
-    "credito", "fatura", "total"
-]):
-    pass
-if not match:
-    print(f"[FALLBACK] {linha}")
     
 def _cortar_texto_antes_proximas_faturas(texto):
     """Remove tudo a partir de 'Compras parceladas - próximas faturas' e seções similares.
