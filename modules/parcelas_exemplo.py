@@ -13,6 +13,8 @@ import plotly.graph_objects as go
 from utils import moeda, processar_fatura, processar_texto_colado, get_cor_valor, get_cor_saldo
 from typing import Any, cast
 
+def normalizar_valor_fatura(valor):
+    return -abs(valor)
 
 @st.dialog("Confirmar Exclusão")
 def _confirmar_exclusao_dialog():
@@ -636,7 +638,7 @@ class ParcelasManager:
             print(f"[IMPORT] Iniciando importação de {len(dados)} itens...")
             for desc, parc, val in dados:
                 try:
-                    val = -abs(val)  # 🔥 CORREÇÃO PRINCIPAL
+                    val = normalizar_valor_fatura(val)
 
                     atual, total = map(int, parc.split("/"))
                 except Exception as inner_e:
