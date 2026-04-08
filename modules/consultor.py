@@ -98,8 +98,10 @@ class ConsultorEngine:
             AND f.data_vencimento BETWEEN '{data_inicio}' AND '{data_fim}'
             ORDER BY f.data_vencimento
         """)
-        if not df_cartao.empty and not df_cartao.isna().all(axis=None):
-            df = pd.concat([df, df_cartao.dropna(how='all')], ignore_index=True)
+        # Corrige FutureWarning: concat apenas se df_cartao tem dados válidos
+        df_cartao_clean = df_cartao.dropna(how='all') if not df_cartao.empty else pd.DataFrame()
+        if not df_cartao_clean.empty:
+            df = pd.concat([df, df_cartao_clean], ignore_index=True)
 
         return df
 
@@ -136,8 +138,10 @@ class ConsultorEngine:
             AND f.data_vencimento BETWEEN '{data_inicio}' AND '{data_fim}'
             ORDER BY f.data_vencimento
         """)
-        if not df_cartao.empty and not df_cartao.isna().all(axis=None):
-            df = pd.concat([df, df_cartao.dropna(how='all')], ignore_index=True)
+        # Corrige FutureWarning: concat apenas se df_cartao tem dados válidos
+        df_cartao_clean = df_cartao.dropna(how='all') if not df_cartao.empty else pd.DataFrame()
+        if not df_cartao_clean.empty:
+            df = pd.concat([df, df_cartao_clean], ignore_index=True)
 
         return df
 
