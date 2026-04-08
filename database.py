@@ -753,13 +753,16 @@ class DatabaseManager:
         - Fatura aparece como 1 linha no extrato (pendente)
         - Ao compensar no caixa = fatura paga
         """
+        print(f"[DEBUG] sincronizar_transacao_fatura: fatura_id={fatura_id}, user_id={user_id}")
         fatura = self.buscar_um(
             "SELECT f.valor_total, c.nome, f.competencia, f.data_vencimento, f.conta_id, f.status "
             "FROM faturas f JOIN contas c ON f.conta_id = c.id "
             "WHERE f.id = %s AND f.user_id = %s",
             (fatura_id, user_id)
         )
+        print(f"[DEBUG] fatura encontrada: {fatura}")
         if not fatura:
+            print("[DEBUG] fatura não encontrada, abortando.")
             return
 
         valor_total, cartao_nome, competencia, data_venc, conta_id, status = fatura
@@ -768,7 +771,7 @@ class DatabaseManager:
 
         # Se o valor_total for menor ou igual a zero, não cria/atualiza transação no caixa (ignora estornos ou faturas zeradas)
         if valor_total is None or valor_total <= 0:
-            # Remove transação existente se houver
+            print(f"[DEBUG] valor_total inválido (None ou <= 0): {valor_total}. Removendo transação se existir.")
             self.executar(
                 "DELETE FROM transacoes WHERE fatura_id = %s AND user_id = %s",
                 (fatura_id, user_id)
@@ -780,26 +783,29 @@ class DatabaseManager:
             "SELECT id FROM transacoes WHERE fatura_id = %s AND user_id = %s",
             (fatura_id, user_id)
         )
+        print(f"[DEBUG] transação existente: {existente}")
 
         # O valor da fatura deve ser sempre negativo (saída), exceto se for crédito puro
         valor_caixa = valor_total if valor_total > 0 else -abs(valor_total)
+        print(f"[DEBUG] valor_caixa a lançar: {valor_caixa}")
         if existente:
-            # Atualiza valor (pode ter mudado se itens foram editados/excluídos)
+            print("[DEBUG] Atualizando transação existente no caixa.")
             self.executar(
                 "UPDATE transacoes SET descricao = %s, valor = %s, data_vencimento = %s, conta_id = %s "
                 "WHERE fatura_id = %s AND user_id = %s",
                 (descricao, valor_caixa, data_venc, conta_id, fatura_id, user_id)
             )
         else:
-            # Cria transação pendente (não compensada) no caixa
+            print("[DEBUG] Criando nova transação no caixa.")
             self.executar(
                 "INSERT INTO transacoes "
                 "(descricao, valor, data_vencimento, conta_id, tipo_fluxo, user_id, "
                 " compensado, data_compensacao, fatura_id) "
                 "VALUES (%s, %s, %s, %s, 'CAIXA', %s, %s, %s, %s)",
-                (descricao, valor_caixa, data_venc, conta_id, user_id,
+                (descricao, valor_caixa, data_venc, conta_id, user_id, 
                  is_paga, data_venc if is_paga else None, fatura_id)
             )
+        print("[DEBUG] Fim sincronizar_transacao_fatura.")
 
     def excluir_fatura(self, fatura_id, user_id):
         """Exclui fatura e todos os seus itens (CASCADE)."""
