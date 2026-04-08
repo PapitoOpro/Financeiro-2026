@@ -635,6 +635,15 @@ class ParcelasManager:
 
             print(f"[IMPORT] Iniciando importação de {len(dados)} itens...")
             for desc, parc, val in dados:
+                try:
+                    val = -abs(val)  # 🔥 CORREÇÃO PRINCIPAL
+
+                    atual, total = map(int, parc.split("/"))
+                except Exception as inner_e:
+                    st.warning(f"Erro ao processar linha '{desc}': {inner_e}")
+                    erros += 1
+                    continue
+
                 print(f"[IMPORT] Item: desc={desc!r}, parc={parc}, val={val}")
                 try:
                     atual, total = map(int, parc.split("/"))

@@ -195,6 +195,7 @@ class CadastrosManager:
                             "VALUES (%s, %s, TRUE, %s) ON CONFLICT (nome, categoria_id, user_id) DO NOTHING",
                             (nova_sub.strip(), cat_id, user_id)
                         )
+                        st.session_state[f"new_sub_{cat_id}"] = ""
                         st.rerun()
 
                 if not df_subs.empty:
