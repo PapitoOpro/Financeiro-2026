@@ -384,7 +384,8 @@ def extrair_parcelas(texto):
     for desc, parc, valor in regex_barra:
         try:
             val_limpo = float(valor.replace(".", "").replace(",", "."))
-            if _is_parcela_valida(parc):
+            # Só considera como parcela se NÃO for data (ex: 02/02 não é parcela, é data)
+            if _is_parcela_valida(parc) and not _is_data_transacao(parc):
                 _add_resultado(desc.strip(), parc, val_limpo)
         except: continue
 
