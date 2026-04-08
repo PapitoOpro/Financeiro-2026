@@ -542,11 +542,8 @@ def extrair_itens_avista(texto, itens_parcelados=None):
 
         linha_lower = linha.lower()
 
-        # Linhas que começam com DD/MM são transações — nunca pular
         comeca_com_data = re.match(r'^\d{1,2}/\d{1,2}\s', linha)
 
-        # Pula taxas bancárias mesmo que comecem com DD/MM
-        # (ENCARGOS, JUROS DE MORA, MULTA, IOF não são compras)
         taxas_bancarias = [
             'encargos refin', 'encargos financ', 'encargos de',
             'encargos pix', 'juros de mora',
@@ -555,34 +552,30 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             'pagamento pix', 'pagamento efetuado',
         ]
         if comeca_com_data:
-            # Pega o texto após a data (DD/MM)
             resto = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', linha_lower)
             if any(resto.startswith(taxa) for taxa in taxas_bancarias):
+                print(f"[DESCARTADO - TAXA BANCÁRIA] {linha}")
                 continue
 
-        # Pula linhas de cabeçalho/rodapé (apenas se NÃO parecem transação)
         if not comeca_com_data and any(skip in linha_lower for skip in skip_patterns):
+            print(f"[DESCARTADO - CABEÇALHO/RODAPÉ] {linha}")
             continue
 
-        # Padrão: DD/MM DESCRICAO VALOR [CATEGORIA] (suporta Itaú multi-coluna)
-        # Aceita valores negativos (estornos/créditos):
-        #   - Sinal antes: '-118,13' (Nubank, etc)
-        #   - Sinal depois: '118,13-' (Itaú)
         match = re.match(
             r'(\d{1,2}/\d{1,2})\s+(.+?)\s+(-?\s*[\d.]+,\d{2})\s*(-)?(?:\s+[A-Z].*|\s*)$',
             linha
         )
 
-
         if not match:
-            # 🔥 FALLBACK INTELIGENTE
             match_valor = re.search(r'(\d+,\d{2})$', linha)
             if not match_valor:
+                print(f"[DESCARTADO - SEM VALOR] {linha}")
                 continue
             valor_str = match_valor.group(1)
             try:
                 valor = float(valor_str.replace(".", "").replace(",", "."))
             except Exception:
+                print(f"[DESCARTADO - VALOR INVÁLIDO] {linha}")
                 continue
             descricao = linha[:match_valor.start()].strip()
             descricao = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', descricao)
@@ -591,60 +584,53 @@ def extrair_itens_avista(texto, itens_parcelados=None):
 
         date_str, desc_raw, valor_str, sinal_pos = match.groups()
 
-        # Limpa espaço entre '-' e dígitos (ex: "- 0,01" → "-0,01")
         valor_str = re.sub(r'-\s+', '-', valor_str.strip())
-        # Se o sinal '-' está pós-fixado (formato Itaú), move para prefixo
         if sinal_pos == '-' and not valor_str.startswith('-'):
             valor_str = '-' + valor_str
 
-        # Valida que DD/MM é uma data (dia 1-31, mês 1-12)
         try:
             dd, mm = map(int, date_str.split('/'))
             if not (1 <= dd <= 31 and 1 <= mm <= 12):
+                print(f"[DESCARTADO - DATA INVÁLIDA] {linha}")
                 continue
         except (ValueError, AttributeError):
+            print(f"[DESCARTADO - DATA INVÁLIDA] {linha}")
             continue
 
         desc = desc_raw.strip()
 
-        # Se a descrição contém padrão XX/YY com total > 1, é parcela
-        # → já foi capturada por extrair_parcelas(), pular
         parc_in_desc = re.search(r'(\d{1,2})/(\d{1,2})', desc)
         if parc_in_desc:
             try:
                 a, t = int(parc_in_desc.group(1)), int(parc_in_desc.group(2))
                 if t > 1 and a <= t:
-                    continue  # Qualquer XX/YY com total>1 é parcela
+                    print(f"[DESCARTADO - PARCELA NA DESCRIÇÃO] {linha}")
+                    continue
             except (ValueError, AttributeError):
                 pass
 
-        # Parse valor ANTES da verificação de duplicatas
         try:
             val = float(valor_str.replace(".", "").replace(",", "."))
             if abs(val) < 0.01:
+                print(f"[DESCARTADO - VALOR MUITO PEQUENO] {linha}")
                 continue
         except (ValueError, TypeError):
+            print(f"[DESCARTADO - VALOR INVÁLIDO] {linha}")
             continue
 
-        # Verifica duplicata com itens parcelados (descrição + MESMO VALOR)
-        # Mesma loja com valor diferente é transação DISTINTA
         desc_norm = re.sub(r'\s+', ' ', desc.upper().strip())
-        # Remove qualquer XX/YY residual do desc para comparar base
         desc_base = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', ' ', desc_norm).strip()
         val_round = round(val, 2)
-        # Só pula se descrição E valor coincidem (mesma transação)
         if (desc_norm, val_round) in parcelados_desc_val or (desc_base, val_round) in parcelados_desc_val:
+            print(f"[DESCARTADO - DUPLICATA PARCELADO] {linha}")
             continue
-        # Substring check: também exige mesmo valor
         if any(
             (dp in desc_norm or desc_norm in dp) and v == val_round
             for dp, v in parcelados_desc_val
         ):
+            print(f"[DESCARTADO - DUPLICATA SUBSTRING] {linha}")
             continue
 
-        # Permite múltiplas compras idênticas (mesma data, desc, valor)
-        # Ex: 3x TagItau 50,00 no mesmo dia são cobranças reais
-        # Também permite créditos/estornos (valores negativos)
         resultados.append((desc, "1/1", val))
 
     return resultados
@@ -845,12 +831,17 @@ def _dedup_itens(dados):
     resultado = []
     for desc, parc, val in dados:
         desc_norm = re.sub(r'\s+', ' ', desc.upper().strip())
-        # Remove XX/YY residual do desc para normalização mais agressiva
         desc_base = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', ' ', desc_norm).strip()
         val_round = round(val, 2)
         key = (desc_norm, parc, val_round)
         key_base = (desc_base, parc, val_round)
 
+        # Permite múltiplas compras idênticas à vista (parc == '1/1')
+        if parc == '1/1':
+            resultado.append((desc, parc, val))
+            continue
+
+        # Para parcelas, deduplica normalmente
         if key in seen_desc_parc or key_base in seen_desc_parc:
             continue
         seen_desc_parc.add(key)
