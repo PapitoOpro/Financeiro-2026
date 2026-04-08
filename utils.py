@@ -533,6 +533,7 @@ def extrair_itens_avista(texto, itens_parcelados=None):
     ]
 
 
+
     for linha in texto.split('\n'):
         linha = linha.strip()
         print(f"[DEBUG] Processando linha: {linha}")
@@ -543,22 +544,22 @@ def extrair_itens_avista(texto, itens_parcelados=None):
         linha_lower = linha.lower()
         comeca_com_data = re.match(r'^\d{1,2}/\d{1,2}\s', linha)
 
-        taxas_bancarias = [
-            'encargos refin', 'encargos financ', 'encargos de',
-            'encargos pix', 'juros de mora',
-            'multa por atraso', 'multa ', 'iof ',
-            'juros rotativo', 'juros do rotativo',
-            'pagamento pix', 'pagamento efetuado',
-        ]
-        if comeca_com_data:
-            resto = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', linha_lower)
-            if any(resto.startswith(taxa) for taxa in taxas_bancarias):
-                print(f"[DESCARTADO - TAXA BANCÁRIA] {linha}")
+        # AJUSTE: Nunca descartar linhas que começam com data, mesmo que contenham palavras de taxa/cabeçalho
+        if not comeca_com_data:
+            if any(skip in linha_lower for skip in skip_patterns):
+                print(f"[DESCARTADO - CABEÇALHO/RODAPÉ] {linha}")
                 continue
 
-        if not comeca_com_data and any(skip in linha_lower for skip in skip_patterns):
-            print(f"[DESCARTADO - CABEÇALHO/RODAPÉ] {linha}")
-            continue
+        # Não descartar taxas bancárias se linha começa com data
+        # (mantém apenas filtro de linhas sem data)
+        #
+        # Se quiser filtrar taxas bancárias mesmo com data, descomente abaixo:
+        # taxas_bancarias = [...]
+        # if comeca_com_data:
+        #     resto = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', linha_lower)
+        #     if any(resto.startswith(taxa) for taxa in taxas_bancarias):
+        #         print(f"[DESCARTADO - TAXA BANCÁRIA] {linha}")
+        #         continue
 
         # Regex permissivo: DD/MM <texto> <valor decimal no final>
         match = re.match(r'^(\d{1,2}/\d{1,2})\s+(.+?)\s+(-?\d+[.,]\d{2})\s*$', linha)
