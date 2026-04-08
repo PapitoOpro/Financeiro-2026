@@ -766,6 +766,15 @@ class DatabaseManager:
         descricao = f"Fatura {cartao_nome} - Ref {competencia}"
         is_paga = status == 'paga'
 
+        # Se o valor_total for menor ou igual a zero, não cria/atualiza transação no caixa (ignora estornos ou faturas zeradas)
+        if valor_total is None or valor_total <= 0:
+            # Remove transação existente se houver
+            self.executar(
+                "DELETE FROM transacoes WHERE fatura_id = %s AND user_id = %s",
+                (fatura_id, user_id)
+            )
+            return
+
         # Verifica se já existe transação para essa fatura
         existente = self.buscar_um(
             "SELECT id FROM transacoes WHERE fatura_id = %s AND user_id = %s",
