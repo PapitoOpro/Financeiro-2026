@@ -646,6 +646,7 @@ class DatabaseManager:
             (conta_id, competencia, user_id)
         )
         if existente:
+            print(f"[DEBUG] criar_fatura: fatura já existe! id={existente[0]} user_id={user_id} conta_id={conta_id} competencia={competencia}")
             return existente[0]
 
         self.executar(
@@ -657,6 +658,7 @@ class DatabaseManager:
             "SELECT id FROM faturas WHERE conta_id = %s AND competencia = %s AND user_id = %s",
             (conta_id, competencia, user_id)
         )
+        print(f"[DEBUG] criar_fatura: fatura criada id={row[0] if row else None} user_id={user_id} conta_id={conta_id} competencia={competencia}")
         return row[0] if row else None
 
     def adicionar_item_fatura(self, fatura_id, descricao, valor, data_compra,
