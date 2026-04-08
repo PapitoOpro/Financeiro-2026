@@ -24,8 +24,6 @@ class CaixaManager:
             "Mês:", MESES_LISTA,
             default=MESES_LISTA[datetime.now().month - 1]
         )
-        @staticmethod
-        def renderizar():
         col_ano, _ = st.columns([1, 5])
         ano_sel = col_ano.number_input(
             "Ano:", min_value=2025, max_value=2030, value=2026
