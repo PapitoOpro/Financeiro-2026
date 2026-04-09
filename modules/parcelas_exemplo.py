@@ -79,19 +79,27 @@ class ParcelasManager:
     def renderizar():
         """Renderiza a página de projeção de gastos."""
         st.header(" Projeção de Gastos (Cartão/Parcelas)")
-        
+
+        @st.cache_data(ttl=60, show_spinner=False)
+        def get_contas(user_id):
+            return db.buscar(f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome")
+
+        @st.cache_data(ttl=60, show_spinner=False)
+        def get_categorias(user_id):
+            return db.buscar(f"SELECT * FROM categorias WHERE user_id = {user_id} ORDER BY nome")
+
         user_id = db.get_user_id()
-        df_contas = db.buscar(f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome")
-        df_cats = db.buscar(f"SELECT * FROM categorias WHERE user_id = {user_id} ORDER BY nome")
-        
+        df_contas = get_contas(user_id)
+        df_cats = get_categorias(user_id)
+
         tab1, tab2, tab3 = st.tabs(["Manual", "Importações", "Previsão"])
-        
+
         with tab1:
             ParcelasManager._tab_manual(df_contas, df_cats)
-        
+
         with tab2:
             ParcelasManager._tab_importacoes(df_contas, df_cats)
-        
+
         with tab3:
             ParcelasManager._tab_previsao()
     
