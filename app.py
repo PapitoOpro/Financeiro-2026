@@ -55,7 +55,7 @@ AuthManager.tela_login()
 if st.session_state.get('logado'):
     # Só força a tela padrão na primeira execução após login
     if 'just_logged_in' not in st.session_state:
-        st.session_state.menu_selecionado = "Consultor Financeiro"
+        st.session_state.menu_selecionado = "Controle de Caixa"
         st.session_state.just_logged_in = True
     db.inicializar_dados_usuario(st.session_state.get('usuario_id'))
 
