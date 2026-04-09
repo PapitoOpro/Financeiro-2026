@@ -490,19 +490,25 @@ class ParcelasManager:
                                     if "à vista" not in parc_val.lower():
                                         parc_match = re.search(r'(\d{1,2})/(\d{1,2})', parc_val)
                                         if parc_match:
-                                            parc_formatada = f"{int(parc_match.group(1))}/{int(parc_match.group(2))}"
+                                            g1, g2 = parc_match.group(1), parc_match.group(2)
+                                            if g1.isdigit() and g2.isdigit():
+                                                parc_formatada = f"{int(g1)}/{int(g2)}"
+                                            else:
+                                                continue  # Ignora se não for dígito
                                 
                                 # CENÁRIO 2: Extrair de textos
                                 else:
                                     # Remove texto de data (Ex: Compra: 12/02) para não confundir com parcela
                                     texto_busca = re.sub(r'\(Compra:\s*\d{1,2}/\d{1,2}.*?\)', '', desc_original)
                                     texto_busca = re.sub(r'\(À vista\)', '', texto_busca, flags=re.IGNORECASE)
-                                    
                                     parc_match = re.search(r'(\d{1,2})/(\d{1,2})', texto_busca)
-                                    
                                     if parc_match:
-                                        parc_formatada = f"{int(parc_match.group(1))}/{int(parc_match.group(2))}"
-                                        desc_limpa = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', '', desc_original).strip()
+                                        g1, g2 = parc_match.group(1), parc_match.group(2)
+                                        if g1.isdigit() and g2.isdigit():
+                                            parc_formatada = f"{int(g1)}/{int(g2)}"
+                                            desc_limpa = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', '', desc_original).strip()
+                                        else:
+                                            continue  # Ignora se não for dígito
                                 
                                 # Valida formato da parcela
                                 try:
