@@ -92,7 +92,7 @@ class CaixaManager:
                 'subcategoria': str(row['subcategoria']),
                 'compensado': bool(row['compensado']),
                 'data_compensacao': str(row['data_compensacao']) if row['data_compensacao'] else None,
-                'fatura_id': int(row['fatura_id']) if row['fatura_id'] else None
+                'fatura_id': int(row['fatura_id']) if pd.notna(row['fatura_id']) else None
             })
         st.session_state['log_extrato'] = log_extrato
         if st.checkbox('Exibir log do extrato do caixa (auditoria)', value=False, key='show_log_extrato'):
