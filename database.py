@@ -690,10 +690,10 @@ class DatabaseManager:
         )
 
     def atualizar_total_fatura(self, fatura_id):
-        """Recalcula valor_total da fatura a partir dos itens."""
+        """Recalcula valor_total da fatura a partir dos itens (sempre positivo)."""
+        # Soma os valores dos itens (negativos), mas salva como positivo
         self.executar(
-            "UPDATE faturas SET valor_total = "
-            "(SELECT COALESCE(SUM(valor), 0) FROM itens_fatura WHERE fatura_id = %s) "
+            "UPDATE faturas SET valor_total = ABS((SELECT COALESCE(SUM(valor), 0) FROM itens_fatura WHERE fatura_id = %s)) "
             "WHERE id = %s",
             (fatura_id, fatura_id)
         )
