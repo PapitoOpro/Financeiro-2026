@@ -177,10 +177,18 @@ class DatabaseManager:
             st.error(" Sem conexão com o banco de dados.")
             return False
 
+        # Converte todos os parâmetros para tipos nativos
+        def to_native(val):
+            import numpy as np
+            if isinstance(val, (np.generic,)):
+                return val.item()
+            return val
+        params_native = tuple(to_native(p) for p in params)
+
         q = query.replace('?', '%s')
         try:
             with conn.cursor() as cur:
-                cur.execute(q, params)
+                cur.execute(q, params_native)
             conn.commit()
             return True
         except Exception as e:
@@ -234,8 +242,15 @@ class DatabaseManager:
 
         q = query.replace('?', '%s')
         try:
+            # Converte todos os parâmetros para tipos nativos
+            import numpy as np
+            def to_native(val):
+                if isinstance(val, (np.generic,)):
+                    return val.item()
+                return val
+            params_native = tuple(to_native(p) for p in params)
             with conn.cursor() as cur:
-                cur.execute(q, params)
+                cur.execute(q, params_native)
                 result = cur.fetchone()
             conn.commit()
             return result
@@ -774,10 +789,11 @@ class DatabaseManager:
         # Se o valor_total for menor ou igual a zero, não cria/atualiza transação no caixa (ignora estornos ou faturas zeradas)
         if valor_total is None or valor_total <= 0:
             print(f"[DEBUG] valor_total inválido (None ou <= 0): {valor_total}. Removendo transação se existir.")
-            self.executar(
+            del_ok = self.executar(
                 "DELETE FROM transacoes WHERE fatura_id = %s AND user_id = %s",
                 (fatura_id, user_id)
             )
+            print(f"[DEBUG] DELETE transacoes retorno: {del_ok}")
             return
 
         # Verifica se já existe transação para essa fatura
@@ -792,14 +808,15 @@ class DatabaseManager:
         print(f"[DEBUG] valor_caixa a lançar: {valor_caixa}")
         if existente:
             print("[DEBUG] Atualizando transação existente no caixa.")
-            self.executar(
+            upd_ok = self.executar(
                 "UPDATE transacoes SET descricao = %s, valor = %s, data_vencimento = %s, conta_id = %s "
                 "WHERE fatura_id = %s AND user_id = %s",
                 (descricao, valor_caixa, data_venc, conta_id, fatura_id, user_id)
             )
+            print(f"[DEBUG] UPDATE transacoes retorno: {upd_ok}")
         else:
             print("[DEBUG] Criando nova transação no caixa.")
-            self.executar(
+            ins_ok = self.executar(
                 "INSERT INTO transacoes "
                 "(descricao, valor, data_vencimento, conta_id, tipo_fluxo, user_id, "
                 " compensado, data_compensacao, fatura_id) "
@@ -807,6 +824,7 @@ class DatabaseManager:
                 (descricao, valor_caixa, data_venc, conta_id, user_id, 
                  is_paga, data_venc if is_paga else None, fatura_id)
             )
+            print(f"[DEBUG] INSERT transacoes retorno: {ins_ok}")
         print("[DEBUG] Fim sincronizar_transacao_fatura.")
 
     def excluir_fatura(self, fatura_id, user_id):
