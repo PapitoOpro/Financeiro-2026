@@ -291,19 +291,24 @@ class CaixaManager:
 
             # Pré-carrega todos os itens de todas as faturas do mês (1 query só)
             fatura_ids_list = [int(x) for x in df_faturas['fatura_id'].unique()]
-            fatura_ids_str = ','.join(str(int(x)) for x in fatura_ids_list)
-            df_all_itens = db.buscar(f"""
-                SELECT i.id, i.fatura_id, i.descricao, i.valor, i.data_compra,
-                       i.parcela_atual, i.parcela_total,
-                       cat.nome as categoria, i.categoria_id, i.subcategoria_id,
-                       COALESCE(sub.nome, '') as subcategoria
-                FROM itens_fatura i
-                LEFT JOIN categorias cat ON i.categoria_id = cat.id
-                LEFT JOIN subcategorias sub ON i.subcategoria_id = sub.id
-                WHERE i.fatura_id IN ({fatura_ids_str})
-                ORDER BY i.descricao
-            """)
-
+            if fatura_ids_list:
+                # Usa parâmetros para evitar SQL injection
+                placeholders = ','.join(['%s'] * len(fatura_ids_list))
+                query = f"""
+                    SELECT i.id, i.fatura_id, i.descricao, i.valor, i.data_compra,
+                           i.parcela_atual, i.parcela_total,
+                           cat.nome as categoria, i.categoria_id, i.subcategoria_id,
+                           COALESCE(sub.nome, '') as subcategoria
+                    FROM itens_fatura i
+                    LEFT JOIN categorias cat ON i.categoria_id = cat.id
+                    LEFT JOIN subcategorias sub ON i.subcategoria_id = sub.id
+                    WHERE i.fatura_id IN ({placeholders}) AND i.user_id = %s
+                    ORDER BY i.descricao
+                """
+                params = tuple(fatura_ids_list) + (user_id,)
+                df_all_itens = db.buscar(query, params)
+            else:
+                df_all_itens = pd.DataFrame()
             for fatura_id_val, grp in df_faturas.groupby('fatura_id'):
                 fatura_id_val = int(fatura_id_val)
                 row = grp.iloc[0]
