@@ -198,8 +198,15 @@ class CadastrosManager:
             with st.expander(f"📂 {cat_nome}", expanded=deve_expandir):
                 
                 # 2. Busca e lista as subcategorias que JÁ EXISTEM
+                # 2. Busca e lista as subcategorias que JÁ EXISTEM (com filtro anti-duplicidade)
                 df_subs = db.buscar(
-                    "SELECT id, nome, ativa FROM subcategorias WHERE categoria_id = %s AND user_id = %s AND ativa = TRUE ORDER BY nome",
+                    """
+                    SELECT MIN(id) as id, nome, ativa 
+                    FROM subcategorias 
+                    WHERE categoria_id = %s AND user_id = %s AND ativa = TRUE 
+                    GROUP BY nome, ativa 
+                    ORDER BY nome
+                    """,
                     (cat_id, user_id)
                 )
                 
