@@ -12,7 +12,7 @@ from modules.cadastros import CadastrosManager
 from modules.admin import AdminManager
 from modules.parcelas_exemplo import ParcelasManager
 from modules.relatorios import RelatoriosManager
-from modules.consultor import ConsultorManager
+# from modules.consultor import ConsultorManager
 from modules.acompanhamento import AcompanhamentoManager
 from modules.onboarding import OnboardingManager
 
@@ -176,7 +176,7 @@ st.sidebar.markdown("---")
 
 # --- Menu de navegação ---
 MENU_ITEMS = [
-    ("", "Consultor Financeiro"),
+    # ("", "Consultor Financeiro"),
     ("", "Controle de Caixa"),
     ("", "Projeção de Gastos"),
     ("", "Cadastros"),
@@ -185,7 +185,7 @@ MENU_ITEMS = [
 ]
 
 if "menu_selecionado" not in st.session_state:
-    st.session_state.menu_selecionado = "Consultor Financeiro"
+    st.session_state.menu_selecionado = "Controle de Caixa"
 
 st.sidebar.markdown('<div class="menu-container">', unsafe_allow_html=True)
 for icone, label in MENU_ITEMS:
@@ -233,8 +233,8 @@ elif menu == "Cadastros":
 elif menu == "Relatórios":
     RelatoriosManager.renderizar()
 
-elif menu == "Consultor Financeiro":
-    ConsultorManager.renderizar()
+     # elif menu == "Consultor Financeiro":
+     #     ConsultorManager.renderizar()
 
 elif menu == "Admin":
     AdminManager.renderizar()
