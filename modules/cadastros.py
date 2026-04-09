@@ -183,6 +183,8 @@ class CadastrosManager:
 
             with st.expander(f"Subcategorias de {cat['nome']} ({len(df_subs) if not df_subs.empty else 0})", expanded=False):
                 # Formulário para nova subcategoria
+                if f"new_sub_{cat_id}" not in st.session_state:
+                    st.session_state[f"new_sub_{cat_id}"] = ""
                 col_sub_input, col_sub_btn = st.columns([4, 1])
                 nova_sub = col_sub_input.text_input(
                     "Nova subcategoria", placeholder="Ex: Padaria, Uber, Netflix...",
