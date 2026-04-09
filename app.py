@@ -51,8 +51,10 @@ db.inicializar_banco()
 # Inicializa autenticação
 AuthManager.tela_login()
 
-# Inicializa dados do usuário logado (limites padrão, etc.)
+ # Inicializa dados do usuário logado (limites padrão, etc.)
 if st.session_state.get('logado'):
+    # Sempre força a tela padrão ao logar
+    st.session_state.menu_selecionado = "Consultor Financeiro"
     db.inicializar_dados_usuario(st.session_state.get('usuario_id'))
 
     # Verifica se precisa de onboarding
