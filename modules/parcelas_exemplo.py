@@ -598,6 +598,10 @@ class ParcelasManager:
                         competencia = venc.strftime('%m/%Y')
 
                         fatura_id = db.criar_fatura(user_id, cid, competencia, venc)
+                        if not fatura_id:
+                            st.warning(f"Erro ao criar/buscar fatura para competência {competencia}. Item ignorado.")
+                            erros += 1
+                            continue
 
                         # Trava anti-duplicidade: verifica se item já existe nessa fatura
                         check = db.buscar_um(
@@ -606,7 +610,6 @@ class ParcelasManager:
                             "AND parcela_total = ? AND user_id = ?",
                             (fatura_id, desc, num_parc_atual, total, user_id)
                         )
-
 
                         if not check:
                             db.adicionar_item_fatura(
