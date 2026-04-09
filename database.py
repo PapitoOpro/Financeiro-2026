@@ -782,7 +782,14 @@ class DatabaseManager:
             print("[DEBUG] fatura não encontrada, abortando.")
             return
 
-        valor_total, cartao_nome, competencia, data_venc, conta_id, status = fatura
+        # Garante que o valor_total está atualizado antes de sincronizar
+        self.atualizar_total_fatura(fatura_id)
+        valor_total, cartao_nome, competencia, data_venc, conta_id, status = self.buscar_um(
+            "SELECT f.valor_total, c.nome, f.competencia, f.data_vencimento, f.conta_id, f.status "
+            "FROM faturas f JOIN contas c ON f.conta_id = c.id "
+            "WHERE f.id = %s AND f.user_id = %s",
+            (fatura_id, user_id)
+        )
         descricao = f"Fatura {cartao_nome} - Ref {competencia}"
         is_paga = status == 'paga'
 
@@ -803,8 +810,8 @@ class DatabaseManager:
         )
         print(f"[DEBUG] transação existente: {existente}")
 
-        # O valor da fatura deve ser sempre negativo (saída), exceto se for crédito puro
-        valor_caixa = valor_total if valor_total > 0 else -abs(valor_total)
+        # O valor da fatura deve ser sempre negativo (saída)
+        valor_caixa = -abs(valor_total)
         print(f"[DEBUG] valor_caixa a lançar: {valor_caixa}")
         if existente:
             print("[DEBUG] Atualizando transação existente no caixa.")
