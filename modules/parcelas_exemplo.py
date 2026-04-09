@@ -578,9 +578,11 @@ class ParcelasManager:
             erros = 0
 
             print(f"[IMPORT] Iniciando importação de {len(dados)} itens...")
+
             for desc, parc, val in dados:
                 try:
                     val = normalizar_valor_fatura(val)
+                    val = abs(val)  # Garante que o valor do item de fatura é sempre positivo
 
                     atual, total = map(int, parc.split("/"))
                 except Exception as inner_e:
