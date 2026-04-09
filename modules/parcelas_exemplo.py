@@ -209,7 +209,7 @@ class ParcelasManager:
         st.markdown("##### Cole o texto dos lançamentos da fatura abaixo:")
         st.caption(
             "Abra o PDF, selecione os lançamentos com o mouse, "
-            "copie (Ctrl+C) e cole abaixo. Não é mais necessário enviar o PDF."
+            "copie (Ctrl+C) e cole abaixo."
         )
         texto_colado = st.text_area(
             "Cole o texto dos lançamentos aqui:",
@@ -381,15 +381,20 @@ class ParcelasManager:
             with st.form("confirmar_importacao"):
                 st.markdown("#### Configurar Lançamento em Lote")
                 col1, col2 = st.columns(2)
-                
+
                 # Previne erro se listas vazias
-                lista_contas = df_contas['nome'].tolist() if not df_contas.empty else ["Sem contas"]
-                lista_cats = df_cats['nome'].tolist() if not df_cats.empty else ["Sem categorias"]
-                
-                conta = col1.selectbox("Cartão de Destino", lista_contas)
+                lista_contas = df_contas['nome'].tolist() if not df_contas.empty else []
+                lista_cats = df_cats['nome'].tolist() if not df_cats.empty else []
+
+                if not lista_contas:
+                    st.error("⚠️ Nenhuma conta/cartão cadastrada. Cadastre em Cadastros antes de importar.")
+                if not lista_cats:
+                    st.error("⚠️ Nenhuma categoria cadastrada. Cadastre em Cadastros antes de importar.")
+
+                conta = col1.selectbox("Cartão de Destino", lista_contas if lista_contas else ["Sem contas"])
                 data_base = col2.date_input("Vencimento da 1ª Parcela do Lote")
-                cat = st.selectbox("Categoria Padrão", lista_cats)
-                
+                cat = st.selectbox("Categoria Padrão", lista_cats if lista_cats else ["Sem categorias"])
+
                 if st.form_submit_button("Salvar no Banco (Aplicar Trava Anti-Duplicidade)", width='stretch'):
                     # Monta lista final apenas com itens marcados para importar
                     dados_finais = [
@@ -397,7 +402,13 @@ class ParcelasManager:
                         for d in dados_editaveis if d["importar"]
                     ]
                     if not dados_finais:
-                        st.warning(" Nenhuma parcela selecionada para importar.")
+                        st.warning("⚠️ Nenhuma parcela selecionada para importar.")
+                    elif not lista_contas or conta == "Sem contas":
+                        st.error("⚠️ Selecione um cartão de destino válido.")
+                    elif not lista_cats or cat == "Sem categorias":
+                        st.error("⚠️ Selecione uma categoria válida.")
+                    elif not data_base:
+                        st.error("⚠️ Selecione a data de vencimento da 1ª parcela.")
                     else:
                         ParcelasManager._importar_pdf_dados(
                             dados_finais, banco_detectado, conta, cat, data_base, df_contas, df_cats
