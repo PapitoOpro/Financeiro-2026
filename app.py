@@ -1,3 +1,13 @@
+# ==== Botão administrativo para sincronizar faturas no Caixa ====
+import streamlit as st
+from database import db
+
+st.markdown("---")
+if st.button("Sincronizar todas as faturas no Caixa"):
+    faturas = db.buscar("SELECT id, user_id FROM faturas")
+    for f in faturas.itertuples():
+        db.sincronizar_transacao_fatura(f.id, f.user_id)
+    st.success("Sincronização concluída!")
 # ==========================================
 # APLICAÇÃO PRINCIPAL - SISTEMA FINANCEIRO 2026
 # ==========================================
