@@ -611,25 +611,14 @@ class ParcelasManager:
                             erros += 1
                             continue
 
-                        # Trava anti-duplicidade: verifica se item já existe nessa fatura
-                        check = db.buscar_um(
-                            "SELECT 1 FROM itens_fatura "
-                            "WHERE fatura_id = ? AND descricao = ? AND parcela_atual = ? "
-                            "AND parcela_total = ? AND user_id = ?",
-                            (fatura_id, desc, num_parc_atual, total, user_id)
-                        )
 
-                        if not check:
-                            db.adicionar_item_fatura(
-                                fatura_id, desc, val, data_base,
-                                num_parc_atual, total, ctid, user_id
-                            )
-                            novos += 1
-                            print(f"[IMPORT]   ✅ NOVO: parc {num_parc_atual}/{total} comp={competencia} fatura_id={fatura_id}")
-                        else:
-                            # Apenas conta como duplicado, não tenta atualizar
-                            duplicados += 1
-                            print(f"[IMPORT]   🔄 DUPLICADO: parc {num_parc_atual}/{total} comp={competencia} fatura_id={fatura_id}")
+                        # Desabilitado: trava anti-duplicidade (importa todos os itens)
+                        db.adicionar_item_fatura(
+                            fatura_id, desc, val, data_base,
+                            num_parc_atual, total, ctid, user_id
+                        )
+                        novos += 1
+                        print(f"[IMPORT]   ✅ NOVO: parc {num_parc_atual}/{total} comp={competencia} fatura_id={fatura_id}")
 
                         db.atualizar_total_fatura(int(fatura_id))
                         db.sincronizar_transacao_fatura(int(fatura_id), user_id)
