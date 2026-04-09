@@ -675,7 +675,7 @@ class ParcelasManager:
         """)
 
                 # Busca itens de fatura do usuário (somente parcelas futuras + Trava Anti-Duplicidade na previsão)
-                df_itens = db.buscar(f"""
+        df_itens = db.buscar(f"""
                         SELECT i.id, i.fatura_id, i.descricao, i.valor, i.data_compra,
                                      i.parcela_atual, i.parcela_total,
                                      cat.nome as categoria, c.nome as banco,
