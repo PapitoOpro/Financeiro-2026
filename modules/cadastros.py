@@ -182,7 +182,72 @@ class CadastrosManager:
             )
 
             with st.expander(f"Subcategorias de {cat['nome']} ({len(df_subs) if not df_subs.empty else 0})", expanded=False):
-                # Formulário para nova subcategoria
+                # Variável no session_state para lembrar qual expander deve ficar aberto
+                if "expander_aberto" not in st.session_state:
+                    st.session_state["expander_aberto"] = None
+
+        # Loop passando por cada categoria macro
+        for idx, row in df_cats.iterrows():
+            cat_id = row['id']
+            cat_nome = row['nome']
+            
+            # Verifica se ESTA categoria é a que deve começar expandida
+            deve_expandir = (st.session_state["expander_aberto"] == cat_id)
+            
+            # 1. O Expander com o estado de abertura dinâmico
+            with st.expander(f"📂 {cat_nome}", expanded=deve_expandir):
+                
+                # 2. Busca e lista as subcategorias que JÁ EXISTEM
+                df_subs = db.buscar(
+                    "SELECT id, nome, ativa FROM subcategorias WHERE categoria_id = %s AND user_id = %s AND ativa = TRUE ORDER BY nome",
+                    (cat_id, user_id)
+                )
+                
+                if not df_subs.empty:
+                    for _, sub in df_subs.iterrows():
+                        sub_id = int(sub['id'])
+                        c_nome, c_edit, c_archive = st.columns([4, 0.5, 0.5])
+                        c_nome.markdown(f" ↳ {sub['nome']}")
+                        edit_sub_flag = f"editing_sub_{sub_id}"
+
+                        # Lógica de Edição Inline
+                        if st.session_state.get(edit_sub_flag, False):
+                            novo_sub_nome = st.text_input(
+                                "Nome", value=sub['nome'], key=f"es_name_{sub_id}"
+                            )
+                            bs1, bs2 = st.columns(2)
+                            if bs1.button("", key=f"save_sub_{sub_id}", icon=":material/check:", help="Salvar"):
+                                db.executar(
+                                    "UPDATE subcategorias SET nome=%s WHERE id=%s AND user_id=%s",
+                                    (novo_sub_nome.strip(), sub_id, user_id)
+                                )
+                                st.session_state[edit_sub_flag] = False
+                                st.session_state["expander_aberto"] = cat_id # Mantém aberto
+                                st.rerun()
+                            if bs2.button("", key=f"cancel_sub_{sub_id}", icon=":material/close:", help="Cancelar"):
+                                st.session_state[edit_sub_flag] = False
+                                st.session_state["expander_aberto"] = cat_id # Mantém aberto
+                                st.rerun()
+                        else:
+                            with c_edit:
+                                if st.button("\u200b", key=f"edit_sub_{sub_id}", help="Editar", icon=":material/edit:"):
+                                    st.session_state[edit_sub_flag] = True
+                                    st.session_state["expander_aberto"] = cat_id # Mantém aberto
+                                    st.rerun()
+                            with c_archive:
+                                if st.button("\u200b", key=f"archive_sub_{sub_id}", help="Arquivar", icon=":material/archive:"):
+                                    db.executar(
+                                        "UPDATE subcategorias SET ativa = FALSE WHERE id=%s AND user_id=%s",
+                                        (sub_id, user_id)
+                                    )
+                                    st.session_state["expander_aberto"] = cat_id # Mantém aberto
+                                    st.rerun()
+                else:
+                    st.caption("Nenhuma subcategoria cadastrada.")
+                
+                st.markdown("---") 
+                
+                # 3. Formulário SEGURO para nova subcategoria
                 with st.form(f"form_add_sub_{cat_id}", clear_on_submit=True, border=False):
                     col_sub_input, col_sub_btn = st.columns([4, 1])
                     
@@ -192,14 +257,16 @@ class CadastrosManager:
                         label_visibility="collapsed"
                     )
                     
-                    # Usamos form_submit_button para aproveitar a limpeza automática do form
-                    if col_sub_btn.form_submit_button("Adicionar", icon=":material/add:", use_container_width=True):
+                    # Usamos form_submit_button para aproveitar a limpeza automática
+                    if col_sub_btn.form_submit_button("", icon=":material/add:", help="Inserir subcategoria", use_container_width=True):
                         if (nova_sub or "").strip():
                             db.executar(
                                 "INSERT INTO subcategorias (nome, categoria_id, ativa, user_id) "
                                 "VALUES (%s, %s, TRUE, %s) ON CONFLICT (nome, categoria_id, user_id) DO NOTHING",
                                 (nova_sub.strip(), cat_id, user_id)
                             )
+                            # Define que esta categoria deve ficar aberta na próxima recarga
+                            st.session_state["expander_aberto"] = cat_id
                             st.rerun()
 
             st.markdown("<hr style='margin:5px 0 10px 0;'>", unsafe_allow_html=True)
