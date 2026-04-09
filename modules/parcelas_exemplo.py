@@ -674,21 +674,37 @@ class ParcelasManager:
             ORDER BY f.data_vencimento ASC
         """)
 
-        # Busca itens de fatura do usuário (somente parcelas futuras)
-        df_itens = db.buscar(f"""
-            SELECT i.id, i.fatura_id, i.descricao, i.valor, i.data_compra,
-                   i.parcela_atual, i.parcela_total,
-                   cat.nome as categoria, c.nome as banco,
-                   f.competencia, f.data_vencimento, f.status,
-                   i.categoria_id
-            FROM itens_fatura i
-            JOIN faturas f ON i.fatura_id = f.id
-            LEFT JOIN contas c ON f.conta_id = c.id
-            LEFT JOIN categorias cat ON i.categoria_id = cat.id
-            WHERE i.user_id = {user_id}
-              AND i.parcela_atual < i.parcela_total
-            ORDER BY f.data_vencimento ASC, i.descricao
-        """)
+                # Busca itens de fatura do usuário (somente parcelas futuras + Trava Anti-Duplicidade na previsão)
+                df_itens = db.buscar(f"""
+                        SELECT i.id, i.fatura_id, i.descricao, i.valor, i.data_compra,
+                                     i.parcela_atual, i.parcela_total,
+                                     cat.nome as categoria, c.nome as banco,
+                                     f.competencia, f.data_vencimento, f.status,
+                                     i.categoria_id
+                        FROM itens_fatura i
+                        JOIN faturas f ON i.fatura_id = f.id
+                        LEFT JOIN contas c ON f.conta_id = c.id
+                        LEFT JOIN categorias cat ON i.categoria_id = cat.id
+                        WHERE i.user_id = {user_id}
+                            AND i.parcela_atual < i.parcela_total
+                            -- TRAVA: Ignora esta parcela se ela já existir em uma fatura real/importada
+                            AND NOT EXISTS (
+                                    SELECT 1 
+                                    FROM itens_fatura i_real
+                                    JOIN faturas f_real ON i_real.fatura_id = f_real.id
+                                    WHERE i_real.user_id = {user_id}
+                                        -- 1. Valida se é o mesmo cartão e a mesma competência (mês/ano)
+                                        AND f_real.conta_id = f.conta_id
+                                        AND f_real.competencia = f.competencia
+                                        -- 2. Identifica que é exatamente a mesma compra
+                                        AND i_real.descricao = i.descricao
+                                        AND i_real.parcela_atual = i.parcela_atual
+                                        -- 3. O Diferenciador: garante que a subquery só ache itens "reais"
+                                        -- (Ajuste 'fechada' ou 'importada' para o status que seu sistema dá ao importar)
+                                        AND (f_real.status = 'fechada' OR f_real.status = 'importada')
+                            )
+                        ORDER BY f.data_vencimento ASC, i.descricao
+                """)
 
         if df_itens.empty:
             st.info("ℹ Nenhuma parcela lançada no cartão ainda.")
