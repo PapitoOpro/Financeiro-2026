@@ -169,31 +169,34 @@ class AcompanhamentoManager:
 
     @staticmethod
     def _renderizar_resumo(total_orcado, total_gasto, pct_geral):
-        """Resumo geral do mês."""
+        """Resumo geral do mês adaptado para Dark/Light Mode."""
         restante = total_orcado - total_gasto
         cor_rest = "#2ecc71" if restante >= 0 else "#e74c3c"
+        
+        # Cor dinâmica para o card Consumido Geral
+        cor_pct = "#2ecc71" if pct_geral <= 70 else ("#f39c12" if pct_geral <= 90 else "#e74c3c")
 
         st.markdown(f"""
             <div style="display:flex; gap:10px; margin:10px 0 15px 0; flex-wrap:wrap;">
-                <div style="background:#f1f2f6; padding:15px; border-radius:10px; flex:1;
+                <div style="background: var(--secondary-background-color); padding:15px; border-radius:10px; flex:1;
                             border-left:5px solid #3498db; min-width:150px;">
-                    <small style="color:#666;">Renda do Mês</small><br>
+                    <small style="color: var(--text-color); opacity: 0.8;">Renda do Mês</small><br>
                     <strong style="font-size:20px; color:#3498db;">{moeda(total_orcado)}</strong>
                 </div>
-                <div style="background:#f1f2f6; padding:15px; border-radius:10px; flex:1;
+                <div style="background: var(--secondary-background-color); padding:15px; border-radius:10px; flex:1;
                             border-left:5px solid #e74c3c; min-width:150px;">
-                    <small style="color:#666;">Total Gasto</small><br>
+                    <small style="color: var(--text-color); opacity: 0.8;">Total Gasto</small><br>
                     <strong style="font-size:20px; color:#e74c3c;">{moeda(total_gasto)}</strong>
                 </div>
-                <div style="background:#f1f2f6; padding:15px; border-radius:10px; flex:1;
+                <div style="background: var(--secondary-background-color); padding:15px; border-radius:10px; flex:1;
                             border-left:5px solid {cor_rest}; min-width:150px;">
-                    <small style="color:#666;">Restante</small><br>
+                    <small style="color: var(--text-color); opacity: 0.8;">Restante</small><br>
                     <strong style="font-size:20px; color:{cor_rest};">{moeda(restante)}</strong>
                 </div>
-                <div style="background:#f1f2f6; padding:15px; border-radius:10px; flex:1;
-                            border-left:5px solid #9b59b6; min-width:150px;">
-                    <small style="color:#666;">Consumido</small><br>
-                    <strong style="font-size:20px; color:#9b59b6;">{pct_geral:.0f}%</strong>
+                <div style="background: var(--secondary-background-color); padding:15px; border-radius:10px; flex:1;
+                            border-left:5px solid {cor_pct}; min-width:150px;">
+                    <small style="color: var(--text-color); opacity: 0.8;">Consumido Geral</small><br>
+                    <strong style="font-size:20px; color:{cor_pct};">{pct_geral:.0f}%</strong>
                 </div>
             </div>
         """, unsafe_allow_html=True)
@@ -201,7 +204,7 @@ class AcompanhamentoManager:
     @staticmethod
     def _renderizar_card_categoria(nome, icone, orcado, gasto_real, pct_meta,
                                     dia_atual, ultimo_dia, subs_df):
-        """Renderiza um card de categoria com barra horizontal + marcador de ritmo."""
+        """Renderiza um card de categoria com barra horizontal + marcador de ritmo imune a temas."""
         if orcado > 0:
             pct_gasto = (gasto_real / orcado) * 100
         else:
@@ -227,9 +230,9 @@ class AcompanhamentoManager:
             pct_dia = (dia_atual / ultimo_dia) * 100
             marcador_html = (
                 f"<div style='position:absolute; left:{pct_dia}%; top:0; width:2px; "
-                f"height:100%; background:#333; opacity:0.5;'></div>"
-                f"<div style='position:absolute; left:{pct_dia}%; top:-14px; "
-                f"font-size:9px; color:#666; transform:translateX(-50%);'>Dia {dia_atual}</div>"
+                f"height:100%; background:var(--text-color); opacity:0.4; z-index:1;'></div>"
+                f"<div style='position:absolute; left:{pct_dia}%; top:-16px; "
+                f"font-size:10px; color:var(--text-color); opacity:0.8; transform:translateX(-50%);'>Dia {dia_atual}</div>"
             )
 
         # Subcategorias breakdown
@@ -237,35 +240,35 @@ class AcompanhamentoManager:
         if not subs_df.empty:
             subs_items = []
             for _, s in subs_df.iterrows():
-                subs_items.append(f"<span style='color:#666;'>{s['subcategoria']}: "
+                subs_items.append(f"<span style='color:var(--text-color); opacity:0.8;'>{s['subcategoria']}: "
                                   f"<strong>{moeda(s['gasto_sub'])}</strong></span>")
             subs_html = (
-                f"<div style='font-size:11px; margin-top:6px; color:#888;'>"
-                f"{' • '.join(subs_items)}</div>"
+                f"<div style='font-size:12px; margin-top:10px; border-top: 1px solid rgba(128,128,128,0.2); padding-top: 8px;'>"
+                f"{' &nbsp;•&nbsp; '.join(subs_items)}</div>"
             )
 
         st.markdown(f"""
-            <div style="background:#f8f9fa; border-radius:10px; padding:14px 18px; margin-bottom:10px;
-                        border-left:5px solid {barra_cor};">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div style="background: var(--secondary-background-color); border-radius:10px; padding:16px 20px; margin-bottom:12px;
+                        border-left:5px solid {barra_cor}; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <div>
-                        <span style="font-size:18px;">{icone}</span>
-                        <strong style="font-size:15px; margin-left:6px;">{nome}</strong>
-                        <span style="font-size:11px; color:#999; margin-left:8px;">(Meta: {pct_meta:.0f}%)</span>
+                        <span style="font-size:20px;">{icone}</span>
+                        <strong style="font-size:16px; margin-left:6px; color:var(--text-color);">{nome}</strong>
+                        <span style="font-size:12px; color:var(--text-color); opacity:0.6; margin-left:8px;">(Meta: {pct_meta:.0f}%)</span>
                     </div>
                     <div style="text-align:right;">
-                        <span style="font-size:13px; color:{barra_cor}; font-weight:bold;">{status_txt}</span>
+                        <span style="font-size:14px; color:{barra_cor}; font-weight:bold;">{status_txt}</span>
                     </div>
                 </div>
-                <div style="position:relative; background:#e0e0e0; border-radius:6px; height:22px; margin:4px 0;">
-                    <div style="background:{barra_cor}; width:{barra_width}%; height:22px; border-radius:6px;
-                                text-align:center; color:white; font-size:11px; line-height:22px;
-                                min-width:30px;">
+                <div style="position:relative; background:rgba(128,128,128,0.2); border-radius:6px; height:24px; margin:8px 0 12px 0;">
+                    <div style="background:{barra_cor}; width:{barra_width}%; height:24px; border-radius:6px;
+                                text-align:center; color:white; font-size:12px; font-weight:bold; line-height:24px;
+                                min-width:35px; position:relative; z-index:2;">
                         {pct_gasto:.0f}%
                     </div>
                     {marcador_html}
                 </div>
-                <div style="display:flex; justify-content:space-between; font-size:12px; color:#666; margin-top:4px;">
+                <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--text-color); opacity:0.9;">
                     <span>Gasto: <strong>{moeda(gasto_real)}</strong></span>
                     <span>Orçado: <strong>{moeda(orcado)}</strong></span>
                     <span>Restante: <strong style="color:{barra_cor};">{moeda(restante_cat)}</strong></span>
