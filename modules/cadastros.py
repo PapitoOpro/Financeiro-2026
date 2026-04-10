@@ -112,140 +112,140 @@ class CadastrosManager:
             if edit_flag not in st.session_state:
                 st.session_state[edit_flag] = False
 
-            # HEADER DA CATEGORIA MACRO
-            if not st.session_state[edit_flag]:
-                col1, col2, col3, col4, col5, col6 = st.columns([0.5, 2.5, 1, 1.5, 0.5, 0.5])
+            # Início do Container (Cartão) da Categoria
+            with st.container():
+                # HEADER DA CATEGORIA MACRO
+                if not st.session_state[edit_flag]:
+                    col1, col2, col3, col4, col5, col6 = st.columns([0.5, 2.5, 1, 1.5, 0.5, 0.5])
 
-                col1.markdown(f"<div style='font-size:22px'>{icone}</div>", unsafe_allow_html=True)
-                col2.markdown(f"**{nome}**")
-                col3.markdown(
-                    f"<span style='background:{tipo_cor}; color:white; padding:2px 8px; border-radius:4px;'>{tipo_label}</span>",
-                    unsafe_allow_html=True
-                )
-                col4.markdown(
-                    f"<div style='background:#e0e0e0; border-radius:6px; position:relative; min-height: 24px;'>"
-                    f"<div style='background:#3498db; width:{pct}%; min-width: 30px; height: 100%; border-radius:6px; color:white; text-align:center; font-weight:bold; white-space:nowrap; position:absolute; top:0; left:0; display:flex; align-items:center; justify-content:center;'>"
-                    f"{pct:.0f}%</div></div>",
-                    unsafe_allow_html=True
-                )
-
-                if col5.button("✏️", key=f"btn_edit_{cat_id}"):
-                    st.session_state[edit_flag] = True
-                    st.rerun()
-
-                if col6.button("🗑️", key=f"btn_del_{cat_id}"):
-                    db.executar(
-                        "UPDATE categorias SET ativa = FALSE WHERE id=%s AND user_id=%s",
-                        (cat_id, user_id)
+                    col1.markdown(f"<div style='font-size:22px'>{icone}</div>", unsafe_allow_html=True)
+                    col2.markdown(f"<div style='padding-top: 4px;'><strong>{nome}</strong></div>", unsafe_allow_html=True)
+                    col3.markdown(
+                        f"<div style='padding-top: 4px;'><span style='background:{tipo_cor}; color:white; padding:2px 8px; border-radius:4px; font-size:14px;'>{tipo_label}</span></div>",
+                        unsafe_allow_html=True
                     )
-                    st.rerun()
-
-            else:
-                c1, c2, c3, c4 = st.columns([3, 1, 1, 1.2])
-                novo_nome = c1.text_input("Nome", value=nome)
-                novo_pct = c2.number_input("Meta %", 0, 100, int(pct))
-                novo_icone = c3.text_input("Ícone", value=icone)
-                novo_tipo = c4.selectbox("Tipo", ["Saída", "Entrada"], index=0 if tipo == "saida" else 1)
-
-                b1, b2 = st.columns(2)
-                if b1.button("Salvar", key=f"save_{cat_id}"):
-                    db.executar(
-                        "UPDATE categorias SET nome=%s, percentual_meta=%s, icone=%s, tipo=%s WHERE id=%s AND user_id=%s",
-                        (novo_nome.strip(), novo_pct, novo_icone.strip(),
-                         "entrada" if novo_tipo == "Entrada" else "saida",
-                         cat_id, user_id)
+                    col4.markdown(
+                        f"<div style='margin-top: 6px; background:#e0e0e0; border-radius:6px; position:relative; min-height: 20px;'>"
+                        f"<div style='background:#3498db; width:{pct}%; min-width: 30px; height: 100%; border-radius:6px; color:white; text-align:center; font-weight:bold; white-space:nowrap; position:absolute; top:0; left:0; display:flex; align-items:center; justify-content:center; font-size:12px;'>"
+                        f"{pct:.0f}%</div></div>",
+                        unsafe_allow_html=True
                     )
-                    st.session_state[edit_flag] = False
-                    st.rerun()
 
-                if b2.button("Cancelar", key=f"cancel_{cat_id}"):
-                    st.session_state[edit_flag] = False
-                    st.rerun()
-
-            # SUBCATEGORIAS
-            deve_expandir = (st.session_state["expander_aberto"] == cat_id)
-            
-            with st.expander(f"📂 Subcategorias", expanded=deve_expandir):
-                
-                # Busca e lista as subcategorias que JÁ EXISTEM (com filtro anti-duplicidade)
-                df_subs = db.buscar(
-                    """
-                    SELECT MIN(id) as id, nome
-                    FROM subcategorias
-                    WHERE categoria_id = %s AND user_id = %s AND ativa = TRUE
-                    GROUP BY nome
-                    ORDER BY nome
-                    """,
-                    (cat_id, user_id)
-                )
-                
-                if not df_subs.empty:
-                    for _, sub in df_subs.iterrows():
-                        sub_id = int(sub['id'])
-                        c_nome, c_edit, c_archive = st.columns([4, 0.5, 0.5])
-                        c_nome.markdown(f" ↳ {sub['nome']}")
-                        edit_sub_flag = f"editing_sub_{sub_id}"
-
-                        # Lógica de Edição Inline
-                        if st.session_state.get(edit_sub_flag, False):
-                            novo_sub_nome = st.text_input(
-                                "Nome", value=sub['nome'], key=f"es_name_{sub_id}", label_visibility="collapsed"
-                            )
-                            bs1, bs2 = st.columns(2)
-                            if bs1.button("", key=f"save_sub_{sub_id}", icon=":material/check:", help="Salvar"):
-                                db.executar(
-                                    "UPDATE subcategorias SET nome=%s WHERE id=%s AND user_id=%s",
-                                    (novo_sub_nome.strip(), sub_id, user_id)
-                                )
-                                st.session_state[edit_sub_flag] = False
-                                st.session_state["expander_aberto"] = cat_id # Mantém aberto
-                                st.rerun()
-                            if bs2.button("", key=f"cancel_sub_{sub_id}", icon=":material/close:", help="Cancelar"):
-                                st.session_state[edit_sub_flag] = False
-                                st.session_state["expander_aberto"] = cat_id # Mantém aberto
-                                st.rerun()
-                        else:
-                            with c_edit:
-                                if st.button("\u200b", key=f"edit_sub_{sub_id}", help="Editar", icon=":material/edit:"):
-                                    st.session_state[edit_sub_flag] = True
-                                    st.session_state["expander_aberto"] = cat_id # Mantém aberto
-                                    st.rerun()
-                            with c_archive:
-                                if st.button("\u200b", key=f"archive_sub_{sub_id}", help="Arquivar", icon=":material/archive:"):
-                                    db.executar(
-                                        "UPDATE subcategorias SET ativa = FALSE WHERE id=%s AND user_id=%s",
-                                        (sub_id, user_id)
-                                    )
-                                    st.session_state["expander_aberto"] = cat_id # Mantém aberto
-                                    st.rerun()
-                else:
-                    st.caption("Nenhuma subcategoria cadastrada.")
-                
-                st.markdown("---") 
-                
-                # Formulário SEGURO para nova subcategoria
-                with st.form(f"form_add_sub_{cat_id}", clear_on_submit=True, border=False):
-                    col_sub_input, col_sub_btn = st.columns([4, 1])
-                    
-                    nova_sub = col_sub_input.text_input(
-                        "Nova subcategoria", 
-                        placeholder="Ex: Padaria, Uber, Netflix...",
-                        label_visibility="collapsed"
-                    )
-                    
-                    # Usamos form_submit_button para aproveitar a limpeza automática
-                    if col_sub_btn.form_submit_button("", icon=":material/add:", help="Inserir subcategoria", use_container_width=True):
-                        if (nova_sub or "").strip():
-                            db.executar(
-                                "INSERT INTO subcategorias (nome, categoria_id, ativa, user_id) "
-                                "VALUES (%s, %s, TRUE, %s) ON CONFLICT (nome, categoria_id, user_id) DO NOTHING",
-                                (nova_sub.strip(), cat_id, user_id)
-                            )
-                            # Define que esta categoria deve ficar aberta na próxima recarga
-                            st.session_state["expander_aberto"] = cat_id
+                    with col5:
+                        if st.button("\u200b", key=f"btn_edit_{cat_id}", icon=":material/edit:", help="Editar categoria"):
+                            st.session_state[edit_flag] = True
                             st.rerun()
 
-            st.markdown("<hr style='margin:5px 0 10px 0;'>", unsafe_allow_html=True)
+                    with col6:
+                        if st.button("\u200b", key=f"btn_del_{cat_id}", icon=":material/delete:", help="Excluir categoria"):
+                            db.executar(
+                                "UPDATE categorias SET ativa = FALSE WHERE id=%s AND user_id=%s",
+                                (cat_id, user_id)
+                            )
+                            st.rerun()
+
+                else:
+                    c1, c2, c3, c4 = st.columns([3, 1, 1, 1.2])
+                    novo_nome = c1.text_input("Nome", value=nome, label_visibility="collapsed")
+                    novo_pct = c2.number_input("Meta %", 0, 100, int(pct), label_visibility="collapsed")
+                    novo_icone = c3.text_input("Ícone", value=icone, label_visibility="collapsed")
+                    novo_tipo = c4.selectbox("Tipo", ["Saída", "Entrada"], index=0 if tipo == "saida" else 1, label_visibility="collapsed")
+
+                    b1, b2 = st.columns([1, 1])
+                    if b1.button("Salvar", key=f"save_{cat_id}", use_container_width=True):
+                        db.executar(
+                            "UPDATE categorias SET nome=%s, percentual_meta=%s, icone=%s, tipo=%s WHERE id=%s AND user_id=%s",
+                            (novo_nome.strip(), novo_pct, novo_icone.strip(),
+                             "entrada" if novo_tipo == "Entrada" else "saida",
+                             cat_id, user_id)
+                        )
+                        st.session_state[edit_flag] = False
+                        st.rerun()
+
+                    if b2.button("Cancelar", key=f"cancel_{cat_id}", use_container_width=True):
+                        st.session_state[edit_flag] = False
+                        st.rerun()
+
+                # SUBCATEGORIAS (Dentro do Container)
+                deve_expandir = (st.session_state.get("expander_aberto") == cat_id)
+                
+                with st.expander(f"↳ Gerenciar subcategorias de {nome}", expanded=deve_expandir):
+                    
+                    df_subs = db.buscar(
+                        """
+                        SELECT MIN(id) as id, nome
+                        FROM subcategorias
+                        WHERE categoria_id = %s AND user_id = %s AND ativa = TRUE
+                        GROUP BY nome
+                        ORDER BY nome
+                        """,
+                        (cat_id, user_id)
+                    )
+                    
+                    if not df_subs.empty:
+                        for _, sub in df_subs.iterrows():
+                            sub_id = int(sub['id'])
+                            c_nome, c_edit, c_archive = st.columns([4, 0.5, 0.5])
+                            c_nome.markdown(f"<div style='padding-top: 6px;'>🔸 {sub['nome']}</div>", unsafe_allow_html=True)
+                            edit_sub_flag = f"editing_sub_{sub_id}"
+
+                            if st.session_state.get(edit_sub_flag, False):
+                                novo_sub_nome = st.text_input(
+                                    "Nome", value=sub['nome'], key=f"es_name_{sub_id}", label_visibility="collapsed"
+                                )
+                                bs1, bs2 = st.columns(2)
+                                if bs1.button("", key=f"save_sub_{sub_id}", icon=":material/check:", help="Salvar"):
+                                    db.executar(
+                                        "UPDATE subcategorias SET nome=%s WHERE id=%s AND user_id=%s",
+                                        (novo_sub_nome.strip(), sub_id, user_id)
+                                    )
+                                    st.session_state[edit_sub_flag] = False
+                                    st.session_state["expander_aberto"] = cat_id
+                                    st.rerun()
+                                if bs2.button("", key=f"cancel_sub_{sub_id}", icon=":material/close:", help="Cancelar"):
+                                    st.session_state[edit_sub_flag] = False
+                                    st.session_state["expander_aberto"] = cat_id
+                                    st.rerun()
+                            else:
+                                with c_edit:
+                                    if st.button("\u200b", key=f"edit_sub_{sub_id}", help="Editar", icon=":material/edit:"):
+                                        st.session_state[edit_sub_flag] = True
+                                        st.session_state["expander_aberto"] = cat_id
+                                        st.rerun()
+                                with c_archive:
+                                    if st.button("\u200b", key=f"archive_sub_{sub_id}", help="Arquivar", icon=":material/archive:"):
+                                        db.executar(
+                                            "UPDATE subcategorias SET ativa = FALSE WHERE id=%s AND user_id=%s",
+                                            (sub_id, user_id)
+                                        )
+                                        st.session_state["expander_aberto"] = cat_id
+                                        st.rerun()
+                    else:
+                        st.caption("Nenhuma subcategoria cadastrada.")
+                    
+                    st.markdown("---") 
+                    
+                    with st.form(f"form_add_sub_{cat_id}", clear_on_submit=True, border=False):
+                        col_sub_input, col_sub_btn = st.columns([4, 1])
+                        
+                        nova_sub = col_sub_input.text_input(
+                            "Nova subcategoria", 
+                            placeholder="Ex: Padaria, Uber, Netflix...",
+                            label_visibility="collapsed"
+                        )
+                        
+                        if col_sub_btn.form_submit_button("", icon=":material/add:", help="Inserir subcategoria", use_container_width=True):
+                            if (nova_sub or "").strip():
+                                db.executar(
+                                    "INSERT INTO subcategorias (nome, categoria_id, ativa, user_id) "
+                                    "VALUES (%s, %s, TRUE, %s) ON CONFLICT (nome, categoria_id, user_id) DO NOTHING",
+                                    (nova_sub.strip(), cat_id, user_id)
+                                )
+                                st.session_state["expander_aberto"] = cat_id
+                                st.rerun()
+
+            # Divisor visual entre os "cartões" das categorias macro
+            st.divider()
 
     # ================================================================
     # CONTAS / BANCOS
