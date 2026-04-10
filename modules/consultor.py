@@ -142,13 +142,19 @@ class ConsultorEngine:
             })
 
         return diag
-
-
 # ==========================================
 # INTERFACE DE USUÁRIO (Cards e Visuais)
 # ==========================================
 class ConsultorManager:
     """Gerencia a exibição do Consultor Financeiro na tela."""
+
+    @staticmethod
+    def widget_alertas(ano, mes):
+        """Widget compacto de alertas para importar em outras telas (ex: Caixa)."""
+        # Calcula o diagnóstico para o mês/ano solicitado
+        diag = ConsultorEngine.diagnostico_completo(ano, mes)
+        # Renderiza apenas os 2 alertas mais importantes para não poluir a tela
+        ConsultorManager._renderizar_alertas(diag['alertas'], max_alertas=2)
 
     @staticmethod
     def _renderizar_status_geral(diag):
