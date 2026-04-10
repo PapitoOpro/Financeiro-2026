@@ -168,10 +168,9 @@ class RelatoriosManager:
         ''', unsafe_allow_html=True)
 
         # ── 5. Abas: Prévia / Curva ABC / Consultor ─────────
-        t_previa, t_abc, t_consultor = st.tabs([
+        t_previa, t_abc = st.tabs([
             "Prévia do Relatório",
             "Curva ABC",
-            "Consultor Financeiro",
         ])
 
         # Monta DataFrame de exibição com colunas selecionadas
@@ -250,54 +249,49 @@ class RelatoriosManager:
         st.markdown("**Curva ABC: Descubra quais despesas consomem mais do seu orçamento.**")
 
         df_saidas = df[df["valor"] < 0].copy()
-        if df_saidas.empty:
-            st.warning("Nenhuma saída (despesa) registrada neste período para gerar a Curva ABC.")
-            return
+        with t_previa:
+            st.subheader("Prévia do Relatório")
+            st.caption(f"{len(df_exibir_renomeado)} registros  |  Período: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}")
+            st.dataframe(df_exibir_renomeado.drop(columns=["valor_num"], errors="ignore"), hide_index=True, width='stretch')
 
-        # 1. Preparação dos Dados (Mantendo numérico para o gráfico)
-        df_saidas["Valor Absoluto"] = df_saidas["valor"].abs()
-        df_abc = df_saidas.sort_values(by="Valor Absoluto", ascending=False).reset_index(drop=True)
-        df_abc["% Acumulada Num"] = (df_abc["Valor Absoluto"].cumsum() / df_abc["Valor Absoluto"].sum()) * 100
+            # ── 6. Exportação ───────────────────────────────
+            st.divider()
+            st.subheader("Exportar Relatório")
+            ec1, ec2 = st.columns(2)
 
-        def classificar_abc(pct):
-            if pct <= 80: return "Classe A"
-            if pct <= 95: return "Classe B"
-            return "Classe C"
+            # --- Excel ---
+            df_export = df_exibir.copy()
+            if "valor_num" in df_export.columns:
+                df_export["valor"] = df_export["valor_num"]
+                df_export.drop(columns=["valor_num"], inplace=True)
+            df_export = df_export.rename(columns=rename)
 
-        df_abc["Classe"] = df_abc["% Acumulada Num"].apply(classificar_abc)
+            buf_xlsx = io.BytesIO()
+            df_export.to_excel(buf_xlsx, index=False, engine="openpyxl")
+            ec1.download_button(
+                "Baixar Excel",
+                data=buf_xlsx.getvalue(),
+                file_name=f"relatorio_{d_ini}_{d_fim}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                width='stretch',
+                icon=":material/download:",
+            )
 
-        # 2. Métricas Rápidas (Cards)
-        # Calculamos quanto cada classe representa em R$ e em quantidade de itens
-        resumo = df_abc.groupby('Classe').agg(
-            Total=('Valor Absoluto', 'sum'),
-            Qtd=('Valor Absoluto', 'count')
-        ).reset_index()
+            # --- PDF ---
+            pdf_bytes = RelatoriosManager._gerar_pdf(
+                df_export, d_ini, d_fim, ent, sai, bal
+            )
+            ec2.download_button(
+                "Baixar PDF",
+                data=pdf_bytes,
+                file_name=f"relatorio_{d_ini}_{d_fim}.pdf",
+                mime="application/pdf",
+                width='stretch',
+                icon=":material/picture_as_pdf:",
+            )
 
-        st.markdown("### Resumo Estratégico")
-        c1, c2, c3 = st.columns(3)
-        cores = {"Classe A": "#e74c3c", "Classe B": "#f39c12", "Classe C": "#2ecc71"} # Vermelho, Laranja, Verde
-
-        for _, row in resumo.iterrows():
-            classe = row['Classe']
-            # Usa a sua função moeda() aqui
-            texto_card = f"""
-            <div style="background-color:#f8f9fa; padding:15px; border-radius:10px; border-left:5px solid {cores.get(classe, '#ccc')};">
-                <p style="margin:0; font-size:14px; color:#555;">{classe}</p>
-                <h3 style="margin:0; color:#333;">{moeda(row['Total'])}</h3>
-                <small style="color:#777;">{row['Qtd']} itens</small>
-            </div>
-            """
-            if classe == "Classe A": c1.markdown(texto_card, unsafe_allow_html=True)
-            elif classe == "Classe B": c2.markdown(texto_card, unsafe_allow_html=True)
-            elif classe == "Classe C": c3.markdown(texto_card, unsafe_allow_html=True)
-
-        st.write("") # Espaço em branco
-
-        # 3. Gráfico de Pareto (O coração da Curva ABC)
-        st.markdown("### Gráfico de Distribuição")
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
-        
-        # Barras de Valor
+        with t_abc:
+            RelatoriosManager._render_curva_abc(df_filtrado)
         fig.add_trace(
             go.Bar(
                 x=df_abc["descricao"].str[:20], # Corta o nome para não poluir
@@ -343,59 +337,71 @@ class RelatoriosManager:
 
             st.info("🎯 **DICA DE OURO:** Gaste 80% do seu tempo renegociando ou cortando os itens da **Classe A** (Vermelho). Eles são os que realmente movem o ponteiro financeiro.")
     
-        # ─── Geração de PDF ──────────────────────────────────────
-        @staticmethod
-        def _gerar_pdf(df, d_ini, d_fim, ent, sai, bal):
-            """
-            Gera um PDF simples do relatório usando a biblioteca reportlab.
-            """
-            import io
-            from reportlab.lib.pagesizes import A4
-            from reportlab.pdfgen import canvas
-            from reportlab.lib.units import cm
-    
-            buffer = io.BytesIO()
-            c = canvas.Canvas(buffer, pagesize=A4)
-            width, height = A4
-    
-            # Título
-            c.setFont("Helvetica-Bold", 16)
-            c.drawString(2 * cm, height - 2 * cm, "Relatório Financeiro")
-    
-            # Período
-            c.setFont("Helvetica", 10)
-            c.drawString(2 * cm, height - 2.7 * cm, f"Período: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}")
-    
-            # Métricas
-            c.setFont("Helvetica", 11)
-            c.drawString(2 * cm, height - 3.5 * cm, f"Entradas: R$ {ent:,.2f}")
-            c.drawString(2 * cm, height - 4.0 * cm, f"Saídas:   R$ {sai:,.2f}")
-            c.drawString(2 * cm, height - 4.5 * cm, f"Balanço:  R$ {bal:,.2f}")
-    
-            # Cabeçalho da tabela
-            c.setFont("Helvetica-Bold", 10)
-            y = height - 5.5 * cm
-            colunas = list(df.columns)
-            col_widths = [5*cm, 6*cm, 3*cm, 4*cm][:len(colunas)]
-            x = 2 * cm
-            for i, col in enumerate(colunas):
-                c.drawString(x, y, str(col))
-                x += col_widths[i] if i < len(col_widths) else 3*cm
-    
-            # Dados da tabela
-            c.setFont("Helvetica", 9)
-            y -= 0.5 * cm
-            for idx, row in df.iterrows():
-                x = 2 * cm
-                for i, col in enumerate(colunas):
-                    valor = str(row[col])
-                    c.drawString(x, y, valor[:20])
-                    x += col_widths[i] if i < len(col_widths) else 3*cm
-                y -= 0.5 * cm
-                if y < 2 * cm:
-                    c.showPage()
-                    y = height - 2 * cm
-    
-            c.save()
-            buffer.seek(0)
-            return buffer.getvalue()
+        # ─── Gerar PDF ────────────────────────────────────────────
+    @staticmethod
+    def _gerar_pdf(df, d_ini, d_fim, ent, sai, bal):
+        """Gera PDF do relatório usando fpdf2."""
+        from fpdf import FPDF
+
+        pdf = FPDF(orientation="L", format="A4")
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+
+        # Título
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.cell(0, 10, "Relatorio Financeiro", ln=True, align="C")
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(0, 6, f"Periodo: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}", ln=True, align="C")
+        pdf.ln(4)
+
+        # Resumo Financeiro
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.cell(90, 8, f"Entradas: {moeda(ent)}")
+        pdf.cell(90, 8, f"Saidas: -{moeda(sai)}")
+        pdf.cell(0, 8, f"Balanco: {moeda(bal)}", ln=True)
+        
+        # --- NOVO: Cálculo Rápido da Classe A ---
+        df_saidas = df[df["valor"] < 0].copy()
+        if not df_saidas.empty:
+            df_saidas["Valor Absoluto"] = df_saidas["valor"].abs()
+            df_abc = df_saidas.sort_values(by="Valor Absoluto", ascending=False).reset_index(drop=True)
+            df_abc["% Acumulada Num"] = (df_abc["Valor Absoluto"].cumsum() / df_abc["Valor Absoluto"].sum()) * 100
+            
+            # Filtra apenas os itens da Classe A (até 80% do valor total)
+            classe_a = df_abc[df_abc["% Acumulada Num"] <= 80]
+            
+            if not classe_a.empty:
+                total_a = classe_a["Valor Absoluto"].sum()
+                qtd_a = len(classe_a)
+                
+                # Texto de Destaque no PDF
+                pdf.set_font("Helvetica", "I", 9)
+                pdf.set_text_color(200, 0, 0) # Cor vermelha escura para chamar atenção (RGB)
+                pdf.cell(0, 6, f"  * Atencao (Curva ABC): {qtd_a} despesas da Classe A representam o maior impacto do mes ({moeda(total_a)}).", ln=True)
+                pdf.set_text_color(0, 0, 0) # CRÍTICO: Volta o pincel para a cor preta padrão!
+        # ----------------------------------------
+        
+        pdf.ln(4)
+
+        # Tabela
+        colunas = list(df.columns)
+        n_cols = len(colunas)
+        page_w = pdf.w - 20  # margens
+        col_w = page_w / n_cols if n_cols else page_w
+
+        # Cabeçalho
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_fill_color(220, 220, 220)
+        for col in colunas:
+            pdf.cell(col_w, 7, str(col)[:25], border=1, fill=True, align="C")
+        pdf.ln()
+
+        # Dados
+        pdf.set_font("Helvetica", "", 8)
+        for _, row in df.iterrows():
+            for col in colunas:
+                val = str(row[col]) if pd.notna(row[col]) else ""
+                pdf.cell(col_w, 6, val[:30], border=1, align="C")
+            pdf.ln()
+
+        return bytes(pdf.output())
