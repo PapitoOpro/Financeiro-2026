@@ -6,7 +6,6 @@ import streamlit as st
 import pandas as pd
 from database import db
 
-
 class CadastrosManager:
     """Gerenciador de cadastros (contas, categorias macro e subcategorias)."""
 
@@ -29,376 +28,146 @@ class CadastrosManager:
     # ================================================================
     @staticmethod
     def _secao_categorias_completa():
+        """Seção unificada: categorias macro com porcentagem + subcategorias."""
         user_id = db.get_user_id()
 
+        # =========================
+        # BUSCA CATEGORIAS MACRO
+        # =========================
         df_cats = db.buscar(
             "SELECT * FROM categorias WHERE user_id = %s AND ativa = TRUE ORDER BY nome",
             (user_id,)
         )
 
-        total_pct = df_cats['percentual_meta'].fillna(0).sum() if not df_cats.empty else 0
+        total_pct = 0
+        if not df_cats.empty and 'percentual_meta' in df_cats.columns:
+            total_pct = df_cats['percentual_meta'].fillna(0).sum()
 
         barra_cor = "#2ecc71" if total_pct == 100 else ("#f39c12" if total_pct < 100 else "#e74c3c")
         barra_width = min(float(total_pct), 100)
 
         st.markdown(f"""
-    <div style="background:#f1f2f6; border-radius:10px; padding:12px; margin-bottom:15px;">
-        <div style="display:flex; justify-content:space-between;">
-            <strong>Orçamento</strong>
-            <strong style="color:{barra_cor};">{total_pct:.0f}%</strong>
-        </div>
-        <div style="background:#ddd; border-radius:6px; height:10px;">
-            <div style="background:{barra_cor}; width:{barra_width}%; height:10px;"></div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # NOVA CATEGORIA
-    with st.form("nova_categoria", clear_on_submit=True):
-        c1, c2, c3, c4 = st.columns([3,1,1,1])
-        nome = c1.text_input("Nome", label_visibility="collapsed")
-        pct = c2.number_input("%", 0, 100, 0, label_visibility="collapsed")
-        icone = c3.text_input("Ícone", "", label_visibility="collapsed")
-        tipo = c4.selectbox("Tipo", ["Saída","Entrada"], label_visibility="collapsed")
-
-        if st.form_submit_button("Adicionar"):
-            if nome.strip():
-                db.executar(
-                    "INSERT INTO categorias (nome, percentual_meta, icone, tipo, ativa, user_id) "
-                    "VALUES (%s,%s,%s,%s,TRUE,%s) "
-                    "ON CONFLICT (nome,user_id) DO UPDATE "
-                    "SET percentual_meta=EXCLUDED.percentual_meta, icone=EXCLUDED.icone, tipo=EXCLUDED.tipo",
-                    (nome.strip(), pct, icone.strip(), "entrada" if tipo=="Entrada" else "saida", user_id)
-                )
-                st.rerun()
-
-    if df_cats.empty:
-        st.info("Nenhuma categoria.")
-        return
-
-    if "expander_aberto" not in st.session_state:
-        st.session_state["expander_aberto"] = None
-
-    st.markdown("---")
-
-    # LOOP ÚNICO
-    for _, cat in df_cats.iterrows():
-        cat_id = int(cat['id'])
-        nome = cat['nome']
-        icone = cat.get('icone','')
-        pct = float(cat.get('percentual_meta',0))
-        tipo = cat.get('tipo','saida')
-
-        tipo_cor = "#2ecc71" if tipo=="entrada" else "#e74c3c"
-
-        edit_flag = f"edit_{cat_id}"
-        if edit_flag not in st.session_state:
-            st.session_state[edit_flag] = False
-
-        # HEADER
-        if not st.session_state[edit_flag]:
-            c1,c2,c3,c4,c5,c6 = st.columns([0.5,2.5,1,1.5,0.5,0.5])
-
-            c1.markdown(f"{icone}")
-            c2.markdown(f"**{nome}**")
-            c3.markdown(f"<span style='background:{tipo_cor};color:white;padding:2px 6px;border-radius:4px'>{tipo}</span>", unsafe_allow_html=True)
-            c4.progress(min(pct,100)/100)
-
-            if c5.button("✏️", key=f"edit_{cat_id}"):
-                st.session_state[edit_flag] = True
-                st.rerun()
-
-            if c6.button("🗑️", key=f"del_{cat_id}"):
-                db.executar("UPDATE categorias SET ativa=FALSE WHERE id=%s AND user_id=%s",(cat_id,user_id))
-                st.rerun()
-
-        else:
-            c1,c2,c3,c4 = st.columns([3,1,1,1])
-            novo_nome = c1.text_input("Nome", value=nome)
-            novo_pct = c2.number_input("%",0,100,int(pct))
-            novo_icone = c3.text_input("Ícone", value=icone)
-            novo_tipo = c4.selectbox("Tipo", ["Saída","Entrada"], index=0 if tipo=="saida" else 1)
-
-            if st.button("Salvar", key=f"save_{cat_id}"):
-                db.executar(
-                    "UPDATE categorias SET nome=%s, percentual_meta=%s, icone=%s, tipo=%s WHERE id=%s AND user_id=%s",
-                    (novo_nome.strip(), novo_pct, novo_icone.strip(),
-                     "entrada" if novo_tipo=="Entrada" else "saida",
-                     cat_id, user_id)
-                )
-                st.session_state[edit_flag]=False
-                st.rerun()
-
-        # SUBCATEGORIAS
-        df_subs = db.buscar(
-            """
-            SELECT MIN(id) as id, nome
-            FROM subcategorias
-            WHERE categoria_id=%s AND user_id=%s AND ativa=TRUE
-            GROUP BY nome
-            ORDER BY nome
-            """,
-            (cat_id,user_id)
-        )
-
-        aberto = st.session_state["expander_aberto"] == cat_id
-
-        with st.expander(f"📂 Subcategorias ({len(df_subs) if not df_subs.empty else 0})", expanded=aberto):
-
-            if not df_subs.empty:
-                for _, sub in df_subs.iterrows():
-                    sub_id = int(sub['id'])
-
-                    c1,c2,c3 = st.columns([4,0.5,0.5])
-                    c1.markdown(f"↳ {sub['nome']}")
-
-                    if c2.button("✏️", key=f"edit_sub_{sub_id}"):
-                        st.session_state[f"edit_sub_{sub_id}"]=True
-                        st.session_state["expander_aberto"]=cat_id
-                        st.rerun()
-
-                    if c3.button("🗑️", key=f"del_sub_{sub_id}"):
-                        db.executar(
-                            "UPDATE subcategorias SET ativa=FALSE WHERE id=%s AND user_id=%s",
-                            (sub_id,user_id)
-                        )
-                        st.session_state["expander_aberto"]=cat_id
-                        st.rerun()
-            else:
-                st.caption("Nenhuma subcategoria.")
-
-
-            # Formulário SEGURO para nova subcategoria
-            with st.form(f"form_add_sub_{cat_id}", clear_on_submit=True, border=False):
-                col_sub_input, col_sub_btn = st.columns([4, 1])
-                nova_sub = col_sub_input.text_input(
-                    "Nova subcategoria", 
-                    placeholder="Ex: Padaria, Uber, Netflix...",
-                    label_visibility="collapsed"
-                )
-                if col_sub_btn.form_submit_button("➕", use_container_width=True):
-                    if (nova_sub or "").strip():
-                        db.executar(
-                            "INSERT INTO subcategorias (nome, categoria_id, ativa, user_id) "
-                            "VALUES (%s, %s, TRUE, %s) ON CONFLICT (nome, categoria_id, user_id) DO NOTHING",
-                            (nova_sub.strip(), cat_id, user_id)
-                        )
-                        st.session_state["expander_aberto"] = cat_id
-                        st.rerun()
-
-    @staticmethod
-    def _secao_categorias_completa():
-        """Seção unificada: categorias macro com porcentagem + subcategorias."""
-        user_id = db.get_user_id()
-
-    # =========================
-    # BUSCA CATEGORIAS
-    # =========================
-    df_cats = db.buscar(
-        "SELECT * FROM categorias WHERE user_id = %s AND ativa = TRUE ORDER BY nome",
-        (user_id,)
-    )
-
-    total_pct = 0
-    if not df_cats.empty and 'percentual_meta' in df_cats.columns:
-        total_pct = df_cats['percentual_meta'].fillna(0).sum()
-
-    barra_cor = "#2ecc71" if total_pct == 100 else ("#f39c12" if total_pct < 100 else "#e74c3c")
-    barra_width = min(float(total_pct), 100)
-
-    st.markdown(f"""
-        <div style="background:#f1f2f6; border-radius:10px; padding:12px 15px; margin-bottom:15px;">
-            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-                <strong>Orçamento Distribuído</strong>
-                <strong style="color:{barra_cor};">{total_pct:.0f}% / 100%</strong>
+            <div style="background:#f1f2f6; border-radius:10px; padding:12px 15px; margin-bottom:15px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                    <strong>Orçamento Distribuído</strong>
+                    <strong style="color:{barra_cor};">{total_pct:.0f}% / 100%</strong>
+                </div>
+                <div style="background:#e0e0e0; border-radius:6px; height:14px;">
+                    <div style="background:{barra_cor}; width:{barra_width}%; height:14px; border-radius:6px;"></div>
+                </div>
             </div>
-            <div style="background:#e0e0e0; border-radius:6px; height:14px;">
-                <div style="background:{barra_cor}; width:{barra_width}%; height:14px; border-radius:6px;"></div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # =========================
-    # NOVA CATEGORIA
-    # =========================
-    st.markdown("### Categorias Macro (Orçamento)")
-    with st.form("form_nova_cat_macro", clear_on_submit=True):
-        c1, c2, c3, c_tipo, c4 = st.columns([3, 1, 1, 1.2, 1])
-        n_nome = c1.text_input("Nome", label_visibility="collapsed")
-        n_pct = c2.number_input("Meta %", 0, 100, 0, label_visibility="collapsed")
-        n_icone = c3.text_input("Ícone", "", label_visibility="collapsed")
-        n_tipo = c_tipo.selectbox("Tipo", ["Saída", "Entrada"], label_visibility="collapsed")
-
-        if c4.form_submit_button("Adicionar"):
-            if (n_nome or "").strip():
-                tipo_val = "entrada" if n_tipo == "Entrada" else "saida"
-                db.executar(
-                    "INSERT INTO categorias (nome, percentual_meta, icone, tipo, ativa, user_id) "
-                    "VALUES (%s, %s, %s, %s, TRUE, %s) "
-                    "ON CONFLICT (nome, user_id) DO UPDATE "
-                    "SET percentual_meta = EXCLUDED.percentual_meta, icone = EXCLUDED.icone, tipo = EXCLUDED.tipo",
-                    (n_nome.strip(), n_pct, n_icone.strip(), tipo_val, user_id)
-                )
-                st.rerun()
-            else:
-                st.error("Digite um nome!")
-
-    if df_cats.empty:
-        st.info("Nenhuma categoria cadastrada.")
-        return
-
-    # =========================
-    # CONTROLE EXPANDER
-    # =========================
-    if "expander_aberto" not in st.session_state:
-        st.session_state["expander_aberto"] = None
-
-    st.markdown("---")
-
-    # =========================
-    # LOOP PRINCIPAL
-    # =========================
-    for _, cat in df_cats.iterrows():
-        cat_id = int(cat['id'])
-        nome = cat['nome']
-        icone = cat.get('icone', '') or ''
-        pct = float(cat.get('percentual_meta', 0) or 0)
-        tipo = cat.get('tipo', 'saida')
-
-        tipo_label = "Entrada" if tipo == "entrada" else "Saída"
-        tipo_cor = "#2ecc71" if tipo == "entrada" else "#e74c3c"
-
-        edit_flag = f"edit_cat_{cat_id}"
-        if edit_flag not in st.session_state:
-            st.session_state[edit_flag] = False
+        """, unsafe_allow_html=True)
 
         # =========================
-        # HEADER
+        # NOVA CATEGORIA MACRO
         # =========================
-        if not st.session_state[edit_flag]:
-            col1, col2, col3, col4, col5, col6 = st.columns([0.5, 2.5, 1, 1.5, 0.5, 0.5])
+        st.markdown("### Categorias Macro (Orçamento)")
+        with st.form("form_nova_cat_macro", clear_on_submit=True):
+            c1, c2, c3, c_tipo, c4 = st.columns([3, 1, 1, 1.2, 1])
+            n_nome = c1.text_input("Nome", label_visibility="collapsed")
+            n_pct = c2.number_input("Meta %", 0, 100, 0, label_visibility="collapsed")
+            n_icone = c3.text_input("Ícone", "", label_visibility="collapsed")
+            n_tipo = c_tipo.selectbox("Tipo", ["Saída", "Entrada"], label_visibility="collapsed")
 
-            col1.markdown(f"<div style='font-size:22px'>{icone}</div>", unsafe_allow_html=True)
-            col2.markdown(f"**{nome}**")
-            col3.markdown(
-                f"<span style='background:{tipo_cor}; color:white; padding:2px 8px; border-radius:4px;'>{tipo_label}</span>",
-                unsafe_allow_html=True
-            )
-            col4.markdown(
-                f"<div style='background:#e0e0e0; border-radius:6px;'>"
-                f"<div style='background:#3498db; width:{pct}%; color:white; text-align:center;'>"
-                f"{pct:.0f}%</div></div>",
-                unsafe_allow_html=True
-            )
+            if c4.form_submit_button("Adicionar"):
+                if (n_nome or "").strip():
+                    tipo_val = "entrada" if n_tipo == "Entrada" else "saida"
+                    db.executar(
+                        "INSERT INTO categorias (nome, percentual_meta, icone, tipo, ativa, user_id) "
+                        "VALUES (%s, %s, %s, %s, TRUE, %s) "
+                        "ON CONFLICT (nome, user_id) DO UPDATE "
+                        "SET percentual_meta = EXCLUDED.percentual_meta, icone = EXCLUDED.icone, tipo = EXCLUDED.tipo",
+                        (n_nome.strip(), n_pct, n_icone.strip(), tipo_val, user_id)
+                    )
+                    st.rerun()
+                else:
+                    st.error("Digite um nome!")
 
-            if col5.button("✏️", key=f"btn_edit_{cat_id}"):
-                st.session_state[edit_flag] = True
-                st.rerun()
-
-            if col6.button("🗑️", key=f"btn_del_{cat_id}"):
-                db.executar(
-                    "UPDATE categorias SET ativa = FALSE WHERE id=%s AND user_id=%s",
-                    (cat_id, user_id)
-                )
-                st.rerun()
-
-        else:
-            c1, c2, c3, c4 = st.columns([3, 1, 1, 1.2])
-            novo_nome = c1.text_input("Nome", value=nome)
-            novo_pct = c2.number_input("Meta %", 0, 100, int(pct))
-            novo_icone = c3.text_input("Ícone", value=icone)
-            novo_tipo = c4.selectbox("Tipo", ["Saída", "Entrada"], index=0 if tipo == "saida" else 1)
-
-            b1, b2 = st.columns(2)
-            if b1.button("Salvar", key=f"save_{cat_id}"):
-                db.executar(
-                    "UPDATE categorias SET nome=%s, percentual_meta=%s, icone=%s, tipo=%s WHERE id=%s AND user_id=%s",
-                    (novo_nome.strip(), novo_pct, novo_icone.strip(),
-                     "entrada" if novo_tipo == "Entrada" else "saida",
-                     cat_id, user_id)
-                )
-                st.session_state[edit_flag] = False
-                st.rerun()
-
-            if b2.button("Cancelar", key=f"cancel_{cat_id}"):
-                st.session_state[edit_flag] = False
-                st.rerun()
+        if df_cats.empty:
+            st.info("Nenhuma categoria cadastrada.")
+            return
 
         # =========================
-        # SUBCATEGORIAS
+        # CONTROLE EXPANDER
         # =========================
-        df_subs = db.buscar(
-            """
-            SELECT MIN(id) as id, nome
-            FROM subcategorias
-            WHERE categoria_id = %s AND user_id = %s AND ativa = TRUE
-            GROUP BY nome
-            ORDER BY nome
-            """,
-            (cat_id, user_id)
-        )
-
-        expandido = (st.session_state["expander_aberto"] == cat_id)
-
-        with st.expander(f"📂 Subcategorias ({len(df_subs) if not df_subs.empty else 0})", expanded=expandido):
-
-            if not df_subs.empty:
-                for _, sub in df_subs.iterrows():
-                    sub_id = int(sub['id'])
-                    nome_sub = sub['nome']
-
-                    c1, c2, c3 = st.columns([4, 0.5, 0.5])
-                    c1.markdown(f"↳ {nome_sub}")
-
-                    if c2.button("✏️", key=f"edit_sub_{sub_id}"):
-                        st.session_state[f"edit_sub_{sub_id}"] = True
-                        st.session_state["expander_aberto"] = cat_id
-                        st.rerun()
-
-                    if c3.button("🗑️", key=f"del_sub_{sub_id}"):
-                        db.executar(
-                            "UPDATE subcategorias SET ativa=FALSE WHERE id=%s AND user_id=%s",
-                            (sub_id, user_id)
-                        )
-                        st.session_state["expander_aberto"] = cat_id
-                        st.rerun()
-            else:
-                st.caption("Nenhuma subcategoria.")
-
-            st.markdown("---")
-
-            with st.form(f"form_sub_{cat_id}", clear_on_submit=True):
-                c1, c2 = st.columns([4, 1])
-                nova = c1.text_input("Nova subcategoria", label_visibility="collapsed")
-
-                if c2.form_submit_button("➕"):
-                    if (nova or "").strip():
-                        db.executar(
-                            "INSERT INTO subcategorias (nome, categoria_id, ativa, user_id) "
-                            "VALUES (%s, %s, TRUE, %s) "
-                            "ON CONFLICT (nome, categoria_id, user_id) DO NOTHING",
-                            (nova.strip(), cat_id, user_id)
-                        )
-                        st.session_state["expander_aberto"] = cat_id
-                        st.rerun()
+        if "expander_aberto" not in st.session_state:
+            st.session_state["expander_aberto"] = None
 
         st.markdown("---")
 
-        # Loop passando por cada categoria macro
-        for idx, row in df_cats.iterrows():
-            cat_id = row['id']
-            cat_nome = row['nome']
-            if "expander_aberto" not in st.session_state:
-                st.session_state["expander_aberto"] = None
-            
-            # Verifica se ESTA categoria é a que deve começar expandida
+        # =========================
+        # LOOP PRINCIPAL (MACRO + SUB)
+        # =========================
+        for _, cat in df_cats.iterrows():
+            cat_id = int(cat['id'])
+            nome = cat['nome']
+            icone = cat.get('icone', '') or ''
+            pct = float(cat.get('percentual_meta', 0) or 0)
+            tipo = cat.get('tipo', 'saida')
+
+            tipo_label = "Entrada" if tipo == "entrada" else "Saída"
+            tipo_cor = "#2ecc71" if tipo == "entrada" else "#e74c3c"
+
+            edit_flag = f"edit_cat_{cat_id}"
+            if edit_flag not in st.session_state:
+                st.session_state[edit_flag] = False
+
+            # HEADER DA CATEGORIA MACRO
+            if not st.session_state[edit_flag]:
+                col1, col2, col3, col4, col5, col6 = st.columns([0.5, 2.5, 1, 1.5, 0.5, 0.5])
+
+                col1.markdown(f"<div style='font-size:22px'>{icone}</div>", unsafe_allow_html=True)
+                col2.markdown(f"**{nome}**")
+                col3.markdown(
+                    f"<span style='background:{tipo_cor}; color:white; padding:2px 8px; border-radius:4px;'>{tipo_label}</span>",
+                    unsafe_allow_html=True
+                )
+                col4.markdown(
+                    f"<div style='background:#e0e0e0; border-radius:6px;'>"
+                    f"<div style='background:#3498db; width:{pct}%; color:white; text-align:center;'>"
+                    f"{pct:.0f}%</div></div>",
+                    unsafe_allow_html=True
+                )
+
+                if col5.button("✏️", key=f"btn_edit_{cat_id}"):
+                    st.session_state[edit_flag] = True
+                    st.rerun()
+
+                if col6.button("🗑️", key=f"btn_del_{cat_id}"):
+                    db.executar(
+                        "UPDATE categorias SET ativa = FALSE WHERE id=%s AND user_id=%s",
+                        (cat_id, user_id)
+                    )
+                    st.rerun()
+
+            else:
+                c1, c2, c3, c4 = st.columns([3, 1, 1, 1.2])
+                novo_nome = c1.text_input("Nome", value=nome)
+                novo_pct = c2.number_input("Meta %", 0, 100, int(pct))
+                novo_icone = c3.text_input("Ícone", value=icone)
+                novo_tipo = c4.selectbox("Tipo", ["Saída", "Entrada"], index=0 if tipo == "saida" else 1)
+
+                b1, b2 = st.columns(2)
+                if b1.button("Salvar", key=f"save_{cat_id}"):
+                    db.executar(
+                        "UPDATE categorias SET nome=%s, percentual_meta=%s, icone=%s, tipo=%s WHERE id=%s AND user_id=%s",
+                        (novo_nome.strip(), novo_pct, novo_icone.strip(),
+                         "entrada" if novo_tipo == "Entrada" else "saida",
+                         cat_id, user_id)
+                    )
+                    st.session_state[edit_flag] = False
+                    st.rerun()
+
+                if b2.button("Cancelar", key=f"cancel_{cat_id}"):
+                    st.session_state[edit_flag] = False
+                    st.rerun()
+
+            # SUBCATEGORIAS
             deve_expandir = (st.session_state["expander_aberto"] == cat_id)
             
-            # 1. O Expander com o estado de abertura dinâmico
-            with st.expander(f"📂 {cat_nome}", expanded=deve_expandir):
+            with st.expander(f"📂 Subcategorias", expanded=deve_expandir):
                 
-                # 2. Busca e lista as subcategorias que JÁ EXISTEM
-                # 2. Busca e lista as subcategorias que JÁ EXISTEM (com filtro anti-duplicidade)
+                # Busca e lista as subcategorias que JÁ EXISTEM (com filtro anti-duplicidade)
                 df_subs = db.buscar(
                     """
                     SELECT MIN(id) as id, nome
@@ -420,7 +189,7 @@ class CadastrosManager:
                         # Lógica de Edição Inline
                         if st.session_state.get(edit_sub_flag, False):
                             novo_sub_nome = st.text_input(
-                                "Nome", value=sub['nome'], key=f"es_name_{sub_id}"
+                                "Nome", value=sub['nome'], key=f"es_name_{sub_id}", label_visibility="collapsed"
                             )
                             bs1, bs2 = st.columns(2)
                             if bs1.button("", key=f"save_sub_{sub_id}", icon=":material/check:", help="Salvar"):
@@ -454,7 +223,7 @@ class CadastrosManager:
                 
                 st.markdown("---") 
                 
-                # 3. Formulário SEGURO para nova subcategoria
+                # Formulário SEGURO para nova subcategoria
                 with st.form(f"form_add_sub_{cat_id}", clear_on_submit=True, border=False):
                     col_sub_input, col_sub_btn = st.columns([4, 1])
                     
@@ -479,7 +248,7 @@ class CadastrosManager:
             st.markdown("<hr style='margin:5px 0 10px 0;'>", unsafe_allow_html=True)
 
     # ================================================================
-    # CONTAS / BANCOS (mantido do original)
+    # CONTAS / BANCOS
     # ================================================================
     @staticmethod
     def _secao_contas():
@@ -493,10 +262,10 @@ class CadastrosManager:
                 "Novo Banco/Cartão", label_visibility="collapsed",
                 placeholder="Ex: Nubank, Itaú..."
             )
-            if col_btn.form_submit_button("Adicionar", width='stretch'):
+            if col_btn.form_submit_button("Adicionar", use_container_width=True):
                 if (n_banco or "").strip():
                     if db.executar(
-                        "INSERT INTO contas (nome, user_id) VALUES (?, ?)",
+                        "INSERT INTO contas (nome, user_id) VALUES (%s, %s)",
                         (n_banco.strip(), user_id)
                     ):
                         st.success(" Banco adicionado!")
@@ -507,7 +276,8 @@ class CadastrosManager:
         st.markdown("**Cadastrados:**")
 
         df_contas = db.buscar(
-            f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome"
+            "SELECT * FROM contas WHERE user_id = %s ORDER BY nome",
+            (user_id,)
         )
 
         if df_contas.empty:
@@ -527,18 +297,19 @@ class CadastrosManager:
 
             if st.session_state[edit_flag]:
                 with col_nome:
-                    novo_nome = st.text_input("Nome", value=r['nome'], key=input_key)
+                    novo_nome = st.text_input("Nome", value=r['nome'], key=input_key, label_visibility="collapsed")
                 with col_edit:
-                    if st.button("Salvar", key=save_key, width='stretch'):
+                    if st.button("Salvar", key=save_key, use_container_width=True):
                         novo_val = (st.session_state.get(input_key) or "").strip()
                         if novo_val:
                             if db.executar(
-                                "UPDATE contas SET nome=? WHERE id=? AND user_id=?",
+                                "UPDATE contas SET nome=%s WHERE id=%s AND user_id=%s",
                                 (novo_val, r['id'], user_id)
                             ):
                                 st.session_state[edit_flag] = False
                                 st.rerun()
-                    if st.button("Cancelar", key=cancel_key, width='stretch'):
+                with col_del:
+                    if st.button("Cancelar", key=cancel_key, use_container_width=True):
                         st.session_state[edit_flag] = False
                         st.rerun()
             else:
@@ -553,7 +324,7 @@ class CadastrosManager:
                 with col_del:
                     if st.button("\u200b", key=f"del_conta_{r['id']}", help="Excluir", icon=":material/delete:"):
                         db.executar(
-                            "DELETE FROM contas WHERE id=? AND user_id=?",
+                            "DELETE FROM contas WHERE id=%s AND user_id=%s",
                             (r['id'], user_id)
                         )
                         st.rerun()
