@@ -173,13 +173,19 @@ class RelatoriosManager:
             "Curva ABC",
         ])
 
-        # Monta DataFrame de exibição com colunas selecionadas
+
+        # Sempre inclua colunas essenciais para exportação/PDF
         col_map = RelatoriosManager.COLUNAS_DISPONIVEIS
-        colunas_internas = [col_map[c] for c in colunas_selecionadas]
+        colunas_essenciais = ["valor", "data_vencimento", "descricao"]
+        colunas_internas = list({col_map[c] for c in colunas_selecionadas} | set(colunas_essenciais))
+        colunas_internas = [c for c in colunas_internas if c in df_filtrado.columns]
 
-        df_exibir = df_filtrado[colunas_internas].copy()
+        df_export = df_filtrado[colunas_internas].copy()
 
-        # Formata para exibição
+        # Formata para exibição apenas as colunas selecionadas
+        colunas_exibicao = [col_map[c] for c in colunas_selecionadas if col_map[c] in df_export.columns]
+        df_exibir = df_export[colunas_exibicao].copy()
+
         rename = {v: k for k, v in col_map.items() if k in colunas_selecionadas}
 
         if "data_vencimento" in df_exibir.columns:
