@@ -201,10 +201,10 @@ class CadastrosManager:
                 # 2. Busca e lista as subcategorias que JÁ EXISTEM (com filtro anti-duplicidade)
                 df_subs = db.buscar(
                     """
-                    SELECT MIN(id) as id, nome, ativa 
-                    FROM subcategorias 
-                    WHERE categoria_id = %s AND user_id = %s AND ativa = TRUE 
-                    GROUP BY nome, ativa 
+                    SELECT MIN(id) as id, nome
+                    FROM subcategorias
+                    WHERE categoria_id = %s AND user_id = %s AND ativa = TRUE
+                    GROUP BY nome
                     ORDER BY nome
                     """,
                     (cat_id, user_id)
