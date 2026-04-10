@@ -168,21 +168,20 @@ class RelatoriosManager:
         ''', unsafe_allow_html=True)
 
         # ── 5. Abas: Prévia / Curva ABC / Consultor ─────────
-        t_previa, t_abc = st.tabs([
+        # Correção: O código original tinha tabs desbalanceadas
+        t_previa, t_abc, t_consultor = st.tabs([
             "Prévia do Relatório",
             "Curva ABC",
+            "Consultor IA"
         ])
 
-
-        # Sempre inclua colunas essenciais para exportação/PDF
+        # Formata para exibição apenas as colunas selecionadas
         col_map = RelatoriosManager.COLUNAS_DISPONIVEIS
         colunas_essenciais = ["valor", "data_vencimento", "descricao"]
         colunas_internas = list({col_map[c] for c in colunas_selecionadas} | set(colunas_essenciais))
         colunas_internas = [c for c in colunas_internas if c in df_filtrado.columns]
 
         df_export = df_filtrado[colunas_internas].copy()
-
-        # Formata para exibição apenas as colunas selecionadas
         colunas_exibicao = [col_map[c] for c in colunas_selecionadas if col_map[c] in df_export.columns]
         df_exibir = df_export[colunas_exibicao].copy()
 
@@ -207,14 +206,14 @@ class RelatoriosManager:
             ec1, ec2 = st.columns(2)
 
             # --- Excel ---
-            df_export = df_exibir.copy()
-            if "valor_num" in df_export.columns:
-                df_export["valor"] = df_export["valor_num"]
-                df_export.drop(columns=["valor_num"], inplace=True)
-            df_export = df_export.rename(columns=rename)
+            df_export_xlsx = df_exibir.copy()
+            if "valor_num" in df_export_xlsx.columns:
+                df_export_xlsx["valor"] = df_export_xlsx["valor_num"]
+                df_export_xlsx.drop(columns=["valor_num"], inplace=True)
+            df_export_xlsx = df_export_xlsx.rename(columns=rename)
 
             buf_xlsx = io.BytesIO()
-            df_export.to_excel(buf_xlsx, index=False, engine="openpyxl")
+            df_export_xlsx.to_excel(buf_xlsx, index=False, engine="openpyxl")
             ec1.download_button(
                 "Baixar Excel",
                 data=buf_xlsx.getvalue(),
@@ -225,8 +224,10 @@ class RelatoriosManager:
             )
 
             # --- PDF ---
+            # Passamos o df_export_xlsx porque ele é o que o usuário quer ver no PDF, 
+            # mas nossa função interna agora sabe encontrar a coluna de valores com segurança
             pdf_bytes = RelatoriosManager._gerar_pdf(
-                df_export, d_ini, d_fim, ent, sai, bal
+                df_export_xlsx, d_ini, d_fim, ent, sai, bal
             )
             ec2.download_button(
                 "Baixar PDF",
@@ -255,59 +256,64 @@ class RelatoriosManager:
         st.markdown("**Curva ABC: Descubra quais despesas consomem mais do seu orçamento.**")
 
         df_saidas = df[df["valor"] < 0].copy()
-        with t_previa:
-            st.subheader("Prévia do Relatório")
-            st.caption(f"{len(df_exibir_renomeado)} registros  |  Período: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}")
-            st.dataframe(df_exibir_renomeado.drop(columns=["valor_num"], errors="ignore"), hide_index=True, width='stretch')
+        if df_saidas.empty:
+            st.warning("Nenhuma saída (despesa) registrada neste período para gerar a Curva ABC.")
+            return
 
-            # ── 6. Exportação ───────────────────────────────
-            st.divider()
-            st.subheader("Exportar Relatório")
-            ec1, ec2 = st.columns(2)
+        # 1. Preparação dos Dados 
+        # Tratamento para evitar os 'não identificados' no gráfico
+        df_saidas["descricao"] = df_saidas["descricao"].fillna("Sem descrição")
+        
+        df_saidas["Valor Absoluto"] = df_saidas["valor"].abs()
+        df_abc = df_saidas.sort_values(by="Valor Absoluto", ascending=False).reset_index(drop=True)
+        df_abc["% Acumulada Num"] = (df_abc["Valor Absoluto"].cumsum() / df_abc["Valor Absoluto"].sum()) * 100
 
-            # --- Excel ---
-            df_export = df_exibir.copy()
-            if "valor_num" in df_export.columns:
-                df_export["valor"] = df_export["valor_num"]
-                df_export.drop(columns=["valor_num"], inplace=True)
-            df_export = df_export.rename(columns=rename)
+        def classificar_abc(pct):
+            if pct <= 80: return "Classe A"
+            if pct <= 95: return "Classe B"
+            return "Classe C"
 
-            buf_xlsx = io.BytesIO()
-            df_export.to_excel(buf_xlsx, index=False, engine="openpyxl")
-            ec1.download_button(
-                "Baixar Excel",
-                data=buf_xlsx.getvalue(),
-                file_name=f"relatorio_{d_ini}_{d_fim}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                width='stretch',
-                icon=":material/download:",
-            )
+        df_abc["Classe"] = df_abc["% Acumulada Num"].apply(classificar_abc)
 
-            # --- PDF ---
-            pdf_bytes = RelatoriosManager._gerar_pdf(
-                df_export, d_ini, d_fim, ent, sai, bal
-            )
-            ec2.download_button(
-                "Baixar PDF",
-                data=pdf_bytes,
-                file_name=f"relatorio_{d_ini}_{d_fim}.pdf",
-                mime="application/pdf",
-                width='stretch',
-                icon=":material/picture_as_pdf:",
-            )
+        # 2. Métricas Rápidas (Cards)
+        resumo = df_abc.groupby('Classe').agg(
+            Total=('Valor Absoluto', 'sum'),
+            Qtd=('Valor Absoluto', 'count')
+        ).reset_index()
 
-        with t_abc:
-            RelatoriosManager._render_curva_abc(df_filtrado)
+        st.markdown("### Resumo Estratégico")
+        c1, c2, c3 = st.columns(3)
+        cores = {"Classe A": "#e74c3c", "Classe B": "#f39c12", "Classe C": "#2ecc71"}
+
+        for _, row in resumo.iterrows():
+            classe = row['Classe']
+            texto_card = f"""
+            <div style="background-color:#f8f9fa; padding:15px; border-radius:10px; border-left:5px solid {cores.get(classe, '#ccc')};">
+                <p style="margin:0; font-size:14px; color:#555;">{classe}</p>
+                <h3 style="margin:0; color:#333;">{moeda(row['Total'])}</h3>
+                <small style="color:#777;">{row['Qtd']} itens</small>
+            </div>
+            """
+            if classe == "Classe A": c1.markdown(texto_card, unsafe_allow_html=True)
+            elif classe == "Classe B": c2.markdown(texto_card, unsafe_allow_html=True)
+            elif classe == "Classe C": c3.markdown(texto_card, unsafe_allow_html=True)
+
+        st.write("") 
+
+        # 3. Gráfico de Pareto 
+        st.markdown("### Gráfico de Distribuição")
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        
         fig.add_trace(
             go.Bar(
-                x=df_abc["descricao"].str[:20], # Corta o nome para não poluir
+                x=df_abc["descricao"].str[:20], 
                 y=df_abc["Valor Absoluto"],
                 name="Valor da Despesa",
                 marker_color=[cores[c] for c in df_abc["Classe"]]
             ),
             secondary_y=False,
         )
-        # Linha de % Acumulada
+        
         fig.add_trace(
             go.Scatter(
                 x=df_abc["descricao"].str[:20], 
@@ -330,7 +336,7 @@ class RelatoriosManager:
         
         st.plotly_chart(fig, use_container_width=True)
 
-        # 4. Tabela de Detalhes (Opcional)
+        # 4. Tabela de Detalhes
         with st.expander("Ver Tabela Detalhada"):
             df_table = df_abc.copy()
             df_table["data_vencimento"] = pd.to_datetime(df_table["data_vencimento"]).dt.strftime("%d/%m/%Y")
@@ -341,9 +347,9 @@ class RelatoriosManager:
             rename_abc = {"data_vencimento": "Data", "descricao": "Descrição"}
             st.dataframe(df_table[cols_abc].rename(columns=rename_abc), hide_index=True, use_container_width=True)
 
-            st.info("🎯 **DICA DE OURO:** Gaste 80% do seu tempo renegociando ou cortando os itens da **Classe A** (Vermelho). Eles são os que realmente movem o ponteiro financeiro.")
-    
-        # ─── Gerar PDF ────────────────────────────────────────────
+        st.info("🎯 **DICA DE OURO:** Gaste 80% do seu tempo renegociando ou cortando os itens da **Classe A** (Vermelho). Eles são os que realmente movem o ponteiro financeiro.")
+
+    # ─── Gerar PDF ────────────────────────────────────────────
     @staticmethod
     def _gerar_pdf(df, d_ini, d_fim, ent, sai, bal):
         """Gera PDF do relatório usando fpdf2."""
@@ -366,26 +372,38 @@ class RelatoriosManager:
         pdf.cell(90, 8, f"Saidas: -{moeda(sai)}")
         pdf.cell(0, 8, f"Balanco: {moeda(bal)}", ln=True)
         
-        # --- NOVO: Cálculo Rápido da Classe A ---
-        df_saidas = df[df["valor"] < 0].copy()
-        if not df_saidas.empty:
-            df_saidas["Valor Absoluto"] = df_saidas["valor"].abs()
-            df_abc = df_saidas.sort_values(by="Valor Absoluto", ascending=False).reset_index(drop=True)
-            df_abc["% Acumulada Num"] = (df_abc["Valor Absoluto"].cumsum() / df_abc["Valor Absoluto"].sum()) * 100
-            
-            # Filtra apenas os itens da Classe A (até 80% do valor total)
-            classe_a = df_abc[df_abc["% Acumulada Num"] <= 80]
-            
-            if not classe_a.empty:
-                total_a = classe_a["Valor Absoluto"].sum()
-                qtd_a = len(classe_a)
+        # --- NOVO: Cálculo Rápido da Classe A Blindado ---
+        # 1. Identifica a coluna de valores baseada no que o usuário escolheu exportar
+        col_valor = None
+        for col_name in ["valor", "Valor", "Valor (R$)", "valor_num", "valor_total"]:
+            if col_name in df.columns:
+                col_valor = col_name
+                break
                 
-                # Texto de Destaque no PDF
-                pdf.set_font("Helvetica", "I", 9)
-                pdf.set_text_color(200, 0, 0) # Cor vermelha escura para chamar atenção (RGB)
-                pdf.cell(0, 6, f"  * Atencao (Curva ABC): {qtd_a} despesas da Classe A representam o maior impacto do mes ({moeda(total_a)}).", ln=True)
-                pdf.set_text_color(0, 0, 0) # CRÍTICO: Volta o pincel para a cor preta padrão!
-        # ----------------------------------------
+        if col_valor is not None:
+            df_temp = df.copy()
+            # Se a coluna estiver como texto (ex: R$ 1.500,00), higieniza antes da matemática
+            if df_temp[col_valor].dtype == object:
+                df_temp[col_valor] = df_temp[col_valor].astype(str).str.replace('R$', '', regex=False).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip()
+                df_temp[col_valor] = pd.to_numeric(df_temp[col_valor], errors='coerce')
+            
+            df_saidas = df_temp[df_temp[col_valor] < 0].copy()
+            if not df_saidas.empty:
+                df_saidas["Valor Absoluto"] = df_saidas[col_valor].abs()
+                df_abc = df_saidas.sort_values(by="Valor Absoluto", ascending=False).reset_index(drop=True)
+                df_abc["% Acumulada Num"] = (df_abc["Valor Absoluto"].cumsum() / df_abc["Valor Absoluto"].sum()) * 100
+                
+                classe_a = df_abc[df_abc["% Acumulada Num"] <= 80]
+                
+                if not classe_a.empty:
+                    total_a = classe_a["Valor Absoluto"].sum()
+                    qtd_a = len(classe_a)
+                    
+                    pdf.set_font("Helvetica", "I", 9)
+                    pdf.set_text_color(200, 0, 0)
+                    pdf.cell(0, 6, f"  * Atencao (Curva ABC): {qtd_a} despesas da Classe A representam o maior impacto do mes ({moeda(total_a)}).", ln=True)
+                    pdf.set_text_color(0, 0, 0)
+        # ---------------------------------------------------
         
         pdf.ln(4)
 
