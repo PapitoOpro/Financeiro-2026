@@ -4,6 +4,8 @@
 # Arquitetura modularizada com separação de responsabilidades
 
 import streamlit as st
+import requests
+import random
 from auth import AuthManager
 from database import db
 from config import MESES_LISTA
@@ -25,6 +27,39 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ==========================================
+# FUNÇÃO DA API BÍBLICA (COM CACHE)
+# ==========================================
+# O ttl=3600 faz com que o versículo mude apenas de hora em hora.
+# Isso evita lentidão no sistema a cada clique no menu.
+@st.cache_data(ttl=3600)
+def buscar_versiculo_financeiro():
+    referencias = [
+        "Proverbs+22:7",
+        "Luke+14:28",
+        "Proverbs+21:20",
+        "Proverbs+13:11",
+        "Romans+13:8",
+        "Matthew+6:24",
+        "Proverbs+10:4",
+        "Proverbs+27:23"
+    ]
+    ref_escolhida = random.choice(referencias)
+    url = f"https://bible-api.com/{ref_escolhida}?translation=almeida"
+    
+    try:
+        response = requests.get(url, timeout=3)
+        if response.status_code == 200:
+            dados = response.json()
+            # Limpa quebras de linha para ficar bonito no layout
+            texto = dados['text'].strip().replace("\n", " ") 
+            ref_formatada = dados['reference']
+            return f'"{texto}" — {ref_formatada}'
+        else:
+            return '"Os planos bem elaborados levam à fartura; mas o apressado sempre acaba na miséria." — Provérbios 21:5'
+    except:
+        return '"Os planos bem elaborados levam à fartura; mas o apressado sempre acaba na miséria." — Provérbios 21:5'
 
 # ==========================================
 # PÁGINA DO GUIA DE USO (acesso público)
@@ -171,7 +206,11 @@ st.markdown("""
 
 # --- Header ---
 st.sidebar.markdown('<div class="sidebar-title">FINANÇAS PRO</div>', unsafe_allow_html=True)
-st.sidebar.markdown('<div class="sidebar-subtitle">"Os planos bem elaborados levam à fartura; mas o apressado sempre acaba na miséria." — Provérbios 21:5</div>', unsafe_allow_html=True)
+
+# Chamada da API para gerar o versículo dinâmico
+versiculo_do_momento = buscar_versiculo_financeiro()
+st.sidebar.markdown(f'<div class="sidebar-subtitle">{versiculo_do_momento}</div>', unsafe_allow_html=True)
+
 st.sidebar.markdown("---")
 
 # --- Menu de navegação ---
@@ -249,4 +288,3 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
-
