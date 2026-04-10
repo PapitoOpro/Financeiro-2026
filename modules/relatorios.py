@@ -12,7 +12,8 @@ from config import MESES_LISTA
 from utils import moeda
 from modules.consultor import ConsultorManager, ConsultorEngine
 from modules.acompanhamento import AcompanhamentoManager
-
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 class RelatoriosManager:
     """Renderiza relatórios analíticos dinâmicos com filtros, prévia e exportação."""
@@ -253,70 +254,148 @@ class RelatoriosManager:
             st.warning("Nenhuma saída (despesa) registrada neste período para gerar a Curva ABC.")
             return
 
+        # 1. Preparação dos Dados (Mantendo numérico para o gráfico)
         df_saidas["Valor Absoluto"] = df_saidas["valor"].abs()
         df_abc = df_saidas.sort_values(by="Valor Absoluto", ascending=False).reset_index(drop=True)
-        df_abc["% Acumulada"] = (df_abc["Valor Absoluto"].cumsum() / df_abc["Valor Absoluto"].sum()) * 100
+        df_abc["% Acumulada Num"] = (df_abc["Valor Absoluto"].cumsum() / df_abc["Valor Absoluto"].sum()) * 100
 
         def classificar_abc(pct):
-            if pct <= 80:
-                return "Classe A (Até 80%)"
-            if pct <= 95:
-                return "Classe B (80%-95%)"
-            return "Classe C (95%-100%)"
+            if pct <= 80: return "Classe A"
+            if pct <= 95: return "Classe B"
+            return "Classe C"
 
-        df_abc["Classe"] = df_abc["% Acumulada"].apply(classificar_abc)
-        df_abc["data_vencimento"] = pd.to_datetime(df_abc["data_vencimento"]).dt.strftime("%d/%m/%Y")
-        df_abc["Valor Absoluto"] = df_abc["Valor Absoluto"].apply(moeda)
-        df_abc["% Acumulada"] = df_abc["% Acumulada"].apply(lambda x: f"{x:.2f}%")
+        df_abc["Classe"] = df_abc["% Acumulada Num"].apply(classificar_abc)
 
-        cols_abc = ["Classe", "data_vencimento", "descricao", "Valor Absoluto", "% Acumulada"]
-        rename_abc = {"data_vencimento": "Data", "descricao": "Descrição"}
-        st.dataframe(df_abc[cols_abc].rename(columns=rename_abc), hide_index=True, width='stretch')
-        st.info("DICA: Focar na negociação dos itens da Classe A traz maior impacto na saúde financeira.")
+        # 2. Métricas Rápidas (Cards)
+        # Calculamos quanto cada classe representa em R$ e em quantidade de itens
+        resumo = df_abc.groupby('Classe').agg(
+            Total=('Valor Absoluto', 'sum'),
+            Qtd=('Valor Absoluto', 'count')
+        ).reset_index()
 
-    # ─── Gerar PDF ────────────────────────────────────────────
-    @staticmethod
-    def _gerar_pdf(df, d_ini, d_fim, ent, sai, bal):
-        """Gera PDF do relatório usando fpdf2."""
-        from fpdf import FPDF
+        st.markdown("### Resumo Estratégico")
+        c1, c2, c3 = st.columns(3)
+        cores = {"Classe A": "#e74c3c", "Classe B": "#f39c12", "Classe C": "#2ecc71"} # Vermelho, Laranja, Verde
 
-        pdf = FPDF(orientation="L", format="A4")
-        pdf.set_auto_page_break(auto=True, margin=15)
-        pdf.add_page()
+        for _, row in resumo.iterrows():
+            classe = row['Classe']
+            # Usa a sua função moeda() aqui
+            texto_card = f"""
+            <div style="background-color:#f8f9fa; padding:15px; border-radius:10px; border-left:5px solid {cores.get(classe, '#ccc')};">
+                <p style="margin:0; font-size:14px; color:#555;">{classe}</p>
+                <h3 style="margin:0; color:#333;">{moeda(row['Total'])}</h3>
+                <small style="color:#777;">{row['Qtd']} itens</small>
+            </div>
+            """
+            if classe == "Classe A": c1.markdown(texto_card, unsafe_allow_html=True)
+            elif classe == "Classe B": c2.markdown(texto_card, unsafe_allow_html=True)
+            elif classe == "Classe C": c3.markdown(texto_card, unsafe_allow_html=True)
 
-        # Título
-        pdf.set_font("Helvetica", "B", 16)
-        pdf.cell(0, 10, "Relatorio Financeiro", ln=True, align="C")
-        pdf.set_font("Helvetica", "", 10)
-        pdf.cell(0, 6, f"Periodo: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}", ln=True, align="C")
-        pdf.ln(4)
+        st.write("") # Espaço em branco
 
-        # Resumo
-        pdf.set_font("Helvetica", "B", 10)
-        pdf.cell(90, 8, f"Entradas: {moeda(ent)}")
-        pdf.cell(90, 8, f"Saidas: -{moeda(sai)}")
-        pdf.cell(0, 8, f"Balanco: {moeda(bal)}", ln=True)
-        pdf.ln(4)
+        # 3. Gráfico de Pareto (O coração da Curva ABC)
+        st.markdown("### Gráfico de Distribuição")
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        
+        # Barras de Valor
+        fig.add_trace(
+            go.Bar(
+                x=df_abc["descricao"].str[:20], # Corta o nome para não poluir
+                y=df_abc["Valor Absoluto"],
+                name="Valor da Despesa",
+                marker_color=[cores[c] for c in df_abc["Classe"]]
+            ),
+            secondary_y=False,
+        )
+        # Linha de % Acumulada
+        fig.add_trace(
+            go.Scatter(
+                x=df_abc["descricao"].str[:20], 
+                y=df_abc["% Acumulada Num"],
+                name="% Acumulada",
+                mode="lines+markers",
+                line=dict(color="#2c3e50", width=2)
+            ),
+            secondary_y=True,
+        )
 
-        # Tabela
-        colunas = list(df.columns)
-        n_cols = len(colunas)
-        page_w = pdf.w - 20  # margens
-        col_w = page_w / n_cols if n_cols else page_w
+        fig.update_layout(
+            height=400, 
+            margin=dict(l=0, r=0, t=30, b=0),
+            showlegend=False,
+            plot_bgcolor="rgba(0,0,0,0)"
+        )
+        fig.update_yaxes(title_text="Valor (R$)", secondary_y=False)
+        fig.update_yaxes(title_text="% Acumulada", range=[0, 105], secondary_y=True)
+        
+        st.plotly_chart(fig, use_container_width=True)
 
-        # Cabeçalho
-        pdf.set_font("Helvetica", "B", 9)
-        pdf.set_fill_color(220, 220, 220)
-        for col in colunas:
-            pdf.cell(col_w, 7, str(col)[:25], border=1, fill=True, align="C")
-        pdf.ln()
+        # 4. Tabela de Detalhes (Opcional)
+        with st.expander("Ver Tabela Detalhada"):
+            df_table = df_abc.copy()
+            df_table["data_vencimento"] = pd.to_datetime(df_table["data_vencimento"]).dt.strftime("%d/%m/%Y")
+            df_table["Valor Absoluto"] = df_table["Valor Absoluto"].apply(moeda)
+            df_table["% Acumulada"] = df_table["% Acumulada Num"].apply(lambda x: f"{x:.2f}%")
+            
+            cols_abc = ["Classe", "data_vencimento", "descricao", "Valor Absoluto", "% Acumulada"]
+            rename_abc = {"data_vencimento": "Data", "descricao": "Descrição"}
+            st.dataframe(df_table[cols_abc].rename(columns=rename_abc), hide_index=True, use_container_width=True)
 
-        # Dados
-        pdf.set_font("Helvetica", "", 8)
-        for _, row in df.iterrows():
-            for col in colunas:
-                val = str(row[col]) if pd.notna(row[col]) else ""
-                pdf.cell(col_w, 6, val[:30], border=1, align="C")
-            pdf.ln()
-
-        return bytes(pdf.output())
+            st.info("🎯 **DICA DE OURO:** Gaste 80% do seu tempo renegociando ou cortando os itens da **Classe A** (Vermelho). Eles são os que realmente movem o ponteiro financeiro.")
+    
+        # ─── Geração de PDF ──────────────────────────────────────
+        @staticmethod
+        def _gerar_pdf(df, d_ini, d_fim, ent, sai, bal):
+            """
+            Gera um PDF simples do relatório usando a biblioteca reportlab.
+            """
+            import io
+            from reportlab.lib.pagesizes import A4
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.units import cm
+    
+            buffer = io.BytesIO()
+            c = canvas.Canvas(buffer, pagesize=A4)
+            width, height = A4
+    
+            # Título
+            c.setFont("Helvetica-Bold", 16)
+            c.drawString(2 * cm, height - 2 * cm, "Relatório Financeiro")
+    
+            # Período
+            c.setFont("Helvetica", 10)
+            c.drawString(2 * cm, height - 2.7 * cm, f"Período: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}")
+    
+            # Métricas
+            c.setFont("Helvetica", 11)
+            c.drawString(2 * cm, height - 3.5 * cm, f"Entradas: R$ {ent:,.2f}")
+            c.drawString(2 * cm, height - 4.0 * cm, f"Saídas:   R$ {sai:,.2f}")
+            c.drawString(2 * cm, height - 4.5 * cm, f"Balanço:  R$ {bal:,.2f}")
+    
+            # Cabeçalho da tabela
+            c.setFont("Helvetica-Bold", 10)
+            y = height - 5.5 * cm
+            colunas = list(df.columns)
+            col_widths = [5*cm, 6*cm, 3*cm, 4*cm][:len(colunas)]
+            x = 2 * cm
+            for i, col in enumerate(colunas):
+                c.drawString(x, y, str(col))
+                x += col_widths[i] if i < len(col_widths) else 3*cm
+    
+            # Dados da tabela
+            c.setFont("Helvetica", 9)
+            y -= 0.5 * cm
+            for idx, row in df.iterrows():
+                x = 2 * cm
+                for i, col in enumerate(colunas):
+                    valor = str(row[col])
+                    c.drawString(x, y, valor[:20])
+                    x += col_widths[i] if i < len(col_widths) else 3*cm
+                y -= 0.5 * cm
+                if y < 2 * cm:
+                    c.showPage()
+                    y = height - 2 * cm
+    
+            c.save()
+            buffer.seek(0)
+            return buffer.getvalue()
