@@ -68,36 +68,7 @@ class CaixaManager:
             AND t.data_vencimento BETWEEN '{data_inicio}' AND '{data_fim}' 
             ORDER BY t.data_vencimento DESC
         """)
-
-        # DEBUG: Exibir todas as transações carregadas do banco antes de qualquer filtro
-        if st.checkbox('DEBUG: Exibir todas as transações do banco (sem filtro)', value=False, key='show_all_db_transacoes'):
-            st.dataframe(df_caixa)
         
-        # Calcula resumo
-
-        ent = df_caixa[df_caixa['valor'] > 0]['valor'].sum() if not df_caixa.empty else 0
-        sai = abs(df_caixa[df_caixa['valor'] < 0]['valor'].sum()) if not df_caixa.empty else 0
-        bal = ent - sai
-
-        # LOG DE AUDITORIA DO EXTRATO
-        log_extrato = []
-        for _, row in df_caixa.iterrows():
-            log_extrato.append({
-                'id': int(row['id']),
-                'data': str(row['data']),
-                'descricao': str(row['descricao']),
-                'valor': float(row['valor']),
-                'categoria': str(row['categoria']),
-                'banco': str(row['banco']),
-                'subcategoria': str(row['subcategoria']),
-                'compensado': bool(row['compensado']),
-                'data_compensacao': str(row['data_compensacao']) if row['data_compensacao'] else None,
-                'fatura_id': int(row['fatura_id']) if pd.notna(row['fatura_id']) else None
-            })
-        st.session_state['log_extrato'] = log_extrato
-        if st.checkbox('Exibir log do extrato do caixa (auditoria)', value=False, key='show_log_extrato'):
-            st.code(str(log_extrato), language='python')
-
         # Compensação stats
         compensados = 0
         pendentes = 0
@@ -108,10 +79,10 @@ class CaixaManager:
             pendentes = total_itens - compensados
         
         # 2. CARDS DE RESUMO
-        CaixaManager._renderizar_cards(ent, sai, bal, compensados, pendentes)
+            CaixaManager._renderizar_cards(ent, sai, bal, compensados, pendentes)
         
         # ALERTAS DO CONSULTOR
-        ConsultorManager.widget_alertas(ano_sel, mes_num)
+            ConsultorManager.widget_alertas(ano_sel, mes_num)
         
         # 3. DIVISÃO: EXTRATO | FORMULÁRIO
         col_extrato, col_espaco, col_form = st.columns([COL_EXTRATO, COL_ESPACO, COL_FORM])
