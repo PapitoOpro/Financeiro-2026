@@ -171,7 +171,7 @@ st.markdown("""
 
 # --- Header ---
 st.sidebar.markdown('<div class="sidebar-title">FINANÇAS PRO</div>', unsafe_allow_html=True)
-st.sidebar.markdown('<div class="sidebar-subtitle">Controle Financeiro</div>', unsafe_allow_html=True)
+st.sidebar.markdown('<div class="sidebar-subtitle">"Os planos bem elaborados levam à fartura; mas o apressado sempre acaba na miséria." — Provérbios 21:5</div>', unsafe_allow_html=True)
 st.sidebar.markdown("---")
 
 # --- Menu de navegação ---
@@ -249,17 +249,4 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
-# ==========================================
-# RODAPÉ DO SISTEMA
-# ==========================================
-st.markdown("---") # Linha divisória sutil
 
-st.markdown(
-    """
-    <div style='text-align: center; color: var(--text-color); opacity: 0.6; font-size: 13px; padding: 10px 0;'>
-        <em>"Os planos bem elaborados levam à fartura; mas o apressado sempre acaba na miséria."</em> <br>
-        <strong>Provérbios 21:5</strong>
-    </div>
-    """, 
-    unsafe_allow_html=True
-)
