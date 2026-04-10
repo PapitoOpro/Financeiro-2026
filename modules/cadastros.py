@@ -123,8 +123,8 @@ class CadastrosManager:
                     unsafe_allow_html=True
                 )
                 col4.markdown(
-                    f"<div style='background:#e0e0e0; border-radius:6px;'>"
-                    f"<div style='background:#3498db; width:{pct}%; color:white; text-align:center;'>"
+                    f"<div style='background:#e0e0e0; border-radius:6px; position:relative; min-height: 24px;'>"
+                    f"<div style='background:#3498db; width:{pct}%; min-width: 30px; height: 100%; border-radius:6px; color:white; text-align:center; font-weight:bold; white-space:nowrap; position:absolute; top:0; left:0; display:flex; align-items:center; justify-content:center;'>"
                     f"{pct:.0f}%</div></div>",
                     unsafe_allow_html=True
                 )
