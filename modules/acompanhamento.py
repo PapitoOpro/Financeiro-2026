@@ -18,12 +18,12 @@ class AcompanhamentoManager:
         """Conteúdo do acompanhamento."""
         st.caption("Visualize o progresso dos seus gastos por categoria.")
 
-        # 1. Filtros
+        # 1. Filtros de Período
         hoje = datetime.now()
         mes_nome = st.segmented_control("Mês:", MESES_LISTA, default=MESES_LISTA[hoje.month - 1])
         if mes_nome is None: mes_nome = MESES_LISTA[hoje.month - 1]
 
-        col_ano, _ = st.columns([1, 5])
+        col_ano, _ = st.columns([1, 4])
         ano_sel = col_ano.number_input("Ano:", min_value=2024, max_value=2030, value=hoje.year, key="acomp_ano")
 
         mes_num = MESES_LISTA.index(mes_nome) + 1
@@ -32,62 +32,90 @@ class AcompanhamentoManager:
 
         user_id = db.get_user_id()
 
-        # 2. Busca de Dados (Queries parametrizadas)
-        df_cats = db.buscar("SELECT * FROM categorias WHERE user_id = %s AND ativa = TRUE ORDER BY nome", (user_id,))
+        # 2. Busca Categorias Ativas
+        df_cats = db.buscar("SELECT id, nome, icone, percentual_meta FROM categorias WHERE user_id = %s AND ativa = TRUE ORDER BY nome", (user_id,))
         if df_cats.empty:
-            st.info("Nenhuma categoria cadastrada.")
+            st.info("Nenhuma categoria cadastrada ou ativa.")
             return
 
-        renda_row = db.buscar("SELECT COALESCE(SUM(valor), 0) as total FROM transacoes WHERE user_id = %s AND valor > 0 AND (tipo_fluxo = 'CAIXA' OR tipo_fluxo IS NULL) AND data_vencimento BETWEEN %s AND %s", (user_id, data_ini, data_fim))
+        # 3. Busca Renda (Entradas)
+        renda_row = db.buscar("""
+            SELECT COALESCE(SUM(valor), 0) as total 
+            FROM transacoes 
+            WHERE user_id = %s AND valor > 0 
+            AND (tipo_fluxo = 'CAIXA' OR tipo_fluxo IS NULL) 
+            AND data_vencimento BETWEEN %s AND %s
+        """, (user_id, data_ini, data_fim))
         renda_mes = float(renda_row.iloc[0]['total']) if not renda_row.empty else 0
 
-        # Gastos Caixa
-        df_gastos = db.buscar("SELECT t.categoria_id, ABS(SUM(t.valor)) as gasto_real FROM transacoes t WHERE t.user_id = %s AND t.valor < 0 AND (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL) AND t.data_vencimento BETWEEN %s AND %s GROUP BY t.categoria_id", (user_id, data_ini, data_fim))
+        # 4. Busca Gastos Caixa (Filtrando IDs nulos para evitar erro de INT)
+        df_gastos = db.buscar("""
+            SELECT categoria_id, ABS(SUM(valor)) as gasto_real 
+            FROM transacoes 
+            WHERE user_id = %s AND valor < 0 
+            AND (tipo_fluxo = 'CAIXA' OR tipo_fluxo IS NULL) 
+            AND categoria_id IS NOT NULL
+            AND data_vencimento BETWEEN %s AND %s 
+            GROUP BY categoria_id
+        """, (user_id, data_ini, data_fim))
         
-        # Gastos Cartão
+        # 5. Busca Gastos Cartão
         df_gastos_cartao = db.buscar_gastos_cartao_por_categoria(user_id, data_ini, data_fim)
         
-        # Consolidação de Gastos
+        # 6. Consolidação dos Gastos por ID de Categoria
         gastos_map = {}
+
         if not df_gastos.empty:
-            for _, r in df_gastos.iterrows(): gastos_map[int(r['categoria_id'])] = float(r['gasto_real'])
+            for _, r in df_gastos.iterrows():
+                try:
+                    cid = int(r['categoria_id'])
+                    gastos_map[cid] = float(r['gasto_real'])
+                except: continue
         
         if not df_gastos_cartao.empty:
             for _, r in df_gastos_cartao.iterrows():
-                cid = int(r['categoria_id'])
-                gastos_map[cid] = gastos_map.get(cid, 0) + float(r['gasto_real'])
+                try:
+                    cid = int(r['categoria_id'])
+                    gastos_map[cid] = gastos_map.get(cid, 0) + float(r['gasto_real'])
+                except: continue
 
-        # Subcategorias
-        df_sub = db.buscar("SELECT t.categoria_id, s.nome as subcategoria, ABS(SUM(t.valor)) as gasto_sub FROM transacoes t JOIN subcategorias s ON t.subcategoria_id = s.id WHERE t.user_id = %s AND t.valor < 0 AND t.data_vencimento BETWEEN %s AND %s GROUP BY t.categoria_id, s.nome", (user_id, data_ini, data_fim))
+        # 7. Busca Subcategorias (Opcional)
+        df_sub = db.buscar("""
+            SELECT t.categoria_id, s.nome as subcategoria, ABS(SUM(t.valor)) as gasto_sub 
+            FROM transacoes t 
+            JOIN subcategorias s ON t.subcategoria_id = s.id 
+            WHERE t.user_id = %s AND t.valor < 0 AND t.data_vencimento BETWEEN %s AND %s 
+            GROUP BY t.categoria_id, s.nome
+        """, (user_id, data_ini, data_fim))
 
-        # 3. Resumo Geral
+        # 8. Renderização do Resumo Geral
         total_gasto = sum(gastos_map.values())
         pct_geral = (total_gasto / renda_mes * 100) if renda_mes > 0 else 0
-        AcompanhamentoManager._renderizar_resumo(renda_mes, total_gasto, pct_geral)
+        AcompanhamentoManager._render_resumo_html(renda_mes, total_gasto, pct_geral)
 
-        # 4. Marcador de Ritmo
+        # 9. Marcador de Ritmo (Dia atual)
         dia_atual = hoje.day if (hoje.month == mes_num and hoje.year == ano_sel) else None
         ultimo_dia = (datetime(ano_sel, mes_num, 1) + relativedelta(months=1) - relativedelta(days=1)).day
 
-        # 5. Renderização dos Cards
+        # 10. Loop de Cards de Categorias
         st.markdown("---")
         for _, cat in df_cats.iterrows():
             cid = int(cat['id'])
             gasto_cat = gastos_map.get(cid, 0)
-            pct_meta = float(cat.get('percentual_meta', 0) or 0)
-            orcado = renda_mes * (pct_meta / 100) if renda_mes > 0 else 0
+            p_meta = float(cat.get('percentual_meta', 0) or 0)
+            orcado = renda_mes * (p_meta / 100) if renda_mes > 0 else 0
             
             subs_desta = df_sub[df_sub['categoria_id'] == cid] if not df_sub.empty else pd.DataFrame()
             
-            AcompanhamentoManager._renderizar_card_categoria(
-                cat['nome'], cat.get('icone', ''), orcado, gasto_cat, pct_meta, dia_atual, ultimo_dia, subs_desta
+            AcompanhamentoManager._render_card_html(
+                cat['nome'], cat.get('icone', ''), orcado, gasto_cat, p_meta, dia_atual, ultimo_dia, subs_desta
             )
 
     @staticmethod
-    def _renderizar_resumo(renda, gasto, pct):
+    def _render_resumo_html(renda, gasto, pct):
         rest = renda - gasto
         c_rest = "#2ecc71" if rest >= 0 else "#e74c3c"
-        c_pct = "#2ecc71" if pct <= 70 else ("#f39c12" if pct <= 90 else "#e74c3c")
+        c_pct = "#2ecc71" if pct <= 75 else ("#f39c12" if pct <= 90 else "#e74c3c")
         
         html = f"""
         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px;">
@@ -95,38 +123,33 @@ class AcompanhamentoManager:
                 <small style="color:var(--text-color); opacity:0.7;">Renda</small><br><strong style="font-size:18px; color:#3498db;">{moeda(renda)}</strong>
             </div>
             <div style="background:var(--secondary-background-color); padding:12px; border-radius:10px; flex:1; border-left:5px solid #e74c3c; min-width:120px;">
-                <small style="color:var(--text-color); opacity:0.7;">Gasto</small><br><strong style="font-size:18px; color:#e74c3c;">{moeda(gasto)}</strong>
+                <small style="color:var(--text-color); opacity:0.7;">Gasto Total</small><br><strong style="font-size:18px; color:#e74c3c;">{moeda(gasto)}</strong>
             </div>
             <div style="background:var(--secondary-background-color); padding:12px; border-radius:10px; flex:1; border-left:5px solid {c_rest}; min-width:120px;">
-                <small style="color:var(--text-color); opacity:0.7;">Restante</small><br><strong style="font-size:18px; color:{c_rest};">{moeda(rest)}</strong>
+                <small style="color:var(--text-color); opacity:0.7;">Disponível</small><br><strong style="font-size:18px; color:{c_rest};">{moeda(rest)}</strong>
             </div>
             <div style="background:var(--secondary-background-color); padding:12px; border-radius:10px; flex:1; border-left:5px solid {c_pct}; min-width:120px;">
-                <small style="color:var(--text-color); opacity:0.7;">Uso</small><br><strong style="font-size:18px; color:{c_pct};">{pct:.0f}%</strong>
+                <small style="color:var(--text-color); opacity:0.7;">% Uso</small><br><strong style="font-size:18px; color:{c_pct};">{pct:.0f}%</strong>
             </div>
         </div>"""
         st.markdown(html.replace('\n', ' '), unsafe_allow_html=True)
 
     @staticmethod
-    def _renderizar_card_categoria(nome, icone, orcado, gasto, meta, dia_atual, ultimo_dia, subs_df):
+    def _render_card_html(nome, icone, orcado, gasto, meta, dia_atual, ultimo_dia, subs_df):
         pct = (gasto / orcado * 100) if orcado > 0 else (100 if gasto > 0 else 0)
-        
-        if pct <= 60: cor, status = "#2ecc71", "Saudável"
-        elif pct <= 85: cor, status = "#f39c12", "Atenção"
-        else: cor, status = "#e74c3c", "Crítico"
+        cor = "#2ecc71" if pct <= 65 else ("#f39c12" if pct <= 85 else "#e74c3c")
+        status = "Saudável" if pct <= 65 else ("Atenção" if pct <= 85 else "Crítico")
 
-        # Marcador de Ritmo
         marcador = ""
         if dia_atual and ultimo_dia > 0:
             p_dia = (dia_atual / ultimo_dia) * 100
             marcador = f"<div style='position:absolute; left:{p_dia}%; top:0; width:2px; height:100%; background:var(--text-color); opacity:0.3; z-index:1;'></div>"
 
-        # Subcategorias
         subs_h = ""
         if not subs_df.empty:
             items = [f"{s['subcategoria']}: {moeda(s['gasto_sub'])}" for _, s in subs_df.iterrows()]
             subs_h = f"<div style='font-size:11px; margin-top:8px; opacity:0.7; border-top:1px solid rgba(128,128,128,0.2); padding-top:5px;'>{' • '.join(items)}</div>"
 
-        # HTML em LINHA ÚNICA para evitar quebra do parser do Streamlit
         card_html = f"""
         <div style="background:var(--secondary-background-color); border-radius:10px; padding:15px; margin-bottom:10px; border-left:5px solid {cor};">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -144,6 +167,4 @@ class AcompanhamentoManager:
             </div>
             {subs_h}
         </div>"""
-        
-        # O SEGREDO: .replace('\n', ' ') remove todas as quebras de linha
         st.markdown(card_html.replace('\n', ' '), unsafe_allow_html=True)
