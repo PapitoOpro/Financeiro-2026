@@ -33,7 +33,7 @@ class AcompanhamentoManager:
         user_id = db.get_user_id()
 
         # 2. Busca Categorias Ativas
-        df_cats = db.buscar("SELECT id, nome, icone, percentual_meta FROM categorias WHERE user_id = %s AND ativa = TRUE ORDER BY nome", (user_id,))
+        df_cats = db.buscar("SELECT id, nome, icone, percentual_meta FROM categorias WHERE user_id = ? AND ativa = TRUE ORDER BY nome", (user_id,))
         if df_cats.empty:
             st.info("Nenhuma categoria cadastrada ou ativa.")
             return
@@ -42,49 +42,49 @@ class AcompanhamentoManager:
         renda_row = db.buscar("""
             SELECT COALESCE(SUM(valor), 0) as total 
             FROM transacoes 
-            WHERE user_id = %s AND valor > 0 
+            WHERE user_id = ? AND valor > 0 
             AND (tipo_fluxo = 'CAIXA' OR tipo_fluxo IS NULL) 
-            AND data_vencimento BETWEEN %s AND %s
+            AND data_vencimento BETWEEN ? AND ?
         """, (user_id, data_ini, data_fim))
         renda_mes = float(renda_row.iloc[0]['total']) if not renda_row.empty else 0
 
-        # 4. Busca Gastos Caixa (Filtrando IDs nulos para evitar erro de INT)
+        # 4. Busca Gastos Caixa (Blindado contra nulos)
         df_gastos = db.buscar("""
-            SELECT categoria_id, ABS(SUM(valor)) as gasto_real 
+            SELECT categoria_id, COALESCE(ABS(SUM(valor)), 0) as gasto_real 
             FROM transacoes 
-            WHERE user_id = %s AND valor < 0 
+            WHERE user_id = ? AND valor < 0 
             AND (tipo_fluxo = 'CAIXA' OR tipo_fluxo IS NULL) 
             AND categoria_id IS NOT NULL
-            AND data_vencimento BETWEEN %s AND %s 
+            AND data_vencimento BETWEEN ? AND ? 
             GROUP BY categoria_id
         """, (user_id, data_ini, data_fim))
         
         # 5. Busca Gastos Cartão
         df_gastos_cartao = db.buscar_gastos_cartao_por_categoria(user_id, data_ini, data_fim)
         
-        # 6. Consolidação dos Gastos por ID de Categoria
+        # 6. Consolidação dos Gastos
         gastos_map = {}
 
+        # Processa gastos de Caixa
         if not df_gastos.empty:
             for _, r in df_gastos.iterrows():
-                try:
+                if pd.notna(r['categoria_id']):
                     cid = int(r['categoria_id'])
-                    gastos_map[cid] = float(r['gasto_real'])
-                except: continue
+                    gastos_map[cid] = float(r['gasto_real'] or 0)
         
+        # Soma gastos de Cartão
         if not df_gastos_cartao.empty:
             for _, r in df_gastos_cartao.iterrows():
-                try:
+                if pd.notna(r['categoria_id']):
                     cid = int(r['categoria_id'])
-                    gastos_map[cid] = gastos_map.get(cid, 0) + float(r['gasto_real'])
-                except: continue
+                    gastos_map[cid] = gastos_map.get(cid, 0) + float(r['gasto_real'] or 0)
 
-        # 7. Busca Subcategorias (Opcional)
+        # 7. Busca Subcategorias
         df_sub = db.buscar("""
-            SELECT t.categoria_id, s.nome as subcategoria, ABS(SUM(t.valor)) as gasto_sub 
+            SELECT t.categoria_id, s.nome as subcategoria, COALESCE(ABS(SUM(t.valor)), 0) as gasto_sub 
             FROM transacoes t 
             JOIN subcategorias s ON t.subcategoria_id = s.id 
-            WHERE t.user_id = %s AND t.valor < 0 AND t.data_vencimento BETWEEN %s AND %s 
+            WHERE t.user_id = ? AND t.valor < 0 AND t.data_vencimento BETWEEN ? AND ? 
             GROUP BY t.categoria_id, s.nome
         """, (user_id, data_ini, data_fim))
 
@@ -93,7 +93,7 @@ class AcompanhamentoManager:
         pct_geral = (total_gasto / renda_mes * 100) if renda_mes > 0 else 0
         AcompanhamentoManager._render_resumo_html(renda_mes, total_gasto, pct_geral)
 
-        # 9. Marcador de Ritmo (Dia atual)
+        # 9. Marcador de Ritmo
         dia_atual = hoje.day if (hoje.month == mes_num and hoje.year == ano_sel) else None
         ultimo_dia = (datetime(ano_sel, mes_num, 1) + relativedelta(months=1) - relativedelta(days=1)).day
 
