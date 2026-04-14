@@ -150,6 +150,7 @@ class AcompanhamentoManager:
             items = [f"{s['subcategoria']}: {moeda(s['gasto_sub'])}" for _, s in subs_df.iterrows()]
             subs_h = f"<div style='font-size:11px; margin-top:8px; opacity:0.7; border-top:1px solid rgba(128,128,128,0.2); padding-top:5px;'>{' • '.join(items)}</div>"
 
+        # HTML ATUALIZADO COM white-space:nowrap E min-width AJUSTADO
         card_html = f"""
         <div style="background:var(--secondary-background-color); border-radius:10px; padding:15px; margin-bottom:10px; border-left:5px solid {cor};">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -157,7 +158,9 @@ class AcompanhamentoManager:
                 <div style="color:{cor}; font-weight:bold; font-size:12px;">{status}</div>
             </div>
             <div style="position:relative; background:rgba(128,128,128,0.15); border-radius:5px; height:20px; margin-bottom:8px;">
-                <div style="background:{cor}; width:{min(pct, 100)}%; height:100%; border-radius:5px; text-align:center; color:white; font-size:11px; line-height:20px; font-weight:bold; position:relative; z-index:2;">{pct:.0f}%</div>
+                <div style="background:{cor}; width:{min(pct, 100)}%; height:100%; border-radius:5px; text-align:center; color:white; font-size:11px; line-height:20px; font-weight:bold; position:relative; z-index:2; min-width:30px; white-space:nowrap; padding: 0 5px;">
+                    {pct:.0f}%
+                </div>
                 {marcador}
             </div>
             <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-color);">
