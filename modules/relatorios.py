@@ -412,6 +412,7 @@ class RelatoriosManager:
         st.info("🎯 **DICA DE OURO:** Gaste 80% do seu tempo renegociando ou cortando os itens da **Classe A** (Vermelho). Eles são os que realmente movem o ponteiro financeiro.")
 
     # ─── Evolução Temporal ────────────────────────────────────
+    # ─── Evolução Temporal ────────────────────────────────────
     @staticmethod
     def _render_evolucao(df, d_ini, d_fim):
         """Gráfico de linha com evolução de entradas e saídas ao longo do período."""
@@ -432,20 +433,25 @@ class RelatoriosManager:
 
         df_ev = df.copy()
         df_ev["data_vencimento"] = pd.to_datetime(df_ev["data_vencimento"])
+        
+        # Criamos colunas separadas para facilitar o agrupamento único
+        df_ev["ent_val"] = df_ev["valor"].apply(lambda x: x if x > 0 else 0)
+        df_ev["sai_val"] = df_ev["valor"].apply(lambda x: abs(x) if x < 0 else 0)
+        
         df_ev = df_ev.set_index("data_vencimento")
 
-        entradas = df_ev[df_ev["valor"] > 0]["valor"].resample(freq).sum().fillna(0)
-        saidas = df_ev[df_ev["valor"] < 0]["valor"].abs().resample(freq).sum().fillna(0)
+        # Agrupamos as duas colunas ao mesmo tempo para garantir o mesmo tamanho/índice
+        df_resampled = df_ev[["ent_val", "sai_val"]].resample(freq).sum().fillna(0)
 
-        if entradas.empty and saidas.empty:
-            st.info("Sem movimentações para exibir no período.")
+        if df_resampled.empty:
+            st.info("Sem movimentações para exibir no gráfico.")
             return
 
         fig = go.Figure()
 
         fig.add_trace(go.Scatter(
-            x=entradas.index,
-            y=entradas.values,
+            x=df_resampled.index,
+            y=df_resampled["ent_val"],
             name="Entradas",
             mode="lines+markers",
             line=dict(color="#27ae60", width=2),
@@ -455,8 +461,8 @@ class RelatoriosManager:
         ))
 
         fig.add_trace(go.Scatter(
-            x=saidas.index,
-            y=saidas.values,
+            x=df_resampled.index,
+            y=df_resampled["sai_val"],
             name="Saídas",
             mode="lines+markers",
             line=dict(color="#e74c3c", width=2),
@@ -480,12 +486,15 @@ class RelatoriosManager:
         st.plotly_chart(fig, use_container_width=True)
 
         with st.expander("Ver tabela de evolução"):
+            # Agora garantimos que todas as colunas venham do mesmo DataFrame resampled
             df_resumo_ev = pd.DataFrame({
-                "Período": entradas.index.strftime("%d/%m/%Y"),
-                "Entradas": entradas.values,
-                "Saídas": saidas.values,
-                "Balanço": (entradas - saidas).values,
+                "Período": df_resampled.index.strftime("%d/%m/%Y"),
+                "Entradas": df_resampled["ent_val"].values,
+                "Saídas": df_resampled["sai_val"].values,
+                "Balanço": (df_resampled["ent_val"] - df_resampled["sai_val"]).values,
             })
+            
+            # Formatação para exibição
             df_resumo_ev["Entradas"] = df_resumo_ev["Entradas"].apply(moeda)
             df_resumo_ev["Saídas"] = df_resumo_ev["Saídas"].apply(moeda)
             df_resumo_ev["Balanço"] = df_resumo_ev["Balanço"].apply(moeda)
