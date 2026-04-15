@@ -150,7 +150,7 @@ class RelatoriosManager:
         sai = abs(df_filtrado[df_filtrado["valor"] < 0]["valor"].sum())
         bal = ent - sai
 
-        # NOVO: busca período equivalente anterior para comparativo nos cards
+        # Busca período equivalente anterior para comparativo
         delta_dias = (d_fim - d_ini).days + 1
         d_ini_ant = d_ini - relativedelta(days=delta_dias)
         d_fim_ant = d_ini - relativedelta(days=1)
@@ -173,31 +173,34 @@ class RelatoriosManager:
                 seta = "▼"
             else:
                 return ""
-            return f'<small style="color:{cor}; font-size:12px;"> {seta} {abs(pct):.1f}% vs período ant.</small>'
+            return f'<small style="color:{cor}; font-size:12px;"> {seta} {abs(pct):.1f}%</small>'
 
         ent_ant = df_ant[df_ant["valor"] > 0]["valor"].sum() if not df_ant.empty else 0
         sai_ant = abs(df_ant[df_ant["valor"] < 0]["valor"].sum()) if not df_ant.empty else 0
         bal_ant = ent_ant - sai_ant
 
-        st.markdown(f'''
-            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                <div style="background:#f1f2f6; color:#333333; padding:15px; border-radius:10px; flex:1; border-left:5px solid #2ecc71;">
-                    <small>Entradas</small><br>
-                    <strong style="font-size: 22px; color: #27ae60;">{moeda(ent)}</strong>
-                    {_delta_html(ent, ent_ant, inverter=False)}
-                </div>
-                <div style="background:#f1f2f6; color:#333333; padding:15px; border-radius:10px; flex:1; border-left:5px solid #e74c3c;">
-                    <small>Saídas</small><br>
-                    <strong style="font-size: 22px; color: #c0392b;">-{moeda(sai)}</strong>
-                    {_delta_html(sai, sai_ant, inverter=True)}
-                </div>
-                <div style="background:{'#2ecc71' if bal >= 0 else '#e74c3c'}; color:#ffffff; padding:15px; border-radius:10px; flex:1;">
-                    <small>Balanço</small><br>
-                    <strong style="font-size: 22px;">{moeda(bal)}</strong>
-                    {_delta_html(bal, bal_ant, inverter=False)}
-                </div>
-            </div>
-        ''', unsafe_allow_html=True)
+        # HTML EM LINHA ÚNICA E SEM IDENTAÇÃO PARA EVITAR BUG DE RENDERIZAÇÃO
+        html_metrics = f"""
+<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+    <div style="background:#f1f2f6; color:#333333; padding:15px; border-radius:10px; flex:1; border-left:5px solid #2ecc71; min-width:150px;">
+        <small>Entradas</small><br>
+        <strong style="font-size: 20px; color: #27ae60;">{moeda(ent)}</strong>
+        {_delta_html(ent, ent_ant, inverter=False)}
+    </div>
+    <div style="background:#f1f2f6; color:#333333; padding:15px; border-radius:10px; flex:1; border-left:5px solid #e74c3c; min-width:150px;">
+        <small>Saídas</small><br>
+        <strong style="font-size: 20px; color: #c0392b;">-{moeda(sai)}</strong>
+        {_delta_html(sai, sai_ant, inverter=True)}
+    </div>
+    <div style="background:{'#2ecc71' if bal >= 0 else '#e74c3c'}; color:#ffffff; padding:15px; border-radius:10px; flex:1; min-width:150px;">
+        <small>Balanço</small><br>
+        <strong style="font-size: 20px;">{moeda(bal)}</strong>
+        {_delta_html(bal, bal_ant, inverter=False)}
+    </div>
+</div>"""
+        
+        # O replace('\n', ' ') é vital aqui também
+        st.markdown(html_metrics.replace('\n', ' '), unsafe_allow_html=True)
 
         # ── 5. Abas (nova aba Evolução adicionada) ───────────
         t_previa, t_abc, t_evolucao, t_consultor = st.tabs([
