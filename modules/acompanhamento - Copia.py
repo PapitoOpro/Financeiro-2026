@@ -262,7 +262,7 @@ class AcompanhamentoManager:
                 </div>
                 <div style="position:relative; background:rgba(128,128,128,0.2); border-radius:6px; height:24px; margin:8px 0 12px 0;">
                     <div style="background:{barra_cor}; width:{barra_width}%; height:24px; border-radius:6px;
-                                text-align:center; color:white; font-size:12px; font-weight:bold; line-height:24px;
+                                text-align:center; color:gray; font-size:12px; font-weight:bold; line-height:24px;
                                 min-width:35px; position:relative; z-index:2;">
                         {pct_gasto:.0f}%
                     </div>

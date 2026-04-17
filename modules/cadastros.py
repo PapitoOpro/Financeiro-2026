@@ -121,12 +121,12 @@ class CadastrosManager:
                     col1.markdown(f"<div style='font-size:22px'>{icone}</div>", unsafe_allow_html=True)
                     col2.markdown(f"<div style='padding-top: 4px;'><strong>{nome}</strong></div>", unsafe_allow_html=True)
                     col3.markdown(
-                        f"<div style='padding-top: 4px;'><span style='background:{tipo_cor}; color:white; padding:2px 8px; border-radius:4px; font-size:14px;'>{tipo_label}</span></div>",
+                        f"<div style='padding-top: 4px;'><span style='background:{tipo_cor}; color:gray; padding:2px 8px; border-radius:4px; font-size:14px;'>{tipo_label}</span></div>",
                         unsafe_allow_html=True
                     )
                     col4.markdown(
                         f"<div style='margin-top: 6px; background:#e0e0e0; border-radius:6px; position:relative; min-height: 20px;'>"
-                        f"<div style='background:#3498db; width:{pct}%; min-width: 30px; height: 100%; border-radius:6px; color:white; text-align:center; font-weight:bold; white-space:nowrap; position:absolute; top:0; left:0; display:flex; align-items:center; justify-content:center; font-size:12px;'>"
+                        f"<div style='background:#3498db; width:{pct}%; min-width: 30px; height: 100%; border-radius:6px; color:gray; text-align:center; font-weight:bold; white-space:nowrap; position:absolute; top:0; left:0; display:flex; align-items:center; justify-content:center; font-size:12px;'>"
                         f"{pct:.0f}%</div></div>",
                         unsafe_allow_html=True
                     )

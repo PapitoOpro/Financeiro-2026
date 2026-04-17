@@ -304,13 +304,13 @@ class ParcelasManager:
                 with c_tipo:
                     if is_avista:
                         st.markdown(
-                            "<span style='background:#3498db; color:white; padding:2px 8px; "
+                            "<span style='background:#3498db; color:gray; padding:2px 8px; "
                             "border-radius:4px; font-size:11px;'>À vista</span>",
                             unsafe_allow_html=True
                         )
                     else:
                         st.markdown(
-                            "<span style='background:#e67e22; color:white; padding:2px 8px; "
+                            "<span style='background:#e67e22; color:gray; padding:2px 8px; "
                             "border-radius:4px; font-size:11px;'>Parcelado</span>",
                             unsafe_allow_html=True
                         )

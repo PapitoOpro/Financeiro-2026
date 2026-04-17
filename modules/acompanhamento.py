@@ -158,7 +158,7 @@ class AcompanhamentoManager:
                 <div style="color:{cor}; font-weight:bold; font-size:12px;">{status}</div>
             </div>
             <div style="position:relative; background:rgba(128,128,128,0.15); border-radius:5px; height:20px; margin-bottom:8px;">
-                <div style="background:{cor}; width:{min(pct, 100)}%; height:100%; border-radius:5px; text-align:center; color:white; font-size:11px; line-height:20px; font-weight:bold; position:relative; z-index:2; min-width:30px; white-space:nowrap; padding: 0 5px;">
+                <div style="background:{cor}; width:{min(pct, 100)}%; height:100%; border-radius:5px; text-align:center; color:gray; font-size:11px; line-height:20px; font-weight:bold; position:relative; z-index:2; min-width:30px; white-space:nowrap; padding: 0 5px;">
                     {pct:.0f}%
                 </div>
                 {marcador}

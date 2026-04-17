@@ -275,7 +275,7 @@ class OnboardingManager:
                         <div style="font-weight:bold;">{cat['nome']}</div>
                         <div style="font-size:11px; color:#888;">{subs_text}</div>
                     </div>
-                    <div style="background:{cor}; color:white; padding:4px 12px; border-radius:12px; 
+                    <div style="background:{cor}; color:gray; padding:4px 12px; border-radius:12px; 
                                 font-weight:bold; font-size:14px;">{pct}%</div>
                 </div>
             """, unsafe_allow_html=True)
