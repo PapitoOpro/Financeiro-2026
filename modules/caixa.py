@@ -481,9 +481,9 @@ class CaixaManager:
                     c1.write(pd.to_datetime(row['data']).strftime('%d/%m/%Y'))
 
                     badge_comp = (
-                        "<span style='background:#2ecc71; color:white; padding:1px 6px; border-radius:4px; font-size:10px;'>OK</span> "
+                        "<span style='background:#2ecc71; color:gray; padding:1px 6px; border-radius:4px; font-size:10px;'>OK</span> "
                         if is_compensado else
-                        "<span style='background:#f39c12; color:white; padding:1px 6px; border-radius:4px; font-size:10px;'>Pend</span> "
+                        "<span style='background:#f39c12; color:gray; padding:1px 6px; border-radius:4px; font-size:10px;'>Pend</span> "
                     )
                     c2.markdown(
                         f"{badge_comp}**{row['descricao']}**<br>"
