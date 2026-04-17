@@ -316,9 +316,9 @@ class CaixaManager:
                 rid = int(row['id'])
 
                 badge = (
-                    "<span style='background:#2ecc71; color:white; padding:2px 8px; border-radius:4px; font-size:11px;'>Paga</span>"
+                    "<span style='background:#2ecc71; color:black; padding:2px 8px; border-radius:4px; font-size:11px;'>Paga</span>"
                     if is_compensado else
-                    "<span style='background:#e74c3c; color:white; padding:2px 8px; border-radius:4px; font-size:11px;'>Pendente</span>"
+                    "<span style='background:#e74c3c; color:black; padding:2px 8px; border-radius:4px; font-size:11px;'>Pendente</span>"
                 )
                 cor_valor = get_cor_valor(row['valor'])
                 data_venc = pd.to_datetime(row['data']).strftime('%d/%m/%Y')
