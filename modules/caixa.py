@@ -329,7 +329,7 @@ class CaixaManager:
                     f"padding:12px 15px; border-radius:6px; margin:8px 0 4px 0;'>"
                     f"<div style='display:flex; justify-content:space-between; align-items:center;'>"
                     f"<div>"
-                    f"<strong style='font-size:15px;'>{row['descricao']}</strong><br>"
+                    f"<strong style='font-size:15px; color:#212529;'>{row['descricao']}</strong><br>"
                     f"<span style='color:gray; font-size:12px;'>Vencimento: {data_venc} | {row['banco']}</span>"
                     f"</div>"
                     f"<div style='text-align:right;'>"
