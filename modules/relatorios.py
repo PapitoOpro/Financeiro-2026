@@ -15,7 +15,6 @@ from modules.acompanhamento import AcompanhamentoManager
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-
 class RelatoriosManager:
     """Renderiza relatórios analíticos dinâmicos com filtros, prévia e exportação."""
 
