@@ -16,4 +16,4 @@ opencv-python-headless
 sqlalchemy
 openpyxl
 fpdf2
-anthropic
+anthropic>=0.40.0

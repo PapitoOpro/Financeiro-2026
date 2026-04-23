@@ -33,6 +33,8 @@ st.set_page_config(
 # ==========================================
 # O ttl=3600 faz com que o versículo mude apenas de hora em hora.
 # Isso evita lentidão no sistema a cada clique no menu.
+
+
 @st.cache_data(ttl=3600)
 def buscar_versiculo_financeiro():
     referencias = [
@@ -47,19 +49,20 @@ def buscar_versiculo_financeiro():
     ]
     ref_escolhida = random.choice(referencias)
     url = f"https://bible-api.com/{ref_escolhida}?translation=almeida"
-    
+
     try:
         response = requests.get(url, timeout=3)
         if response.status_code == 200:
             dados = response.json()
             # Limpa quebras de linha para ficar bonito no layout
-            texto = dados['text'].strip().replace("\n", " ") 
+            texto = dados['text'].strip().replace("\n", " ")
             ref_formatada = dados['reference']
             return f'"{texto}" — {ref_formatada}'
         else:
             return '"Os planos bem elaborados levam à fartura; mas o apressado sempre acaba na miséria." — Provérbios 21:5'
     except:
         return '"Os planos bem elaborados levam à fartura; mas o apressado sempre acaba na miséria." — Provérbios 21:5'
+
 
 # ==========================================
 # PÁGINA DO GUIA DE USO (acesso público)
@@ -83,7 +86,7 @@ if st.query_params.get("guia"):
 # Inicializa banco de dados
 db.inicializar_banco()
 
- # Inicializa autenticação
+# Inicializa autenticação
 AuthManager.tela_login()
 
 # Inicializa dados do usuário logado (limites padrão, etc.)
@@ -205,17 +208,19 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- Header ---
-st.sidebar.markdown('<div class="sidebar-title">FINANÇAS PRO</div>', unsafe_allow_html=True)
+st.sidebar.markdown(
+    '<div class="sidebar-title">FINANÇAS PRO</div>', unsafe_allow_html=True)
 
 # Chamada da API para gerar o versículo dinâmico
 versiculo_do_momento = buscar_versiculo_financeiro()
-st.sidebar.markdown(f'<div class="sidebar-subtitle">{versiculo_do_momento}</div>', unsafe_allow_html=True)
+st.sidebar.markdown(
+    f'<div class="sidebar-subtitle">{versiculo_do_momento}</div>', unsafe_allow_html=True)
 
 st.sidebar.markdown("---")
 
 # --- Menu de navegação ---
 MENU_ITEMS = [
-    # ("", "Consultor Financeiro"),
+    ("??", "Consultor Financeiro"),
     ("", "Controle de Caixa"),
     ("", "Projeção de Gastos"),
     ("", "Cadastros"),
@@ -242,10 +247,10 @@ st.sidebar.markdown('</div>', unsafe_allow_html=True)
 # --- Rodapé do sidebar ---
 st.sidebar.markdown("---")
 st.sidebar.markdown(
-    f'<div class="sidebar-user">👤 <span class="sidebar-user-name">{st.session_state.usuario_nome}</span></div>',
+    f'<div class="sidebar-user">?? <span class="sidebar-user-name">{st.session_state.usuario_nome}</span></div>',
     unsafe_allow_html=True
 )
-if st.sidebar.button("🚪  Sair", width='stretch'):
+if st.sidebar.button("??  Sair", width='stretch'):
     AuthManager.fazer_logout()
 st.sidebar.markdown(
     "<div style='text-align: center; margin-top: 8px;'>"
@@ -272,8 +277,8 @@ elif menu == "Cadastros":
 elif menu == "Relatórios":
     RelatoriosManager.renderizar()
 
-     # elif menu == "Consultor Financeiro":
-     #     ConsultorManager.renderizar()
+elif menu == "Consultor Financeiro":
+    ConsultorManager.renderizar()
 
 elif menu == "Admin":
     AdminManager.renderizar()
