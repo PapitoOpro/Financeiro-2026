@@ -14,7 +14,7 @@ from modules.cadastros import CadastrosManager
 from modules.admin import AdminManager
 from modules.parcelas_exemplo import ParcelasManager
 from modules.relatorios import RelatoriosManager
-# from modules.consultor import ConsultorManager
+from modules.consultor import ConsultorManager
 from modules.acompanhamento import AcompanhamentoManager
 from modules.onboarding import OnboardingManager
 

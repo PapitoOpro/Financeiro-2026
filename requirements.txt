@@ -16,3 +16,4 @@ opencv-python-headless
 sqlalchemy
 openpyxl
 fpdf2
+anthropic
