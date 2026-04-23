@@ -15,6 +15,7 @@ from modules.acompanhamento import AcompanhamentoManager
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+
 class RelatoriosManager:
     """Renderiza relatórios analíticos dinâmicos com filtros, prévia e exportação."""
 
@@ -99,7 +100,8 @@ class RelatoriosManager:
         """
         df_cartao = db.buscar(q_cartao, (user_id, d_ini, d_fim))
         if not df_cartao.empty and not df_cartao.isna().all(axis=None):
-            df = pd.concat([df, df_cartao.dropna(how='all')], ignore_index=True)
+            df = pd.concat([df, df_cartao.dropna(how='all')],
+                           ignore_index=True)
 
         if df.empty:
             st.info("Nenhuma movimentação registrada neste período.")
@@ -111,13 +113,17 @@ class RelatoriosManager:
         with st.expander("Filtros adicionais", expanded=False):
             fc1, fc2, fc3 = st.columns(3)
 
-            categorias_unicas = sorted(df["categoria"].dropna().unique().tolist())
+            categorias_unicas = sorted(
+                df["categoria"].dropna().unique().tolist())
             # CORRIGIDO: "Sem categoria" como opção explícita, sem incluir NaN silenciosamente
-            opcoes_categorias = categorias_unicas + (["Sem categoria"] if df["categoria"].isna().any() else [])
-            filtro_categorias = fc1.multiselect("Categorias", opcoes_categorias, default=opcoes_categorias)
+            opcoes_categorias = categorias_unicas + \
+                (["Sem categoria"] if df["categoria"].isna().any() else [])
+            filtro_categorias = fc1.multiselect(
+                "Categorias", opcoes_categorias, default=opcoes_categorias)
 
             bancos_unicos = sorted(df["banco"].dropna().unique().tolist())
-            filtro_bancos = fc2.multiselect("Cartão / Banco", bancos_unicos, default=bancos_unicos)
+            filtro_bancos = fc2.multiselect(
+                "Cartão / Banco", bancos_unicos, default=bancos_unicos)
 
             tipo_opcoes = ["Todos", "Somente Entradas", "Somente Saídas"]
             filtro_tipo = fc3.radio("Tipo", tipo_opcoes, horizontal=True)
@@ -128,7 +134,8 @@ class RelatoriosManager:
             incluir_sem_cat = "Sem categoria" in filtro_categorias
             cats_reais = [c for c in filtro_categorias if c != "Sem categoria"]
             if incluir_sem_cat:
-                mask &= df["categoria"].isin(cats_reais) | df["categoria"].isna()
+                mask &= df["categoria"].isin(
+                    cats_reais) | df["categoria"].isna()
             else:
                 mask &= df["categoria"].isin(cats_reais)
         if filtro_bancos:
@@ -141,7 +148,8 @@ class RelatoriosManager:
         df_filtrado = df[mask].copy()
 
         if df_filtrado.empty:
-            st.warning("Nenhum registro encontrado com os filtros selecionados.")
+            st.warning(
+                "Nenhum registro encontrado com os filtros selecionados.")
             return
 
         # ── 4. Métricas com comparativo do período anterior ──
@@ -157,7 +165,8 @@ class RelatoriosManager:
         df_ant = db.buscar(q_caixa, (user_id, d_ini_ant, d_fim_ant))
         df_ant_cartao = db.buscar(q_cartao, (user_id, d_ini_ant, d_fim_ant))
         if not df_ant_cartao.empty and not df_ant_cartao.isna().all(axis=None):
-            df_ant = pd.concat([df_ant, df_ant_cartao.dropna(how='all')], ignore_index=True)
+            df_ant = pd.concat(
+                [df_ant, df_ant_cartao.dropna(how='all')], ignore_index=True)
 
         def _delta_html(atual, anterior, inverter=False):
             if anterior == 0 or df_ant.empty:
@@ -174,8 +183,10 @@ class RelatoriosManager:
                 return ""
             return f'<small style="color:{cor}; font-size:12px;"> {seta} {abs(pct):.1f}%</small>'
 
-        ent_ant = df_ant[df_ant["valor"] > 0]["valor"].sum() if not df_ant.empty else 0
-        sai_ant = abs(df_ant[df_ant["valor"] < 0]["valor"].sum()) if not df_ant.empty else 0
+        ent_ant = df_ant[df_ant["valor"] >
+                         0]["valor"].sum() if not df_ant.empty else 0
+        sai_ant = abs(df_ant[df_ant["valor"] < 0]
+                      ["valor"].sum()) if not df_ant.empty else 0
         bal_ant = ent_ant - sai_ant
 
         # HTML EM LINHA ÚNICA E SEM IDENTAÇÃO PARA EVITAR BUG DE RENDERIZAÇÃO
@@ -197,7 +208,7 @@ class RelatoriosManager:
         {_delta_html(bal, bal_ant, inverter=False)}
     </div>
 </div>"""
-        
+
         # O replace('\n', ' ') é vital aqui também
         st.markdown(html_metrics.replace('\n', ' '), unsafe_allow_html=True)
 
@@ -211,17 +222,21 @@ class RelatoriosManager:
 
         col_map = RelatoriosManager.COLUNAS_DISPONIVEIS
         colunas_essenciais = ["valor", "data_vencimento", "descricao"]
-        colunas_internas = list({col_map[c] for c in colunas_selecionadas} | set(colunas_essenciais))
-        colunas_internas = [c for c in colunas_internas if c in df_filtrado.columns]
+        colunas_internas = list(
+            {col_map[c] for c in colunas_selecionadas} | set(colunas_essenciais))
+        colunas_internas = [
+            c for c in colunas_internas if c in df_filtrado.columns]
 
         df_export = df_filtrado[colunas_internas].copy()
-        colunas_exibicao = [col_map[c] for c in colunas_selecionadas if col_map[c] in df_export.columns]
+        colunas_exibicao = [
+            col_map[c] for c in colunas_selecionadas if col_map[c] in df_export.columns]
         df_exibir = df_export[colunas_exibicao].copy()
 
         rename = {v: k for k, v in col_map.items() if k in colunas_selecionadas}
 
         if "data_vencimento" in df_exibir.columns:
-            df_exibir["data_vencimento"] = df_exibir["data_vencimento"].dt.strftime("%d/%m/%Y")
+            df_exibir["data_vencimento"] = df_exibir["data_vencimento"].dt.strftime(
+                "%d/%m/%Y")
         if "valor" in df_exibir.columns:
             df_exibir["valor_num"] = df_exibir["valor"]
             df_exibir["valor"] = df_exibir["valor"].apply(moeda)
@@ -231,8 +246,10 @@ class RelatoriosManager:
         # ── Tab Prévia ──────────────────────────────────────
         with t_previa:
             st.subheader("Prévia do Relatório")
-            st.caption(f"{len(df_exibir_renomeado)} registros  |  Período: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}")
-            st.dataframe(df_exibir_renomeado.drop(columns=["valor_num"], errors="ignore"), hide_index=True, use_container_width=True)
+            st.caption(
+                f"{len(df_exibir_renomeado)} registros  |  Período: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}")
+            st.dataframe(df_exibir_renomeado.drop(columns=[
+                         "valor_num"], errors="ignore"), hide_index=True, use_container_width=True)
 
             st.divider()
             st.subheader("Exportar Relatório")
@@ -256,7 +273,8 @@ class RelatoriosManager:
             )
 
             # CORRIGIDO: passa df_filtrado com valores numéricos originais
-            pdf_bytes = RelatoriosManager._gerar_pdf(df_filtrado, d_ini, d_fim, ent, sai, bal)
+            pdf_bytes = RelatoriosManager._gerar_pdf(
+                df_filtrado, d_ini, d_fim, ent, sai, bal)
             ec2.download_button(
                 "Baixar PDF",
                 data=pdf_bytes,
@@ -278,7 +296,8 @@ class RelatoriosManager:
         with t_consultor:
             mes_consultor = d_ini.month
             ano_consultor = d_ini.year
-            diag = ConsultorEngine.diagnostico_completo(ano_consultor, mes_consultor)
+            diag = ConsultorEngine.diagnostico_completo(
+                ano_consultor, mes_consultor)
             ConsultorManager._renderizar_status_geral(diag)
             ConsultorManager._renderizar_alertas(diag['alertas'])
             st.markdown("---")
@@ -287,15 +306,18 @@ class RelatoriosManager:
     # ─── Curva ABC ────────────────────────────────────────────
     @staticmethod
     def _render_curva_abc(df):
-        st.markdown("**Curva ABC: Descubra quais despesas consomem mais do seu orçamento.**")
+        st.markdown(
+            "**Curva ABC: Descubra quais despesas consomem mais do seu orçamento.**")
 
         df_saidas = df[df["valor"] < 0].copy()
         if df_saidas.empty:
-            st.warning("Nenhuma saída (despesa) registrada neste período para gerar a Curva ABC.")
+            st.warning(
+                "Nenhuma saída (despesa) registrada neste período para gerar a Curva ABC.")
             return
 
         df_saidas["descricao"] = df_saidas["descricao"].fillna("Sem descrição")
-        df_saidas["categoria"] = df_saidas["categoria"].fillna("Sem categoria") if "categoria" in df_saidas.columns else "Sem categoria"
+        df_saidas["categoria"] = df_saidas["categoria"].fillna(
+            "Sem categoria") if "categoria" in df_saidas.columns else "Sem categoria"
         df_saidas["Valor Absoluto"] = df_saidas["valor"].abs()
 
         # NOVO: toggle para agrupar por descrição ou categoria
@@ -317,15 +339,19 @@ class RelatoriosManager:
         )
 
         df_agrupado["% Acumulada Num"] = (
-            df_agrupado["Valor Absoluto"].cumsum() / df_agrupado["Valor Absoluto"].sum()
+            df_agrupado["Valor Absoluto"].cumsum(
+            ) / df_agrupado["Valor Absoluto"].sum()
         ) * 100
 
         def classificar_abc(pct):
-            if pct <= 80: return "Classe A"
-            if pct <= 95: return "Classe B"
+            if pct <= 80:
+                return "Classe A"
+            if pct <= 95:
+                return "Classe B"
             return "Classe C"
 
-        df_agrupado["Classe"] = df_agrupado["% Acumulada Num"].apply(classificar_abc)
+        df_agrupado["Classe"] = df_agrupado["% Acumulada Num"].apply(
+            classificar_abc)
 
         resumo = df_agrupado.groupby("Classe").agg(
             Total=("Valor Absoluto", "sum"),
@@ -334,7 +360,8 @@ class RelatoriosManager:
 
         st.markdown("### Resumo Estratégico")
         c1, c2, c3 = st.columns(3)
-        cores = {"Classe A": "#e74c3c", "Classe B": "#f39c12", "Classe C": "#2ecc71"}
+        cores = {"Classe A": "#e74c3c",
+                 "Classe B": "#f39c12", "Classe C": "#2ecc71"}
 
         for _, row in resumo.iterrows():
             classe = row["Classe"]
@@ -345,9 +372,12 @@ class RelatoriosManager:
                 <small style="color:#777;">{row['Qtd']} itens</small>
             </div>
             """
-            if classe == "Classe A": c1.markdown(texto_card, unsafe_allow_html=True)
-            elif classe == "Classe B": c2.markdown(texto_card, unsafe_allow_html=True)
-            elif classe == "Classe C": c3.markdown(texto_card, unsafe_allow_html=True)
+            if classe == "Classe A":
+                c1.markdown(texto_card, unsafe_allow_html=True)
+            elif classe == "Classe B":
+                c2.markdown(texto_card, unsafe_allow_html=True)
+            elif classe == "Classe C":
+                c3.markdown(texto_card, unsafe_allow_html=True)
 
         st.write("")
 
@@ -358,7 +388,6 @@ class RelatoriosManager:
         fig.add_trace(
             go.Bar(
                 x=df_agrupado[col_grupo].str[:25],
-                y=df_agrupado["Valor Absoluto"],
                 name="Valor da Despesa",
                 marker_color=[cores[c] for c in df_agrupado["Classe"]],
                 hovertemplate="%{x}<br>R$ %{y:,.2f}<extra></extra>",
@@ -389,20 +418,23 @@ class RelatoriosManager:
             height=420,
             margin=dict(l=0, r=60, t=30, b=80),
             showlegend=True,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            legend=dict(orientation="h", yanchor="bottom",
+                        y=1.02, xanchor="right", x=1),
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
         )
         fig.update_xaxes(tickangle=-40, tickfont=dict(size=11))
         fig.update_yaxes(title_text="Valor (R$)", secondary_y=False)
-        fig.update_yaxes(title_text="% Acumulada", range=[0, 105], secondary_y=True)
+        fig.update_yaxes(title_text="% Acumulada", range=[
+                         0, 105], secondary_y=True)
 
         st.plotly_chart(fig, use_container_width=True)
 
         with st.expander("Ver Tabela Detalhada"):
             df_table = df_agrupado.copy()
             df_table["Valor"] = df_table["Valor Absoluto"].apply(moeda)
-            df_table["% Acumulada"] = df_table["% Acumulada Num"].apply(lambda x: f"{x:.1f}%")
+            df_table["% Acumulada"] = df_table["% Acumulada Num"].apply(
+                lambda x: f"{x:.1f}%")
             cols_show = ["Classe", col_grupo, "Valor", "% Acumulada"]
             rename_show = {"descricao": "Descrição", "categoria": "Categoria"}
             st.dataframe(
@@ -435,15 +467,89 @@ class RelatoriosManager:
 
         df_ev = df.copy()
         df_ev["data_vencimento"] = pd.to_datetime(df_ev["data_vencimento"])
-        
+
         # Criamos colunas separadas para facilitar o agrupamento único
         df_ev["ent_val"] = df_ev["valor"].apply(lambda x: x if x > 0 else 0)
-        df_ev["sai_val"] = df_ev["valor"].apply(lambda x: abs(x) if x < 0 else 0)
-        
+        df_ev["sai_val"] = df_ev["valor"].apply(
+            lambda x: abs(x) if x < 0 else 0)
+         q_caixa = """
+                    SELECT t.data_vencimento, t.descricao, t.valor,
+                           cat.nome AS categoria, c.nome AS banco
+                    FROM transacoes t
+                    LEFT JOIN categorias cat ON t.categoria_id = cat.id
+                    LEFT JOIN contas c ON t.conta_id = c.id
+                    WHERE t.user_id = %s
+                      AND (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL)
+                      AND t.fatura_id IS NULL
+                      AND t.data_vencimento BETWEEN %s AND %s
+                """
+          df = db.buscar(q_caixa, (user_id, d_ini, d_fim))
+
+           if df.empty:
+                st.info("Nenhuma movimentação registrada neste período.")
+                return
+
+            df["data_vencimento"] = pd.to_datetime(df["data_vencimento"])
+
+            # ── 3. Filtros Adicionais ─────────────────────────────
+            with st.expander("Filtros adicionais", expanded=False):
+                fc1, fc2, fc3 = st.columns(3)
+
+                categorias_unicas = sorted(
+                    df["categoria"].dropna().unique().tolist())
+                opcoes_categorias = categorias_unicas + \
+                    (["Sem categoria"] if df["categoria"].isna().any() else [])
+                filtro_categorias = fc1.multiselect(
+                    "Categorias", opcoes_categorias, default=opcoes_categorias)
+
+                bancos_unicos = sorted(df["banco"].dropna().unique().tolist())
+                filtro_bancos = fc2.multiselect(
+                    "Cartão / Banco", bancos_unicos, default=bancos_unicos)
+
+                tipo_opcoes = ["Todos", "Somente Entradas", "Somente Saídas"]
+                filtro_tipo = fc3.radio("Tipo", tipo_opcoes, horizontal=True)
+
+            mask = pd.Series(True, index=df.index)
+            if filtro_categorias:
+                incluir_sem_cat = "Sem categoria" in filtro_categorias
+                cats_reais = [
+                    c for c in filtro_categorias if c != "Sem categoria"]
+                if incluir_sem_cat:
+                    mask &= df["categoria"].isin(
+                        cats_reais) | df["categoria"].isna()
+                else:
+                    mask &= df["categoria"].isin(cats_reais)
+            if filtro_bancos:
+                mask &= df["banco"].isin(filtro_bancos) | df["banco"].isna()
+            if filtro_tipo == "Somente Entradas":
+                mask &= df["valor"] > 0
+            elif filtro_tipo == "Somente Saídas":
+                mask &= df["valor"] < 0
+
+            df_filtrado = df[mask].copy()
+
+            if df_filtrado.empty:
+                st.warning(
+                    "Nenhum registro encontrado com os filtros selecionados.")
+                return
+
+            # ── 4. Métricas com comparativo do período anterior ──
+            ent = df_filtrado[df_filtrado["valor"] > 0]["valor"].sum()
+            sai = abs(df_filtrado[df_filtrado["valor"] < 0]["valor"].sum())
+            bal = ent - sai
+
+            # Busca período equivalente anterior para comparativo
+            delta_dias = (d_fim - d_ini).days + 1
+            d_ini_ant = d_ini - relativedelta(days=delta_dias)
+            d_fim_ant = d_ini - relativedelta(days=1)
+
+            df_ant = db.buscar(q_caixa, (user_id, d_ini_ant, d_fim_ant))
+
         df_ev = df_ev.set_index("data_vencimento")
 
         # Agrupamos as duas colunas ao mesmo tempo para garantir o mesmo tamanho/índice
-        df_resampled = df_ev[["ent_val", "sai_val"]].resample(freq).sum().fillna(0)
+        df_resampled = df_ev[["ent_val", "sai_val"]
+                             ].resample(freq).sum().fillna(0)
 
         if df_resampled.empty:
             st.info("Sem movimentações para exibir no gráfico.")
@@ -478,7 +584,8 @@ class RelatoriosManager:
             margin=dict(l=0, r=0, t=30, b=40),
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            legend=dict(orientation="h", yanchor="bottom",
+                        y=1.02, xanchor="right", x=1),
             hovermode="x unified",
             yaxis=dict(title="Valor (R$)", tickprefix="R$ "),
         )
@@ -495,12 +602,13 @@ class RelatoriosManager:
                 "Saídas": df_resampled["sai_val"].values,
                 "Balanço": (df_resampled["ent_val"] - df_resampled["sai_val"]).values,
             })
-            
+
             # Formatação para exibição
             df_resumo_ev["Entradas"] = df_resumo_ev["Entradas"].apply(moeda)
             df_resumo_ev["Saídas"] = df_resumo_ev["Saídas"].apply(moeda)
             df_resumo_ev["Balanço"] = df_resumo_ev["Balanço"].apply(moeda)
-            st.dataframe(df_resumo_ev, hide_index=True, use_container_width=True)
+            st.dataframe(df_resumo_ev, hide_index=True,
+                         use_container_width=True)
 
     # ─── Gerar PDF ────────────────────────────────────────────
     @staticmethod
@@ -518,7 +626,8 @@ class RelatoriosManager:
         pdf.set_font("Helvetica", "B", 16)
         pdf.cell(0, 10, "Relatorio Financeiro", ln=True, align="C")
         pdf.set_font("Helvetica", "", 10)
-        pdf.cell(0, 6, f"Periodo: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}", ln=True, align="C")
+        pdf.cell(
+            0, 6, f"Periodo: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}", ln=True, align="C")
         pdf.ln(4)
 
         pdf.set_font("Helvetica", "B", 10)
@@ -537,7 +646,8 @@ class RelatoriosManager:
                 .sort_values("_abs", ascending=False)
                 .reset_index(drop=True)
             )
-            df_abc_pdf["pct_acum"] = (df_abc_pdf["_abs"].cumsum() / df_abc_pdf["_abs"].sum()) * 100
+            df_abc_pdf["pct_acum"] = (
+                df_abc_pdf["_abs"].cumsum() / df_abc_pdf["_abs"].sum()) * 100
             classe_a = df_abc_pdf[df_abc_pdf["pct_acum"] <= 80]
 
             if not classe_a.empty:
@@ -545,7 +655,8 @@ class RelatoriosManager:
                 qtd_a = len(classe_a)
                 pdf.set_font("Helvetica", "I", 9)
                 pdf.set_text_color(200, 0, 0)
-                pdf.cell(0, 6, f"  * Atencao (Curva ABC): {qtd_a} categorias da Classe A representam o maior impacto ({moeda(total_a)}).", ln=True)
+                pdf.cell(
+                    0, 6, f"  * Atencao (Curva ABC): {qtd_a} categorias da Classe A representam o maior impacto ({moeda(total_a)}).", ln=True)
                 pdf.set_text_color(0, 0, 0)
 
         pdf.ln(4)
@@ -553,7 +664,8 @@ class RelatoriosManager:
         # Formata colunas para exibição no PDF
         df_pdf = df.copy()
         if "data_vencimento" in df_pdf.columns:
-            df_pdf["data_vencimento"] = pd.to_datetime(df_pdf["data_vencimento"]).dt.strftime("%d/%m/%Y")
+            df_pdf["data_vencimento"] = pd.to_datetime(
+                df_pdf["data_vencimento"]).dt.strftime("%d/%m/%Y")
         if "valor" in df_pdf.columns:
             df_pdf["valor"] = df_pdf["valor"].apply(moeda)
 
