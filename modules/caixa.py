@@ -119,15 +119,14 @@ class CaixaManager:
         # ALERTAS DO CONSULTOR
         ConsultorManager.widget_alertas(ano_sel, mes_num)
 
-        # 3. DIVISÃO: EXTRATO | FORMULÁRIO
-        col_extrato, col_espaco, col_form = st.columns(
-            [COL_EXTRATO, COL_ESPACO, COL_FORM])
+        # 3. DIVISÃO: FORMULÁRIO | EXTRATO
+        # Formulário definido primeiro para aparecer no topo em telas mobile.
+        col_form, _, col_extrato = st.columns(
+            [COL_FORM, COL_ESPACO, COL_EXTRATO])
 
-        # LADO DIREITO: FORMULÁRIO
         with col_form:
             CaixaManager._renderizar_formulario(df_contas, df_cats, df_subs)
 
-        # LADO ESQUERDO: EXTRATO
         with col_extrato:
             CaixaManager._renderizar_extrato(df_caixa, df_contas, df_cats)
 
