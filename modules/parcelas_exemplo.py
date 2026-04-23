@@ -212,34 +212,120 @@ class ParcelasManager:
 
     @staticmethod
     def _tab_importar_pdf(df_contas, df_cats):
-        """Aba para importar faturas apenas via texto manual."""
-        st.subheader(" Importador de Faturas (Texto Manual)")
-        st.markdown("##### Cole o texto dos lançamentos da fatura abaixo:")
-        st.caption(
-            "Abra o PDF, selecione os lançamentos com o mouse, "
-            "copie (Ctrl+C) e cole abaixo."
+        """Aba para importar faturas via upload de PDF ou texto colado (fallback)."""
+        st.subheader("?? Importador de Faturas PDF")
+
+        # -- OPÇÃO 1: UPLOAD DIRETO DO PDF (caminho principal) --------------
+        st.markdown("##### Opção 1 — Upload do PDF da fatura")
+        st.caption("Suporte automático a: Nubank, Itaú, Bradesco, Mercado Pago, Porto Bank.")
+
+        pdf_file = st.file_uploader(
+            "Selecione o PDF da fatura do cartão",
+            type=["pdf"],
+            key="pdf_uploader",
+            help="Faça upload do PDF da fatura. O sistema detecta o banco e extrai os lançamentos automaticamente.",
         )
-        texto_colado = st.text_area(
-            "Cole o texto dos lançamentos aqui:",
-            height=200,
-            key="ocr_texto_colado",
-        )
-        if texto_colado:
-            if st.button("Processar texto colado", icon=":material/refresh:"):
-                banco_c, texto_c, dados_c, metodo_c = processar_texto_colado(texto_colado)
-                if dados_c:
-                    st.session_state["ocr_banco"] = banco_c
-                    st.session_state["ocr_texto"] = texto_c
-                    st.session_state["ocr_dados"] = dados_c
-                    st.session_state["ocr_metodo"] = metodo_c
-                    st.session_state.pop("ocr_dados_editaveis", None)
-                    st.session_state["ocr_version"] = st.session_state.get("ocr_version", 0) + 1
-                    n_av = sum(1 for _, p, _ in dados_c if p == "1/1")
-                    n_pc = len(dados_c) - n_av
-                    st.success(f"{len(dados_c)} itens encontrados! ({n_pc} parcelado(s), {n_av} à vista)")
-                    ParcelasManager._safe_rerun()
-                else:
-                    st.warning("Nenhum item detectado no texto colado.")
+
+        # Detecta troca de arquivo para limpar estado anterior
+        if pdf_file and st.session_state.get("ocr_file_name") != pdf_file.name:
+            ParcelasManager._resetar_estado_pdf()
+            st.session_state["ocr_file_name"] = pdf_file.name
+
+        if pdf_file:
+            senha_pdf = None
+            col_senha, col_btn = st.columns([2, 1])
+            with col_senha:
+                senha_input = st.text_input(
+                    "Senha do PDF (se houver)",
+                    type="password",
+                    key="pdf_senha",
+                    placeholder="Deixe em branco se não tiver senha",
+                )
+                if senha_input:
+                    senha_pdf = senha_input
+
+            with col_btn:
+                st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
+                processar_btn = st.button(
+                    "?? Extrair lançamentos",
+                    key="btn_processar_pdf",
+                    type="primary",
+                    use_container_width=True,
+                )
+
+            if processar_btn:
+                with st.spinner("Lendo PDF e extraindo lançamentos... aguarde."):
+                    try:
+                        banco_p, texto_p, dados_p, metodo_p = processar_fatura(
+                            pdf_file, senha_pdf=senha_pdf, incluir_avista=True
+                        )
+
+                        if texto_p == "__PDF_PROTEGIDO__" or banco_p == "__PDF_PROTEGIDO__":
+                            st.error(
+                                "?? **PDF protegido por senha.**\n\n"
+                                "Digite a senha do PDF no campo acima e tente novamente."
+                            )
+                        elif not dados_p:
+                            st.warning(
+                                "?? Nenhum lançamento detectado automaticamente.\n\n"
+                                "Tente a **Opção 2** abaixo: copie o texto do PDF e cole manualmente."
+                            )
+                        else:
+                            st.session_state["ocr_banco"] = banco_p
+                            st.session_state["ocr_texto"] = texto_p
+                            st.session_state["ocr_dados"] = dados_p
+                            st.session_state["ocr_metodo"] = metodo_p
+                            st.session_state.pop("ocr_dados_editaveis", None)
+                            st.session_state["ocr_version"] = (
+                                st.session_state.get("ocr_version", 0) + 1
+                            )
+                            n_av = sum(1 for _, p, _ in dados_p if p == "1/1")
+                            n_pc = len(dados_p) - n_av
+                            st.success(
+                                f"? **{len(dados_p)} itens extraídos!** "
+                                f"({n_pc} parcelado(s), {n_av} à vista) "
+                                f"— Banco: **{banco_p}** · Método: `{metodo_p}`"
+                            )
+                            ParcelasManager._safe_rerun()
+
+                    except Exception as e:
+                        st.error(f"? Erro ao processar PDF: {e}")
+
+        st.divider()
+
+        # -- OPÇÃO 2: TEXTO COLADO (fallback para PDFs problemáticos) -------
+        with st.expander("Opção 2 — Colar texto manualmente (para PDFs que não abriram)", expanded=False):
+            st.caption(
+                "Use somente se o upload não funcionar. "
+                "Abra o PDF, selecione os lançamentos, copie (Ctrl+C) e cole abaixo."
+            )
+            texto_colado = st.text_area(
+                "Cole o texto dos lançamentos aqui:",
+                height=180,
+                key="ocr_texto_colado",
+            )
+            if texto_colado:
+                if st.button("Processar texto colado", icon=":material/refresh:", key="btn_processar_texto"):
+                    banco_c, texto_c, dados_c, metodo_c = processar_texto_colado(texto_colado)
+                    if dados_c:
+                        st.session_state["ocr_banco"] = banco_c
+                        st.session_state["ocr_texto"] = texto_c
+                        st.session_state["ocr_dados"] = dados_c
+                        st.session_state["ocr_metodo"] = metodo_c
+                        st.session_state.pop("ocr_dados_editaveis", None)
+                        st.session_state["ocr_version"] = (
+                            st.session_state.get("ocr_version", 0) + 1
+                        )
+                        n_av = sum(1 for _, p, _ in dados_c if p == "1/1")
+                        n_pc = len(dados_c) - n_av
+                        st.success(
+                            f"? {len(dados_c)} itens encontrados! "
+                            f"({n_pc} parcelado(s), {n_av} à vista)"
+                        )
+                        ParcelasManager._safe_rerun()
+                    else:
+                        st.warning("Nenhum item detectado no texto colado.")
+
         st.divider()
 
         dados_salvos = st.session_state.get("ocr_dados", [])
@@ -258,7 +344,7 @@ class ParcelasManager:
                     svd.pop(idx_to_del)
                 st.session_state["ocr_dados_editaveis"] = eds
                 st.session_state["ocr_dados"] = svd
-                # Incrementa versão → todos os widgets são recriados com chaves novas
+                # Incrementa versão ? todos os widgets são recriados com chaves novas
                 st.session_state["ocr_version"] = st.session_state.get("ocr_version", 0) + 1
 
             # Inicializa dados editáveis no session_state (só na primeira vez)
@@ -335,7 +421,7 @@ class ParcelasManager:
             # ============================================================
             # ADICIONAR COMPRAS MANUAIS (não capturadas pelo OCR)
             # ============================================================
-            with st.expander("➕ Adicionar compras não detectadas pelo OCR", expanded=False):
+            with st.expander("? Adicionar compras não detectadas pelo OCR", expanded=False):
                 st.caption("Insira compras que não apareceram na leitura automática para acertar o valor total da fatura.")
                 
                 # Inicializa lista de itens manuais pendentes no session_state
@@ -362,7 +448,7 @@ class ParcelasManager:
                         st.session_state["ocr_dados"] = dados_salvos_list
                         # Incrementa versão para widgets serem recriados
                         st.session_state["ocr_version"] = st.session_state.get("ocr_version", 0) + 1
-                        st.toast(f"✅ \"{manual_desc.strip()}\" adicionado!")
+                        st.toast(f"? \"{manual_desc.strip()}\" adicionado!")
                         ParcelasManager._safe_rerun()
 
                 # Mostra itens manuais já adicionados que não vieram do OCR original
@@ -395,9 +481,9 @@ class ParcelasManager:
                 lista_cats = df_cats['nome'].tolist() if not df_cats.empty else []
 
                 if not lista_contas:
-                    st.error("⚠️ Nenhuma conta/cartão cadastrada. Cadastre em Cadastros antes de importar.")
+                    st.error("?? Nenhuma conta/cartão cadastrada. Cadastre em Cadastros antes de importar.")
                 if not lista_cats:
-                    st.error("⚠️ Nenhuma categoria cadastrada. Cadastre em Cadastros antes de importar.")
+                    st.error("?? Nenhuma categoria cadastrada. Cadastre em Cadastros antes de importar.")
 
                 conta = col1.selectbox("Cartão de Destino", lista_contas if lista_contas else ["Sem contas"])
                 data_base = col2.date_input("Vencimento da 1ª Parcela do Lote")
@@ -410,13 +496,13 @@ class ParcelasManager:
                         for d in dados_editaveis if d["importar"]
                     ]
                     if not dados_finais:
-                        st.warning("⚠️ Nenhuma parcela selecionada para importar.")
+                        st.warning("?? Nenhuma parcela selecionada para importar.")
                     elif not lista_contas or conta == "Sem contas":
-                        st.error("⚠️ Selecione um cartão de destino válido.")
+                        st.error("?? Selecione um cartão de destino válido.")
                     elif not lista_cats or cat == "Sem categorias":
-                        st.error("⚠️ Selecione uma categoria válida.")
+                        st.error("?? Selecione uma categoria válida.")
                     elif not data_base:
-                        st.error("⚠️ Selecione a data de vencimento da 1ª parcela.")
+                        st.error("?? Selecione a data de vencimento da 1ª parcela.")
                     else:
                         ParcelasManager._importar_pdf_dados(
                             dados_finais, banco_detectado, conta, cat, data_base, df_contas, df_cats
@@ -626,7 +712,7 @@ class ParcelasManager:
                             num_parc_atual, total, ctid, user_id
                         )
                         novos += 1
-                        print(f"[IMPORT]   ✅ NOVO: parc {num_parc_atual}/{total} comp={competencia} fatura_id={fatura_id}")
+                        print(f"[IMPORT]   ? NOVO: parc {num_parc_atual}/{total} comp={competencia} fatura_id={fatura_id}")
 
                         db.atualizar_total_fatura(int(fatura_id))
                         db.sincronizar_transacao_fatura(int(fatura_id), user_id)
@@ -637,13 +723,13 @@ class ParcelasManager:
                     continue
 
             if novos > 0:
-                st.session_state['parcela_msg_sucesso'] = f"✅ {novos} itens salvos!"
+                st.session_state['parcela_msg_sucesso'] = f"? {novos} itens salvos!"
             if duplicados > 0:
                 st.session_state['parcela_msg_sucesso'] = st.session_state.get('parcela_msg_sucesso', '') + f" | {duplicados} ignorado(s) (já existiam)."
             if erros > 0:
                 st.session_state['parcela_msg_sucesso'] = st.session_state.get('parcela_msg_sucesso', '') + f" | {erros} com erro."
             if novos == 0 and duplicados > 0:
-                st.session_state['parcela_msg_sucesso'] = f"⚠️ Nenhum item novo importado — {duplicados} já existiam no sistema."
+                st.session_state['parcela_msg_sucesso'] = f"?? Nenhum item novo importado — {duplicados} já existiam no sistema."
 
             ParcelasManager._resetar_estado_pdf()
             # Limpa widget keys da auditoria para não manter dados obsoletos
@@ -707,7 +793,7 @@ class ParcelasManager:
                 """)
 
         if df_itens.empty:
-            st.info("ℹ Nenhuma parcela lançada no cartão ainda.")
+            st.info("? Nenhuma parcela lançada no cartão ainda.")
             return
 
         df_itens['data_vencimento'] = pd.to_datetime(df_itens['data_vencimento'])
@@ -797,7 +883,7 @@ class ParcelasManager:
 
         st.markdown("---")
 
-        # 5. LISTAGEM POR FATURA (grouped by month → card → items)
+        # 5. LISTAGEM POR FATURA (grouped by month ? card ? items)
         st.markdown("** Detalhamento por Mês**")
 
         msg_sucesso = st.session_state.pop('parcela_msg_sucesso', None)
