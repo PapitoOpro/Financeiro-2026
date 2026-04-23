@@ -220,12 +220,12 @@ st.sidebar.markdown("---")
 
 # --- Menu de navegação ---
 MENU_ITEMS = [
-    ("??", "Consultor Financeiro"),
-    ("", "Controle de Caixa"),
-    ("", "Projeção de Gastos"),
-    ("", "Cadastros"),
-    ("", "Relatórios"),
-    ("", "Admin"),
+    ("🤖", "Consultor Financeiro"),
+    ("💰", "Controle de Caixa"),
+    ("📅", "Projeção de Gastos"),
+    ("📋", "Cadastros"),
+    ("📊", "Relatórios"),
+    ("⚙️", "Admin"),
 ]
 
 if "menu_selecionado" not in st.session_state:
@@ -247,10 +247,10 @@ st.sidebar.markdown('</div>', unsafe_allow_html=True)
 # --- Rodapé do sidebar ---
 st.sidebar.markdown("---")
 st.sidebar.markdown(
-    f'<div class="sidebar-user">?? <span class="sidebar-user-name">{st.session_state.usuario_nome}</span></div>',
+    f'<div class="sidebar-user">👤 <span class="sidebar-user-name">{st.session_state.usuario_nome}</span></div>',
     unsafe_allow_html=True
 )
-if st.sidebar.button("??  Sair", width='stretch'):
+if st.sidebar.button("🚪  Sair", width='stretch'):
     AuthManager.fazer_logout()
 st.sidebar.markdown(
     "<div style='text-align: center; margin-top: 8px;'>"
