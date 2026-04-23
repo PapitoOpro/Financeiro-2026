@@ -27,9 +27,9 @@ def _confirmar_exclusao_dialog():
         return
 
     if len(ids) == 1:
-        st.warning(f" Excluir **{descs[0]}**?\n\nEsta ação é irreversível.")
+        st.warning(f"⚠️ Excluir **{descs[0]}**?\n\nEsta ação é irreversível.")
     else:
-        st.warning(f" Excluir **{len(ids)} item(ns)**? Esta ação é irreversível.")
+        st.warning(f"⚠️ Excluir **{len(ids)} item(ns)**? Esta ação é irreversível.")
         for desc in descs:
             st.markdown(f"- {desc}")
 
@@ -56,7 +56,7 @@ def _confirmar_exclusao_dialog():
             for fid in fatura_ids_afetadas:
                 db.atualizar_total_fatura(int(fid))
 
-            st.session_state['parcela_msg_sucesso'] = f" {len(ids)} item(ns) excluído(s) com sucesso!"
+            st.session_state['parcela_msg_sucesso'] = f"✅ {len(ids)} item(ns) excluído(s) com sucesso!"
             st.session_state.pop('ids_para_excluir', None)
             st.session_state.pop('descs_para_excluir', None)
             st.session_state.pop('excluir_tipo', None)
@@ -78,7 +78,7 @@ class ParcelasManager:
     @staticmethod
     def renderizar():
         """Renderiza a página de projeção de gastos."""
-        st.header(" Projeção de Gastos (Cartão/Parcelas)")
+        st.header("📅 Projeção de Gastos (Cartão/Parcelas)")
 
         @st.cache_data(ttl=60, show_spinner=False)
         def get_contas(user_id):
@@ -124,9 +124,9 @@ class ParcelasManager:
             
             if st.form_submit_button("Lançar Parcelas", width='stretch'):
                 if not desc or v_parcela <= 0:
-                    st.error(" Preencha descrição e valor!")
+                    st.error("⚠️ Preencha descrição e valor!")
                 elif p_atual > p_total:
-                    st.error(" Parcela atual não pode ser maior que total!")
+                    st.error("⚠️ Parcela atual não pode ser maior que total!")
                 else:
                     ParcelasManager._lancar_parcelas(
                         desc, v_parcela, p_atual, p_total, cnt, cat, dt_ini,
@@ -213,7 +213,7 @@ class ParcelasManager:
     @staticmethod
     def _tab_importar_pdf(df_contas, df_cats):
         """Aba para importar faturas via upload de PDF ou texto colado (fallback)."""
-        st.subheader("?? Importador de Faturas PDF")
+        st.subheader("📄 Importador de Faturas PDF")
 
         # -- OPÇÃO 1: UPLOAD DIRETO DO PDF (caminho principal) --------------
         st.markdown("##### Opção 1 — Upload do PDF da fatura")
@@ -247,7 +247,7 @@ class ParcelasManager:
             with col_btn:
                 st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
                 processar_btn = st.button(
-                    "?? Extrair lançamentos",
+                    "🔍 Extrair lançamentos",
                     key="btn_processar_pdf",
                     type="primary",
                     use_container_width=True,
@@ -262,12 +262,12 @@ class ParcelasManager:
 
                         if texto_p == "__PDF_PROTEGIDO__" or banco_p == "__PDF_PROTEGIDO__":
                             st.error(
-                                "?? **PDF protegido por senha.**\n\n"
+                                "🔒 **PDF protegido por senha.**\n\n"
                                 "Digite a senha do PDF no campo acima e tente novamente."
                             )
                         elif not dados_p:
                             st.warning(
-                                "?? Nenhum lançamento detectado automaticamente.\n\n"
+                                "⚠️ Nenhum lançamento detectado automaticamente.\n\n"
                                 "Tente a **Opção 2** abaixo: copie o texto do PDF e cole manualmente."
                             )
                         else:
@@ -282,14 +282,14 @@ class ParcelasManager:
                             n_av = sum(1 for _, p, _ in dados_p if p == "1/1")
                             n_pc = len(dados_p) - n_av
                             st.success(
-                                f"? **{len(dados_p)} itens extraídos!** "
+                                f"✅ **{len(dados_p)} itens extraídos!** "
                                 f"({n_pc} parcelado(s), {n_av} à vista) "
                                 f"— Banco: **{banco_p}** · Método: `{metodo_p}`"
                             )
                             ParcelasManager._safe_rerun()
 
                     except Exception as e:
-                        st.error(f"? Erro ao processar PDF: {e}")
+                        st.error(f"❌ Erro ao processar PDF: {e}")
 
         st.divider()
 
@@ -319,7 +319,7 @@ class ParcelasManager:
                         n_av = sum(1 for _, p, _ in dados_c if p == "1/1")
                         n_pc = len(dados_c) - n_av
                         st.success(
-                            f"? {len(dados_c)} itens encontrados! "
+                            f"✅ {len(dados_c)} itens encontrados! "
                             f"({n_pc} parcelado(s), {n_av} à vista)"
                         )
                         ParcelasManager._safe_rerun()
@@ -421,7 +421,7 @@ class ParcelasManager:
             # ============================================================
             # ADICIONAR COMPRAS MANUAIS (não capturadas pelo OCR)
             # ============================================================
-            with st.expander("? Adicionar compras não detectadas pelo OCR", expanded=False):
+            with st.expander("➕ Adicionar compras não detectadas pelo OCR", expanded=False):
                 st.caption("Insira compras que não apareceram na leitura automática para acertar o valor total da fatura.")
                 
                 # Inicializa lista de itens manuais pendentes no session_state
@@ -448,7 +448,7 @@ class ParcelasManager:
                         st.session_state["ocr_dados"] = dados_salvos_list
                         # Incrementa versão para widgets serem recriados
                         st.session_state["ocr_version"] = st.session_state.get("ocr_version", 0) + 1
-                        st.toast(f"? \"{manual_desc.strip()}\" adicionado!")
+                        st.toast(f"✅ \"{manual_desc.strip()}\" adicionado!")
                         ParcelasManager._safe_rerun()
 
                 # Mostra itens manuais já adicionados que não vieram do OCR original
@@ -481,9 +481,9 @@ class ParcelasManager:
                 lista_cats = df_cats['nome'].tolist() if not df_cats.empty else []
 
                 if not lista_contas:
-                    st.error("?? Nenhuma conta/cartão cadastrada. Cadastre em Cadastros antes de importar.")
+                    st.error("⚠️ Nenhuma conta/cartão cadastrada. Cadastre em Cadastros antes de importar.")
                 if not lista_cats:
-                    st.error("?? Nenhuma categoria cadastrada. Cadastre em Cadastros antes de importar.")
+                    st.error("⚠️ Nenhuma categoria cadastrada. Cadastre em Cadastros antes de importar.")
 
                 conta = col1.selectbox("Cartão de Destino", lista_contas if lista_contas else ["Sem contas"])
                 data_base = col2.date_input("Vencimento da 1ª Parcela do Lote")
@@ -496,13 +496,13 @@ class ParcelasManager:
                         for d in dados_editaveis if d["importar"]
                     ]
                     if not dados_finais:
-                        st.warning("?? Nenhuma parcela selecionada para importar.")
+                        st.warning("⚠️ Nenhuma parcela selecionada para importar.")
                     elif not lista_contas or conta == "Sem contas":
-                        st.error("?? Selecione um cartão de destino válido.")
+                        st.error("⚠️ Selecione um cartão de destino válido.")
                     elif not lista_cats or cat == "Sem categorias":
-                        st.error("?? Selecione uma categoria válida.")
+                        st.error("⚠️ Selecione uma categoria válida.")
                     elif not data_base:
-                        st.error("?? Selecione a data de vencimento da 1ª parcela.")
+                        st.error("⚠️ Selecione a data de vencimento da 1ª parcela.")
                     else:
                         ParcelasManager._importar_pdf_dados(
                             dados_finais, banco_detectado, conta, cat, data_base, df_contas, df_cats
@@ -510,7 +510,7 @@ class ParcelasManager:
     @staticmethod
     def _tab_importar_csv(df_contas, df_cats):
         """Aba para importar faturas via arquivo CSV (Otimizada e com Conversor de Moeda)."""
-        st.subheader(" Importador de Faturas via CSV")
+        st.subheader("📊 Importador de Faturas via CSV")
         
         file_csv = st.file_uploader("Envie a fatura em formato CSV", type=["csv"])
 
@@ -663,10 +663,10 @@ class ParcelasManager:
             cats_match = df_cats[df_cats.nome == cat]
 
             if contas_match.empty:
-                st.error(" Conta/Cartão não encontrado. Cadastre um cartão em **Cadastros** antes de importar.")
+                st.error("⚠️ Conta/Cartão não encontrado. Cadastre um cartão em **Cadastros** antes de importar.")
                 return
             if cats_match.empty:
-                st.error(" Categoria não encontrada. Cadastre uma categoria em **Cadastros** antes de importar.")
+                st.error("⚠️ Categoria não encontrada. Cadastre uma categoria em **Cadastros** antes de importar.")
                 return
 
             cid = int(contas_match.id.values[0])
@@ -712,7 +712,7 @@ class ParcelasManager:
                             num_parc_atual, total, ctid, user_id
                         )
                         novos += 1
-                        print(f"[IMPORT]   ? NOVO: parc {num_parc_atual}/{total} comp={competencia} fatura_id={fatura_id}")
+                        print(f"[IMPORT]   ✅ NOVO: parc {num_parc_atual}/{total} comp={competencia} fatura_id={fatura_id}")
 
                         db.atualizar_total_fatura(int(fatura_id))
                         db.sincronizar_transacao_fatura(int(fatura_id), user_id)
@@ -723,13 +723,13 @@ class ParcelasManager:
                     continue
 
             if novos > 0:
-                st.session_state['parcela_msg_sucesso'] = f"? {novos} itens salvos!"
+                st.session_state['parcela_msg_sucesso'] = f"✅ {novos} itens salvos!"
             if duplicados > 0:
                 st.session_state['parcela_msg_sucesso'] = st.session_state.get('parcela_msg_sucesso', '') + f" | {duplicados} ignorado(s) (já existiam)."
             if erros > 0:
                 st.session_state['parcela_msg_sucesso'] = st.session_state.get('parcela_msg_sucesso', '') + f" | {erros} com erro."
             if novos == 0 and duplicados > 0:
-                st.session_state['parcela_msg_sucesso'] = f"?? Nenhum item novo importado — {duplicados} já existiam no sistema."
+                st.session_state['parcela_msg_sucesso'] = f"ℹ️ Nenhum item novo importado — {duplicados} já existiam no sistema."
 
             ParcelasManager._resetar_estado_pdf()
             # Limpa widget keys da auditoria para não manter dados obsoletos
@@ -744,7 +744,7 @@ class ParcelasManager:
     @staticmethod
     def _tab_previsao():
         """Aba com previsão de gastos - Dashboard completo (lê de faturas + itens)."""
-        st.subheader(" Dashboard de Previsão de Gastos")
+        st.subheader("📈 Dashboard de Previsão de Gastos")
 
         user_id = db.get_user_id()
         df_contas = db.buscar(f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome")
@@ -793,7 +793,7 @@ class ParcelasManager:
                 """)
 
         if df_itens.empty:
-            st.info("? Nenhuma parcela lançada no cartão ainda.")
+            st.info("📭 Nenhuma parcela lançada no cartão ainda.")
             return
 
         df_itens['data_vencimento'] = pd.to_datetime(df_itens['data_vencimento'])
@@ -879,7 +879,7 @@ class ParcelasManager:
             'parcela_total': 'Total Parcelas'
         })
         csv_bytes = csv_rel.to_csv(index=False).encode('utf-8')
-        st.download_button(" Baixar CSV de Previsão", data=csv_bytes, file_name="previsao_parcelas.csv", mime="text/csv")
+        st.download_button("📥 Baixar CSV de Previsão", data=csv_bytes, file_name="previsao_parcelas.csv", mime="text/csv")
 
         st.markdown("---")
 
@@ -923,7 +923,7 @@ class ParcelasManager:
 
                         # Status da fatura (aberta/paga)
                         status_fatura = f_cartao['status'].iloc[0] if 'status' in f_cartao.columns else 'aberta'
-                        badge = " Paga" if status_fatura == 'paga' else " Aberta"
+                        badge = "✅ Paga" if status_fatura == 'paga' else "🔓 Aberta"
 
                         st.markdown(
                             f"** Fatura: {cartao}** — Subtotal: "

@@ -99,7 +99,8 @@ class ConsultorManager:
                     f"{status} {row['data_vencimento']} | {row['descricao']} | R$ {row['valor']:,.2f}{cat}"
                 )
         else:
-            linhas.append("\n### Mês atual\nNenhum lançamento encontrado neste mês.")
+            linhas.append(
+                "\n### Mês atual\nNenhum lançamento encontrado neste mês.")
 
         # --- Gastos por categoria (últimos 3 meses) ---
         df_cat = db.buscar(
@@ -149,7 +150,8 @@ class ConsultorManager:
                         f"| R$ {row['valor']:,.2f} | {cartao}"
                     )
                 if len(df_parcelas) > 15:
-                    linhas.append(f"  ... e mais {len(df_parcelas) - 15} parcelas.")
+                    linhas.append(
+                        f"  ... e mais {len(df_parcelas) - 15} parcelas.")
         except Exception:
             pass
 
@@ -175,7 +177,8 @@ class ConsultorManager:
     def _atualizar_contexto(user_id: int):
         """Força atualização do contexto financeiro no session_state."""
         with st.spinner("🔄 Carregando seus dados financeiros..."):
-            st.session_state.consultor_contexto = ConsultorManager._buscar_contexto_financeiro(user_id)
+            st.session_state.consultor_contexto = ConsultorManager._buscar_contexto_financeiro(
+                user_id)
             st.session_state.consultor_contexto_data = date.today().isoformat()
 
     @staticmethod
@@ -184,7 +187,8 @@ class ConsultorManager:
 
         # -- Cabeçalho ----------------------------------------------
         st.title("🤖 Consultor Financeiro IA")
-        st.caption("Powered by Claude Haiku · Tire dúvidas sobre seus gastos e o sistema")
+        st.caption(
+            "Powered by Claude Haiku · Tire dúvidas sobre seus gastos e o sistema")
 
         # -- Verifica API Key ----------------------------------------
         api_key = ConsultorManager._get_api_key()
@@ -258,7 +262,8 @@ class ConsultorManager:
                 st.markdown(msg["content"])
 
         # -- Input do usuário ----------------------------------------
-        pergunta = st.chat_input("Pergunte sobre seus gastos ou como usar o sistema...")
+        pergunta = st.chat_input(
+            "Pergunte sobre seus gastos ou como usar o sistema...")
 
         # Pergunta via botão de sugestão tem prioridade
         if "consultor_pendente" in st.session_state:
@@ -323,12 +328,24 @@ class ConsultorManager:
                 except Exception as e:
                     placeholder.error(f"❌ Erro inesperado: {str(e)}")
                     st.session_state.consultor_historico.pop()
+                except Exception as e:
+                    msg = str(e)
+                    if "credit balance" in msg or "billing" in msg.lower():
+                        placeholder.error(
+                            "⚠️ O Consultor IA está temporariamente indisponível. "
+                            "Entre em contato com o administrador do sistema."
+                        )
+                    elif "AuthenticationError" in type(e).__name__:
+                        placeholder.error("❌ Chave de API inválida.")
+                    else:
+                        placeholder.error(f"❌ Erro inesperado: {msg}")
 
         # -- Rodapé informativo --------------------------------------
         if st.session_state.consultor_historico:
             num_msgs = len(st.session_state.consultor_historico)
             tokens_est = num_msgs * 600  # estimativa conservadora
-            custo_est = (tokens_est / 1_000_000) * 0.80  # $0.80/M tokens input Haiku
+            custo_est = (tokens_est / 1_000_000) * \
+                0.80  # $0.80/M tokens input Haiku
             st.caption(
                 f"💬 {num_msgs // 2} pergunta(s) nesta sessão · "
                 f"Custo estimado: ~${custo_est:.4f} USD"

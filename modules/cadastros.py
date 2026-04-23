@@ -15,7 +15,7 @@ class CadastrosManager:
         st.header("Cadastros do Sistema")
         st.markdown("Gerencie contas bancárias, categorias macro (orçamento) e subcategorias (operacional).")
 
-        tab_cats, tab_contas = st.tabs([" Categorias e Subcategorias", " Bancos e Cartões"])
+        tab_cats, tab_contas = st.tabs(["📋 Categorias e Subcategorias", "🏦 Bancos e Cartões"])
 
         with tab_cats:
             CadastrosManager._secao_categorias_completa()
@@ -268,10 +268,10 @@ class CadastrosManager:
                         "INSERT INTO contas (nome, user_id) VALUES (%s, %s)",
                         (n_banco.strip(), user_id)
                     ):
-                        st.success(" Banco adicionado!")
+                        st.success("✅ Banco adicionado!")
                         st.rerun()
                 else:
-                    st.error(" Digite um nome!")
+                    st.error("⚠️ Digite um nome!")
 
         st.markdown("**Cadastrados:**")
 
