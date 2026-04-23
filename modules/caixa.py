@@ -9,7 +9,6 @@ from dateutil.relativedelta import relativedelta
 from config import MESES_LISTA, COL_EXTRATO, COL_ESPACO, COL_FORM, CORES
 from database import db
 from utils import moeda, get_cor_saldo, get_cor_valor
-from modules.consultor import ConsultorManager
 
 
 # ─── Funções de busca com cache (TTL 30s) ────────────────────────────────────
@@ -122,9 +121,8 @@ class CaixaManager:
             )
             pendentes = total_itens - compensados
 
-        # ── 5. Cards e alertas ────────────────────────────────────────────────
+        # ── 5. Cards ─────────────────────────────────────────────────────────────
         CaixaManager._renderizar_cards(ent, sai, bal, compensados, pendentes)
-        ConsultorManager.widget_alertas(ano_sel, mes_num)
 
         # ── 6. Layout: Formulário | Extrato ───────────────────────────────────
         # Formulário definido primeiro para aparecer no topo em telas mobile.

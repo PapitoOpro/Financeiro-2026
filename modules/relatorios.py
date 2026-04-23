@@ -10,7 +10,7 @@ from dateutil.relativedelta import relativedelta
 from database import db
 from config import MESES_LISTA
 from utils import moeda
-from modules.consultor import ConsultorManager, ConsultorEngine
+from modules.consultor import ConsultorManager
 from modules.acompanhamento import AcompanhamentoManager
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -298,13 +298,7 @@ class RelatoriosManager:
 
         # ── Tab Consultor ─────────────────────────────────────────────────────
         with t_consultor:
-            mes_consultor = d_ini.month
-            ano_consultor = d_ini.year
-            diag = ConsultorEngine.diagnostico_completo(ano_consultor, mes_consultor)
-            ConsultorManager._renderizar_status_geral(diag)
-            ConsultorManager._renderizar_alertas(diag["alertas"])
-            st.markdown("---")
-            ConsultorManager._renderizar_diagnostico(diag)
+            ConsultorManager.renderizar()
 
     # ─── Curva ABC ────────────────────────────────────────────────────────────
     @staticmethod
