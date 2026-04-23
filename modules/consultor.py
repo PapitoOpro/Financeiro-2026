@@ -93,7 +93,7 @@ class ConsultorManager:
             # Últimos 10 lançamentos
             linhas.append("\n### Últimos lançamentos do mês")
             for _, row in df_mes.head(10).iterrows():
-                status = "?" if row.get("compensado") else "?"
+                status = "✅" if row.get("compensado") else "⏳"
                 cat = f" | {row['categoria']}" if row.get("categoria") else ""
                 linhas.append(
                     f"{status} {row['data_vencimento']} | {row['descricao']} | R$ {row['valor']:,.2f}{cat}"
@@ -174,7 +174,7 @@ class ConsultorManager:
     @staticmethod
     def _atualizar_contexto(user_id: int):
         """Força atualização do contexto financeiro no session_state."""
-        with st.spinner("?? Carregando seus dados financeiros..."):
+        with st.spinner("🔄 Carregando seus dados financeiros..."):
             st.session_state.consultor_contexto = ConsultorManager._buscar_contexto_financeiro(user_id)
             st.session_state.consultor_contexto_data = date.today().isoformat()
 
@@ -183,21 +183,21 @@ class ConsultorManager:
         user_id = st.session_state.get("usuario_id")
 
         # -- Cabeçalho ----------------------------------------------
-        st.title("?? Consultor Financeiro IA")
+        st.title("🤖 Consultor Financeiro IA")
         st.caption("Powered by Claude Haiku · Tire dúvidas sobre seus gastos e o sistema")
 
         # -- Verifica API Key ----------------------------------------
         api_key = ConsultorManager._get_api_key()
         if not api_key:
             st.error(
-                "?? **Chave da API não configurada.**\n\n"
+                "🔑 **Chave da API não configurada.**\n\n"
                 "Adicione `ANTHROPIC_API_KEY = 'sk-ant-...'` no arquivo `.streamlit/secrets.toml` "
                 "ou nas variáveis de ambiente do Streamlit Cloud."
             )
             with st.expander("Como obter a chave?"):
                 st.markdown(
                     "1. Acesse [console.anthropic.com](https://console.anthropic.com)\n"
-                    "2. Vá em **API Keys ? Create Key**\n"
+                    "2. Vá em **API Keys → Create Key**\n"
                     "3. Copie a chave e adicione em `secrets.toml`:\n"
                     "```toml\nANTHROPIC_API_KEY = 'sk-ant-sua-chave-aqui'\n```"
                 )
@@ -218,24 +218,24 @@ class ConsultorManager:
         # -- Barra de ações ------------------------------------------
         col_title, col_refresh, col_clear = st.columns([5, 1, 1])
         with col_refresh:
-            if st.button("?? Atualizar dados", help="Recarrega seus dados financeiros"):
+            if st.button("🔄 Atualizar dados", help="Recarrega seus dados financeiros"):
                 ConsultorManager._atualizar_contexto(user_id)
-                st.toast("Dados atualizados!", icon="?")
+                st.toast("Dados atualizados!", icon="✅")
         with col_clear:
-            if st.button("??? Limpar chat", help="Apaga o histórico da conversa"):
+            if st.button("🗑️ Limpar chat", help="Apaga o histórico da conversa"):
                 st.session_state.consultor_historico = []
                 st.rerun()
 
         # -- Sugestões de perguntas (apenas quando chat vazio) -------
         if not st.session_state.consultor_historico:
-            st.markdown("#### ?? Perguntas frequentes")
+            st.markdown("#### 💡 Perguntas frequentes")
             sugestoes = [
-                ("??", "Quanto gastei por categoria este mês?"),
-                ("??", "Quais são minhas parcelas futuras?"),
-                ("??", "Qual mês terei mais gastos?"),
-                ("??", "Como importar minha fatura de cartão?"),
-                ("?", "Como lançar uma despesa parcelada?"),
-                ("??", "Meu orçamento está saudável?"),
+                ("📊", "Quanto gastei por categoria este mês?"),
+                ("💳", "Quais são minhas parcelas futuras?"),
+                ("📈", "Qual mês terei mais gastos?"),
+                ("📄", "Como importar minha fatura de cartão?"),
+                ("✍️", "Como lançar uma despesa parcelada?"),
+                ("💚", "Meu orçamento está saudável?"),
             ]
 
             col1, col2, col3 = st.columns(3)
@@ -310,18 +310,18 @@ class ConsultorManager:
 
                 except anthropic.AuthenticationError:
                     placeholder.error(
-                        "? Chave de API inválida. Verifique o `ANTHROPIC_API_KEY` nas configurações."
+                        "🔑 Chave de API inválida. Verifique o `ANTHROPIC_API_KEY` nas configurações."
                     )
                     st.session_state.consultor_historico.pop()
 
                 except anthropic.RateLimitError:
                     placeholder.warning(
-                        "? Limite de requisições atingido. Aguarde alguns segundos e tente novamente."
+                        "⏳ Limite de requisições atingido. Aguarde alguns segundos e tente novamente."
                     )
                     st.session_state.consultor_historico.pop()
 
                 except Exception as e:
-                    placeholder.error(f"? Erro inesperado: {str(e)}")
+                    placeholder.error(f"❌ Erro inesperado: {str(e)}")
                     st.session_state.consultor_historico.pop()
 
         # -- Rodapé informativo --------------------------------------
@@ -330,6 +330,6 @@ class ConsultorManager:
             tokens_est = num_msgs * 600  # estimativa conservadora
             custo_est = (tokens_est / 1_000_000) * 0.80  # $0.80/M tokens input Haiku
             st.caption(
-                f"?? {num_msgs // 2} pergunta(s) nesta sessão · "
+                f"💬 {num_msgs // 2} pergunta(s) nesta sessão · "
                 f"Custo estimado: ~${custo_est:.4f} USD"
             )
