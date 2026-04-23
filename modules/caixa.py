@@ -11,14 +11,15 @@ from database import db
 from utils import moeda, get_cor_saldo, get_cor_valor
 from modules.consultor import ConsultorManager
 
+
 class CaixaManager:
     """Gerenciador do Controle de Caixa."""
-    
+
     @staticmethod
     def renderizar():
         """Renderiza a página de controle de caixa."""
         st.header("Controle de Caixa Real")
-        
+
         # 1. FILTROS NO TOPO
         mes_nome = st.segmented_control(
             "Mês:", MESES_LISTA,
@@ -28,7 +29,7 @@ class CaixaManager:
         ano_sel = col_ano.number_input(
             "Ano:", min_value=2025, max_value=2030, value=2026
         )
-        
+
         # Calcula período
         mes_num = MESES_LISTA.index(mes_nome) + 1
         data_inicio = f"{ano_sel}-{mes_num:02d}-01"
@@ -37,12 +38,14 @@ class CaixaManager:
             relativedelta(months=1) -
             relativedelta(days=1)
         ).strftime('%Y-%m-%d')
-        
+
         # Carrega dados
         user_id = db.get_user_id()
-        df_contas = db.buscar(f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome")
-        df_cats = db.buscar(f"SELECT * FROM categorias WHERE user_id = {user_id} AND ativa = TRUE ORDER BY nome")
-        
+        df_contas = db.buscar(
+            f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome")
+        df_cats = db.buscar(
+            f"SELECT * FROM categorias WHERE user_id = {user_id} AND ativa = TRUE ORDER BY nome")
+
         # Carrega todas as subcategorias ativas
         df_subs = db.buscar(f"""
             SELECT s.id, s.nome, s.categoria_id, c.nome as categoria_nome,
@@ -52,7 +55,7 @@ class CaixaManager:
             WHERE s.user_id = {user_id} AND s.ativa = TRUE
             ORDER BY c.nome, s.nome
         """)
-        
+
         df_caixa = db.buscar(f"""
             SELECT t.id, t.data_vencimento as data, t.descricao, t.valor,
                    cat.nome as categoria, c.nome as banco,
@@ -70,33 +73,16 @@ class CaixaManager:
         """)
 
         # DEBUG: Exibir todas as transações carregadas do banco antes de qualquer filtro
-        if st.checkbox('DEBUG: Exibir todas as transações do banco (sem filtro)', value=False, key='show_all_db_transacoes'):
-            st.dataframe(df_caixa)
-        
+        # if st.checkbox('DEBUG: Exibir todas as transações do banco (sem filtro)', value=False, key='show_all_db_transacoes'):
+        # st.dataframe(df_caixa)
+
         # Calcula resumo
 
-        ent = df_caixa[df_caixa['valor'] > 0]['valor'].sum() if not df_caixa.empty else 0
-        sai = abs(df_caixa[df_caixa['valor'] < 0]['valor'].sum()) if not df_caixa.empty else 0
+        ent = df_caixa[df_caixa['valor'] >
+                       0]['valor'].sum() if not df_caixa.empty else 0
+        sai = abs(df_caixa[df_caixa['valor'] < 0]
+                  ['valor'].sum()) if not df_caixa.empty else 0
         bal = ent - sai
-
-        # LOG DE AUDITORIA DO EXTRATO
-        log_extrato = []
-        for _, row in df_caixa.iterrows():
-            log_extrato.append({
-                'id': int(row['id']),
-                'data': str(row['data']),
-                'descricao': str(row['descricao']),
-                'valor': float(row['valor']),
-                'categoria': str(row['categoria']),
-                'banco': str(row['banco']),
-                'subcategoria': str(row['subcategoria']),
-                'compensado': bool(row['compensado']),
-                'data_compensacao': str(row['data_compensacao']) if row['data_compensacao'] else None,
-                'fatura_id': int(row['fatura_id']) if pd.notna(row['fatura_id']) else None
-            })
-        st.session_state['log_extrato'] = log_extrato
-        if st.checkbox('Exibir log do extrato do caixa (auditoria)', value=False, key='show_log_extrato'):
-            st.code(str(log_extrato), language='python')
 
         # Compensação stats
         compensados = 0
@@ -104,32 +90,34 @@ class CaixaManager:
         total_itens = 0
         if not df_caixa.empty:
             total_itens = len(df_caixa)
-            compensados = df_caixa['compensado'].sum() if 'compensado' in df_caixa.columns else 0
+            compensados = df_caixa['compensado'].sum(
+            ) if 'compensado' in df_caixa.columns else 0
             pendentes = total_itens - compensados
-        
+
         # 2. CARDS DE RESUMO
         CaixaManager._renderizar_cards(ent, sai, bal, compensados, pendentes)
-        
+
         # ALERTAS DO CONSULTOR
         ConsultorManager.widget_alertas(ano_sel, mes_num)
-        
+
         # 3. DIVISÃO: EXTRATO | FORMULÁRIO
-        col_extrato, col_espaco, col_form = st.columns([COL_EXTRATO, COL_ESPACO, COL_FORM])
-        
+        col_extrato, col_espaco, col_form = st.columns(
+            [COL_EXTRATO, COL_ESPACO, COL_FORM])
+
         # LADO DIREITO: FORMULÁRIO
         with col_form:
             CaixaManager._renderizar_formulario(df_contas, df_cats, df_subs)
-        
+
         # LADO ESQUERDO: EXTRATO
         with col_extrato:
             CaixaManager._renderizar_extrato(df_caixa, df_contas, df_cats)
-    
+
     @staticmethod
     def _renderizar_cards(ent, sai, bal, compensados=0, pendentes=0):
         """Renderiza os cards de resumo."""
         bg_bal = get_cor_saldo(bal)
         cor_pend = '#e74c3c' if pendentes > 0 else '#2ecc71'
-        
+
         st.markdown(f'''
             <div style="display: flex; gap: 10px; margin-bottom: 25px; margin-top: 10px;">
                 <div style="background:#f1f2f6; color:#333333; padding:15px; border-radius:10px; flex:1; border-left:5px solid {CORES['entrada']};">
@@ -148,90 +136,98 @@ class CaixaManager:
                 </div>
             </div>
         ''', unsafe_allow_html=True)
-    
+
     @staticmethod
     def _renderizar_formulario(df_contas, df_cats, df_subs=None):
         """Renderiza formulário de novo lançamento com seleção por subcategoria."""
         st.markdown("**Novo Lançamento**")
-        
+
         # Monta lista de subcategorias agrupadas: "Subcategoria (Categoria)"
         if df_subs is None:
             df_subs = pd.DataFrame()
-        
+
         # Tipo FORA do form para permitir filtragem dinâmica de subcategorias
         c_tipo1, c_tipo2 = st.columns(2)
-        tipo = c_tipo1.radio("Tipo", ["Entrada", "Saída"], key="caixa_tipo_lancamento")
-        data_pg = c_tipo2.date_input("Data", datetime.now(), key="caixa_data_lancamento")
+        tipo = c_tipo1.radio(
+            "Tipo", ["Entrada", "Saída"], key="caixa_tipo_lancamento")
+        data_pg = c_tipo2.date_input(
+            "Data", datetime.now(), key="caixa_data_lancamento")
 
         # Filtra subcategorias pelo tipo selecionado
         tipo_filtro = "entrada" if tipo == "Entrada" else "saida"
         if not df_subs.empty and 'categoria_tipo' in df_subs.columns:
-            df_subs_filtrado = df_subs[df_subs['categoria_tipo'] == tipo_filtro].reset_index(drop=True)
+            df_subs_filtrado = df_subs[df_subs['categoria_tipo'] == tipo_filtro].reset_index(
+                drop=True)
         else:
             df_subs_filtrado = df_subs
         tem_subs = not df_subs_filtrado.empty
 
         # Filtra categorias pelo tipo selecionado
         if not df_cats.empty and 'tipo' in df_cats.columns:
-            df_cats_filtrado = df_cats[df_cats['tipo'] == tipo_filtro].reset_index(drop=True)
+            df_cats_filtrado = df_cats[df_cats['tipo']
+                                       == tipo_filtro].reset_index(drop=True)
         else:
             df_cats_filtrado = df_cats
 
         with st.form("form_caixa", clear_on_submit=True):
             desc_r = st.text_input("Descrição")
             val_r = st.number_input("Valor (R$)", min_value=0.0)
-            
+
             conta_r = st.selectbox(
                 "Conta / Banco",
                 df_contas['nome'] if not df_contas.empty else [""]
             )
-            
+
             # Seleção inteligente: subcategoria → auto-associa à categoria
             sub_id_sel = None
             cat_id_sel = None
-            
+
             if tem_subs:
                 opcoes_sub = df_subs_filtrado.apply(
                     lambda r: f"{r['nome']} ({r['categoria_nome']})", axis=1
                 ).tolist()
-                
+
                 sel_sub = st.selectbox("Subcategoria", opcoes_sub,
                                        help="Escolha a subcategoria e a categoria será associada automaticamente.")
-                
+
                 if sel_sub:
                     idx = opcoes_sub.index(sel_sub)
                     sub_id_sel = int(df_subs_filtrado.iloc[idx]['id'])
-                    cat_id_sel = int(df_subs_filtrado.iloc[idx]['categoria_id'])
-                    st.caption(f"→ Categoria: **{df_subs_filtrado.iloc[idx]['categoria_nome']}**")
-            
+                    cat_id_sel = int(
+                        df_subs_filtrado.iloc[idx]['categoria_id'])
+                    st.caption(
+                        f"→ Categoria: **{df_subs_filtrado.iloc[idx]['categoria_nome']}**")
+
             # Fallback oculto: se não há subcategorias, usa primeira categoria disponível
             if cat_id_sel is None and not df_cats_filtrado.empty:
                 cat_id_sel = int(df_cats_filtrado.iloc[0]['id'])
 
             compensado_r = st.checkbox("Já compensado", value=False)
-            
+
             if st.form_submit_button("Lançar no Caixa", width='stretch'):
                 if not desc_r or val_r <= 0:
                     st.error("Preencha descrição e valor!")
                 else:
-                    cid = int(df_contas[df_contas.nome == conta_r].id.values[0])
+                    cid = int(
+                        df_contas[df_contas.nome == conta_r].id.values[0])
                     ctid = cat_id_sel
-                    
+
                     valor_final = -val_r if "Saída" in tipo else val_r
                     data_comp = data_pg if compensado_r else None
                     user_id = db.get_user_id()
-                    
+
                     db.executar(
                         "INSERT INTO transacoes (descricao, valor, data_vencimento, conta_id, categoria_id, subcategoria_id, tipo_fluxo, compensado, data_compensacao, user_id) VALUES (?,?,?,?,?,?,'CAIXA',?,?,?)",
-                        (desc_r, valor_final, data_pg, cid, ctid, sub_id_sel, compensado_r, data_comp, user_id)
+                        (desc_r, valor_final, data_pg, cid, ctid,
+                         sub_id_sel, compensado_r, data_comp, user_id)
                     )
                     st.rerun()
-    
+
     @staticmethod
     def _renderizar_extrato(df_caixa, df_contas, df_cats):
         """Renderiza lista de transações com edição inline."""
         st.markdown("**Extrato de Transações**")
-        
+
         if df_caixa.empty:
             st.info("Nenhuma movimentação lançada neste mês.")
             return
@@ -257,7 +253,8 @@ class CaixaManager:
         df_normais = df_view[df_view['fatura_id'].isna()].copy()
 
         # Coleta IDs pendentes de transações normais para bulk
-        ids_pendentes_normais = df_normais[df_normais['compensado'] == False]['id'].tolist() if not df_normais.empty and 'compensado' in df_normais.columns else []
+        ids_pendentes_normais = df_normais[df_normais['compensado'] == False]['id'].tolist(
+        ) if not df_normais.empty and 'compensado' in df_normais.columns else []
         selected_comp_ids = [
             int(k.replace('comp_sel_', ''))
             for k in st.session_state
@@ -269,7 +266,8 @@ class CaixaManager:
         if selected_comp_ids:
             col_info, col_btn = st.columns([3, 1])
             with col_info:
-                st.info(f"**{len(selected_comp_ids)}** lançamento(s) selecionado(s) para compensar")
+                st.info(
+                    f"**{len(selected_comp_ids)}** lançamento(s) selecionado(s) para compensar")
             with col_btn:
                 if st.button("Compensar selecionados", type="primary", width='stretch', key="btn_comp_bulk", icon=":material/check_circle:"):
                     hoje = datetime.now().date()
@@ -290,7 +288,8 @@ class CaixaManager:
             user_id = db.get_user_id()
 
             # Pré-carrega todos os itens de todas as faturas do mês (1 query só)
-            fatura_ids_list = [int(x) for x in df_faturas['fatura_id'].unique()]
+            fatura_ids_list = [int(x)
+                               for x in df_faturas['fatura_id'].unique()]
             if fatura_ids_list:
                 # Usa parâmetros para evitar SQL injection
                 placeholders = ','.join(['%s'] * len(fatura_ids_list))
@@ -345,7 +344,8 @@ class CaixaManager:
                 with c_pagar:
                     if not is_compensado:
                         if st.button(f"Pagar Fatura", key=f"pagar_fat_{fatura_id_val}", width='stretch', icon=":material/check:"):
-                            db.pagar_fatura(int(fatura_id_val), user_id, datetime.now().date())
+                            db.pagar_fatura(int(fatura_id_val),
+                                            user_id, datetime.now().date())
                             st.rerun()
                     else:
                         if st.button(f"Reabrir Fatura", key=f"reabrir_fat_{fatura_id_val}", width='stretch', icon=":material/undo:"):
@@ -358,18 +358,22 @@ class CaixaManager:
 
                 # Confirmação de exclusão de fatura
                 if st.session_state.get(f"confirm_del_fat_{fatura_id_val}", False):
-                    st.warning(f"Excluir fatura **{row['descricao']}** e todos os seus itens?")
+                    st.warning(
+                        f"Excluir fatura **{row['descricao']}** e todos os seus itens?")
                     cc1, cc2 = st.columns(2)
                     if cc1.button("Sim, excluir", key=f"yes_del_fat_{fatura_id_val}", icon=":material/check:"):
                         db.excluir_fatura(int(fatura_id_val), user_id)
-                        st.session_state.pop(f"confirm_del_fat_{fatura_id_val}", None)
+                        st.session_state.pop(
+                            f"confirm_del_fat_{fatura_id_val}", None)
                         st.rerun()
                     if cc2.button("Não", key=f"no_del_fat_{fatura_id_val}", icon=":material/close:"):
-                        st.session_state.pop(f"confirm_del_fat_{fatura_id_val}", None)
+                        st.session_state.pop(
+                            f"confirm_del_fat_{fatura_id_val}", None)
                         st.rerun()
 
                 # Expander com itens da fatura (usa dados pré-carregados)
-                df_itens_fat = df_all_itens[df_all_itens['fatura_id'] == int(fatura_id_val)] if not df_all_itens.empty else pd.DataFrame()
+                df_itens_fat = df_all_itens[df_all_itens['fatura_id'] == int(
+                    fatura_id_val)] if not df_all_itens.empty else pd.DataFrame()
                 n_itens = len(df_itens_fat)
 
                 with st.expander(f"Ver itens da fatura ({n_itens} itens)", expanded=False):
@@ -379,15 +383,18 @@ class CaixaManager:
                         for _, item in df_itens_fat.iterrows():
                             item_id = int(item['id'])
                             editing_item_key = f"editing_fat_item_{item_id}"
-                            is_editing_item = st.session_state.get(editing_item_key, False)
+                            is_editing_item = st.session_state.get(
+                                editing_item_key, False)
 
                             parc_label = ""
                             if item.get('parcela_atual') and item.get('parcela_total'):
                                 parc_label = f" ({int(item['parcela_atual']):02d}/{int(item['parcela_total']):02d})"
 
                             if not is_editing_item:
-                                ci1, ci2, ci3, ci4, ci5 = st.columns([1.3, 3.5, 2.0, 0.5, 0.5])
-                                data_compra_str = pd.to_datetime(item['data_compra']).strftime('%d/%m/%Y') if item.get('data_compra') and not pd.isnull(item['data_compra']) else ""
+                                ci1, ci2, ci3, ci4, ci5 = st.columns(
+                                    [1.3, 3.5, 2.0, 0.5, 0.5])
+                                data_compra_str = pd.to_datetime(item['data_compra']).strftime(
+                                    '%d/%m/%Y') if item.get('data_compra') and not pd.isnull(item['data_compra']) else ""
                                 ci1.write(data_compra_str)
                                 ci2.markdown(
                                     f"**{item['descricao']}**{parc_label}<br>"
@@ -411,32 +418,45 @@ class CaixaManager:
 
                                 # Confirmação de exclusão do item
                                 if st.session_state.get(f"confirm_del_fi_{item_id}", False):
-                                    st.warning(f"Excluir **{item['descricao']}**?")
+                                    st.warning(
+                                        f"Excluir **{item['descricao']}**?")
                                     cd1, cd2 = st.columns(2)
                                     if cd1.button("Sim", key=f"yes_del_fi_{item_id}", icon=":material/check:"):
-                                        db.executar("DELETE FROM itens_fatura WHERE id=? AND user_id=?", (item_id, user_id))
-                                        db.atualizar_total_fatura(fatura_id_val)
-                                        db.sincronizar_transacao_fatura(fatura_id_val, user_id)
-                                        st.session_state.pop(f"confirm_del_fi_{item_id}", None)
+                                        db.executar(
+                                            "DELETE FROM itens_fatura WHERE id=? AND user_id=?", (item_id, user_id))
+                                        db.atualizar_total_fatura(
+                                            fatura_id_val)
+                                        db.sincronizar_transacao_fatura(
+                                            fatura_id_val, user_id)
+                                        st.session_state.pop(
+                                            f"confirm_del_fi_{item_id}", None)
                                         st.rerun()
                                     if cd2.button("Não", key=f"no_del_fi_{item_id}", icon=":material/close:"):
-                                        st.session_state.pop(f"confirm_del_fi_{item_id}", None)
+                                        st.session_state.pop(
+                                            f"confirm_del_fi_{item_id}", None)
                                         st.rerun()
                             else:
                                 # Edição inline do item da fatura
                                 with st.form(f"form_edit_fi_{item_id}"):
-                                    d_desc = st.text_input("Descrição", value=item['descricao'], key=f"efi_desc_{item_id}")
-                                    d_val = st.number_input("Valor (R$)", min_value=0.0, value=float(abs(item['valor'])), key=f"efi_val_{item_id}")
-                                    cat_op = df_cats['nome'].tolist() if not df_cats.empty else []
+                                    d_desc = st.text_input(
+                                        "Descrição", value=item['descricao'], key=f"efi_desc_{item_id}")
+                                    d_val = st.number_input("Valor (R$)", min_value=0.0, value=float(
+                                        abs(item['valor'])), key=f"efi_val_{item_id}")
+                                    cat_op = df_cats['nome'].tolist(
+                                    ) if not df_cats.empty else []
                                     default_cat_idx = 0
                                     try:
-                                        default_cat_idx = cat_op.index(item.get('categoria', '')) if item.get('categoria', '') in cat_op else 0
+                                        default_cat_idx = cat_op.index(item.get('categoria', '')) if item.get(
+                                            'categoria', '') in cat_op else 0
                                     except Exception:
                                         default_cat_idx = 0
-                                    sel_cat = st.selectbox("Categoria", cat_op, index=default_cat_idx, key=f"efi_cat_{item_id}")
+                                    sel_cat = st.selectbox(
+                                        "Categoria", cat_op, index=default_cat_idx, key=f"efi_cat_{item_id}")
 
-                                    save_clicked = st.form_submit_button("Salvar")
-                                    cancel_clicked = st.form_submit_button("Cancelar")
+                                    save_clicked = st.form_submit_button(
+                                        "Salvar")
+                                    cancel_clicked = st.form_submit_button(
+                                        "Cancelar")
 
                                     if cancel_clicked:
                                         st.session_state[editing_item_key] = False
@@ -444,19 +464,25 @@ class CaixaManager:
 
                                     if save_clicked:
                                         try:
-                                            ctid = int(df_cats[df_cats.nome == sel_cat].id.values[0])
+                                            ctid = int(
+                                                df_cats[df_cats.nome == sel_cat].id.values[0])
                                             db.executar(
                                                 "UPDATE itens_fatura SET descricao=?, valor=?, categoria_id=? WHERE id=? AND user_id=?",
-                                                (d_desc, abs(float(d_val)), ctid, item_id, user_id)
+                                                (d_desc, abs(float(d_val)),
+                                                 ctid, item_id, user_id)
                                             )
-                                            db.atualizar_total_fatura(int(fatura_id_val))
-                                            db.sincronizar_transacao_fatura(int(fatura_id_val), user_id)
+                                            db.atualizar_total_fatura(
+                                                int(fatura_id_val))
+                                            db.sincronizar_transacao_fatura(
+                                                int(fatura_id_val), user_id)
                                         except Exception as e:
-                                            st.error(f"Erro ao atualizar item: {e}")
+                                            st.error(
+                                                f"Erro ao atualizar item: {e}")
                                         st.session_state[editing_item_key] = False
                                         st.rerun()
 
-                st.markdown("<hr style='margin: 5px 0 10px 0; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
+                st.markdown(
+                    "<hr style='margin: 5px 0 10px 0; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
 
         # ========== SEÇÃO TRANSAÇÕES NORMAIS ==========
         if not df_normais.empty:
@@ -472,11 +498,14 @@ class CaixaManager:
                 if not is_editing:
                     # --- MODO LEITURA ---
                     if not is_compensado:
-                        c_sel, c1, c2, c3, c_comp, c4, c5 = st.columns([0.3, 1.2, 3.0, 2.0, 0.7, 0.5, 0.5])
+                        c_sel, c1, c2, c3, c_comp, c4, c5 = st.columns(
+                            [0.3, 1.2, 3.0, 2.0, 0.7, 0.5, 0.5])
                         with c_sel:
-                            st.checkbox("Selecionar", key=f"comp_sel_{rid}", label_visibility="collapsed")
+                            st.checkbox(
+                                "Selecionar", key=f"comp_sel_{rid}", label_visibility="collapsed")
                     else:
-                        c1, c2, c3, c_comp, c4, c5 = st.columns([1.3, 3.0, 2.0, 0.7, 0.5, 0.5])
+                        c1, c2, c3, c_comp, c4, c5 = st.columns(
+                            [1.3, 3.0, 2.0, 0.7, 0.5, 0.5])
 
                     c1.write(pd.to_datetime(row['data']).strftime('%d/%m/%Y'))
 
@@ -529,50 +558,66 @@ class CaixaManager:
                         st.warning(f"Excluir **{row['descricao']}**?")
                         cc1, cc2 = st.columns(2)
                         if cc1.button("Sim", key=f"yes_del_{rid}", icon=":material/check:"):
-                            db.executar("DELETE FROM transacoes WHERE id=? AND user_id=?", (rid, db.get_user_id()))
-                            st.session_state.pop(f"confirm_del_caixa_{rid}", None)
+                            db.executar(
+                                "DELETE FROM transacoes WHERE id=? AND user_id=?", (rid, db.get_user_id()))
+                            st.session_state.pop(
+                                f"confirm_del_caixa_{rid}", None)
                             st.rerun()
                         if cc2.button("Não", key=f"no_del_{rid}", icon=":material/close:"):
-                            st.session_state.pop(f"confirm_del_caixa_{rid}", None)
+                            st.session_state.pop(
+                                f"confirm_del_caixa_{rid}", None)
                             st.rerun()
                 else:
                     # --- MODO EDIÇÃO INLINE ---
                     st.markdown(f"---\n**Editando: {row['descricao']}**")
 
-                    n_desc = st.text_input("Descrição", value=row['descricao'], key=f"ec_desc_{rid}")
+                    n_desc = st.text_input(
+                        "Descrição", value=row['descricao'], key=f"ec_desc_{rid}")
 
                     ec1, ec2 = st.columns(2)
-                    n_val = ec1.number_input("Valor (R$)", value=abs(float(row['valor'])), min_value=0.0, key=f"ec_val_{rid}")
-                    n_tipo = ec2.radio("Tipo", ["Entrada", "Saída"], index=0 if row['valor'] >= 0 else 1, key=f"ec_tipo_{rid}")
+                    n_val = ec1.number_input("Valor (R$)", value=abs(
+                        float(row['valor'])), min_value=0.0, key=f"ec_val_{rid}")
+                    n_tipo = ec2.radio("Tipo", [
+                                       "Entrada", "Saída"], index=0 if row['valor'] >= 0 else 1, key=f"ec_tipo_{rid}")
 
                     try:
-                        default_date = pd.to_datetime(row['data']).date() if not pd.isnull(row['data']) else datetime.now().date()
+                        default_date = pd.to_datetime(row['data']).date() if not pd.isnull(
+                            row['data']) else datetime.now().date()
                     except Exception:
                         default_date = datetime.now().date()
 
                     ec3, ec4, ec5 = st.columns(3)
-                    n_data = ec3.date_input("Data", value=default_date, key=f"ec_data_{rid}")
+                    n_data = ec3.date_input(
+                        "Data", value=default_date, key=f"ec_data_{rid}")
 
                     lista_contas = df_contas['nome'].tolist()
-                    idx_conta = lista_contas.index(row['banco']) if row.get('banco') in lista_contas else 0
-                    n_conta = ec4.selectbox("Conta / Banco", lista_contas, index=idx_conta, key=f"ec_cnt_{rid}")
+                    idx_conta = lista_contas.index(row['banco']) if row.get(
+                        'banco') in lista_contas else 0
+                    n_conta = ec4.selectbox(
+                        "Conta / Banco", lista_contas, index=idx_conta, key=f"ec_cnt_{rid}")
 
                     lista_cats = df_cats['nome'].tolist()
-                    idx_cat = lista_cats.index(row['categoria']) if row.get('categoria') in lista_cats else 0
-                    n_cat = ec5.selectbox("Categoria", lista_cats, index=idx_cat, key=f"ec_cat_{rid}")
+                    idx_cat = lista_cats.index(row['categoria']) if row.get(
+                        'categoria') in lista_cats else 0
+                    n_cat = ec5.selectbox(
+                        "Categoria", lista_cats, index=idx_cat, key=f"ec_cat_{rid}")
 
-                    n_compensado = st.checkbox("Compensado", value=is_compensado, key=f"ec_comp_{rid}")
+                    n_compensado = st.checkbox(
+                        "Compensado", value=is_compensado, key=f"ec_comp_{rid}")
 
                     btn1, btn2 = st.columns(2)
                     if btn1.button("Salvar", key=f"ec_save_{rid}", width='stretch', icon=":material/save:"):
-                        cid = int(df_contas[df_contas.nome == n_conta].id.values[0])
+                        cid = int(
+                            df_contas[df_contas.nome == n_conta].id.values[0])
                         ctid = int(df_cats[df_cats.nome == n_cat].id.values[0])
                         v_final = -n_val if n_tipo == "Saída" else n_val
-                        data_comp = datetime.now().date() if n_compensado and not is_compensado else (row.get('data_compensacao') if n_compensado else None)
+                        data_comp = datetime.now().date() if n_compensado and not is_compensado else (
+                            row.get('data_compensacao') if n_compensado else None)
 
                         db.executar(
                             "UPDATE transacoes SET descricao=?, valor=?, data_vencimento=?, conta_id=?, categoria_id=?, compensado=?, data_compensacao=? WHERE id=? AND user_id=?",
-                            (n_desc, v_final, n_data, cid, ctid, n_compensado, data_comp, rid, db.get_user_id())
+                            (n_desc, v_final, n_data, cid, ctid,
+                             n_compensado, data_comp, rid, db.get_user_id())
                         )
                         st.session_state.pop(editing_key, None)
                         st.rerun()
@@ -584,7 +629,8 @@ class CaixaManager:
                     st.markdown("---")
 
                 if not is_editing:
-                    st.markdown("<hr style='margin: 0px 0px 10px 0px; padding: 0; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
+                    st.markdown(
+                        "<hr style='margin: 0px 0px 10px 0px; padding: 0; border-top: 1px solid #e0e0e0;'>", unsafe_allow_html=True)
 
                 # Expander com itens da fatura (se for pagamento de fatura)
                 fatura_id_val = row.get('fatura_id')
