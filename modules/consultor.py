@@ -326,19 +326,17 @@ class ConsultorManager:
                     st.session_state.consultor_historico.pop()
 
                 except Exception as e:
-                    placeholder.error(f"❌ Erro inesperado: {str(e)}")
-                    st.session_state.consultor_historico.pop()
-                except Exception as e:
                     msg = str(e)
-                    if "credit balance" in msg or "billing" in msg.lower():
-                        placeholder.error(
-                            "⚠️ O Consultor IA está temporariamente indisponível. "
-                            "Entre em contato com o administrador do sistema."
+                    if "credit balance" in msg or "too low" in msg:
+                        placeholder.warning(
+                            "💳 **Créditos da API insuficientes.**\n\n"
+                            "O Consultor IA está temporariamente indisponível. "
+                            "O administrador precisa recarregar os créditos em "
+                            "[console.anthropic.com/billing](https://console.anthropic.com/billing)."
                         )
-                    elif "AuthenticationError" in type(e).__name__:
-                        placeholder.error("❌ Chave de API inválida.")
                     else:
                         placeholder.error(f"❌ Erro inesperado: {msg}")
+                    st.session_state.consultor_historico.pop()
 
         # -- Rodapé informativo --------------------------------------
         if st.session_state.consultor_historico:
