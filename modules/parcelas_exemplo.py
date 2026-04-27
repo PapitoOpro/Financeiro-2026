@@ -730,6 +730,13 @@ class ParcelasManager:
                     erros += 1
                     continue
 
+            # Marca a fatura do mês base como 'importada' (diferencia de projetadas)
+            competencia_base = data_base.strftime('%m/%Y')
+            db.executar(
+                "UPDATE faturas SET status = 'importada' WHERE conta_id = %s AND competencia = %s AND user_id = %s",
+                (cid, competencia_base, user_id),
+            )
+
             if novos > 0:
                 st.session_state['parcela_msg_sucesso'] = f"✅ {novos} itens salvos!"
             if duplicados > 0:

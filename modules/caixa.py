@@ -52,11 +52,13 @@ def _fetch_extrato(user_id, data_inicio, data_fim):
                cat.nome as categoria, c.nome as banco,
                COALESCE(sub.nome, '') as subcategoria,
                COALESCE(t.compensado, FALSE) as compensado,
-               t.data_compensacao, t.fatura_id
+               t.data_compensacao, t.fatura_id,
+               COALESCE(f.status, 'aberta') as fatura_status
         FROM transacoes t
         LEFT JOIN categorias cat ON t.categoria_id = cat.id
         LEFT JOIN contas c ON t.conta_id = c.id
         LEFT JOIN subcategorias sub ON t.subcategoria_id = sub.id
+        LEFT JOIN faturas f ON t.fatura_id = f.id
         WHERE t.user_id = %s
           AND (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL)
           AND t.data_vencimento BETWEEN %s AND %s
@@ -107,10 +109,19 @@ class CaixaManager:
         df_subs = _fetch_subcategorias(user_id)
         df_caixa = _fetch_extrato(user_id, data_inicio, data_fim)
 
-        # ── 4. Resumo ─────────────────────────────────────────────────────────
+        # ── 4. Saldo anterior (acumulado até início do mês) ───────────────────
+        row_ant = db.buscar_um(
+            "SELECT COALESCE(SUM(valor), 0) FROM transacoes "
+            "WHERE user_id = %s AND (tipo_fluxo = 'CAIXA' OR tipo_fluxo IS NULL) "
+            "AND data_vencimento < %s",
+            (user_id, data_inicio),
+        )
+        saldo_anterior = float(row_ant[0]) if row_ant else 0.0
+
+        # ── 5. Resumo ─────────────────────────────────────────────────────────
         ent = df_caixa[df_caixa["valor"] > 0]["valor"].sum() if not df_caixa.empty else 0
         sai = abs(df_caixa[df_caixa["valor"] < 0]["valor"].sum()) if not df_caixa.empty else 0
-        bal = ent - sai
+        bal = saldo_anterior + ent - sai
 
         compensados = 0
         pendentes = 0
@@ -121,8 +132,8 @@ class CaixaManager:
             )
             pendentes = total_itens - compensados
 
-        # ── 5. Cards ─────────────────────────────────────────────────────────────
-        CaixaManager._renderizar_cards(ent, sai, bal, compensados, pendentes)
+        # ── 6. Cards ─────────────────────────────────────────────────────────────
+        CaixaManager._renderizar_cards(ent, sai, bal, saldo_anterior, compensados, pendentes)
 
         # ── 6. Layout: Formulário | Extrato ───────────────────────────────────
         # Formulário definido primeiro para aparecer no topo em telas mobile.
@@ -146,13 +157,19 @@ class CaixaManager:
         )
 
     @staticmethod
-    def _renderizar_cards(ent, sai, bal, compensados=0, pendentes=0):
+    def _renderizar_cards(ent, sai, bal, saldo_anterior=0.0, compensados=0, pendentes=0):
         bg_bal = get_cor_saldo(bal)
         cor_pend = "#e74c3c" if pendentes > 0 else "#2ecc71"
+        cor_ant = CORES.get("positivo", "#2ecc71") if saldo_anterior >= 0 else CORES.get("negativo", "#e74c3c")
         card = CaixaManager._card_html
 
         html = (
             '<div style="display:flex; gap:10px; margin-bottom:25px; margin-top:10px; flex-wrap:wrap;">'
+            + card(
+                "Saldo Anterior",
+                f'<strong style="font-size:20px; color:{cor_ant};">{moeda(saldo_anterior)}</strong>',
+                cor_borda="#9b59b6",
+            )
             + card(
                 "Entradas",
                 f'<strong style="font-size:20px; color:{CORES["positivo"]};">{moeda(ent)}</strong>',
@@ -361,20 +378,24 @@ class CaixaManager:
                 fatura_id_val = int(fatura_id_val)
                 row = grp.iloc[0]
                 is_compensado = bool(row.get("compensado", False))
+                fat_status = row.get("fatura_status", "aberta")
+                is_projetada = fat_status not in ("importada", "paga", "fechada")
 
-                badge = (
-                    "<span style='background:#2ecc71; color:black; padding:2px 8px; "
-                    "border-radius:4px; font-size:11px;'>Paga</span>"
-                    if is_compensado
-                    else "<span style='background:#e74c3c; color:black; padding:2px 8px; "
-                    "border-radius:4px; font-size:11px;'>Pendente</span>"
-                )
+                if is_compensado:
+                    badge = "<span style='background:#2ecc71; color:black; padding:2px 8px; border-radius:4px; font-size:11px;'>Paga</span>"
+                    cor_borda = "#2ecc71"
+                elif is_projetada:
+                    badge = "<span style='background:#9b59b6; color:white; padding:2px 8px; border-radius:4px; font-size:11px;'>Projetada</span>"
+                    cor_borda = "#9b59b6"
+                else:
+                    badge = "<span style='background:#e74c3c; color:black; padding:2px 8px; border-radius:4px; font-size:11px;'>Pendente</span>"
+                    cor_borda = "#e74c3c"
+
                 cor_valor = get_cor_valor(row["valor"])
                 data_venc = pd.to_datetime(row["data"]).strftime("%d/%m/%Y")
 
                 st.markdown(
-                    f"<div style='background:#f8f9fa; border-left:4px solid "
-                    f"{'#2ecc71' if is_compensado else '#e74c3c'}; "
+                    f"<div style='background:#f8f9fa; border-left:4px solid {cor_borda}; "
                     f"padding:12px 15px; border-radius:6px; margin:8px 0 4px 0;'>"
                     f"<div style='display:flex; justify-content:space-between; align-items:center;'>"
                     f"<div>"
