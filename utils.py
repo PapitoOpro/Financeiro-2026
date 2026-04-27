@@ -169,8 +169,44 @@ def _split_multicolunas(texto):
     """
     linhas_out = []
     for linha in texto.split('\n'):
-        # Função placeholder: retorna as linhas como estão
-        linhas_out.append(linha)
+        linha = limpar_linha(linha)
+        # Remove texto de resumo que segue valor com marcador Itaú (L, S, E, P)
+        # Ex: "10/12 DROGRARIA SAO 04/04 51,87 L Total dos lancamentos atuais 1.579,37"
+        # → "10/12 DROGRARIA SAO 04/04 51,87"
+        linha_split_marker = re.sub(
+            r'(\d{1,3}(?:\.\d{3})*,\d{2})\s+[LSEP]\s+(?:Total|Lancamentos|Credito).*',
+            r'\1',
+            linha, flags=re.IGNORECASE
+        )
+        # Divide onde um valor monetário é seguido por DD/MM (início de nova transação)
+        partes = re.split(
+            r'(-?\d{1,3}(?:\.\d{3})*,\d{2})\s+(?=\d{1,2}/\d{1,2}\b)',
+            linha_split_marker
+        )
+        if len(partes) >= 3:
+            i = 0
+            while i < len(partes) - 1:
+                combined = (partes[i].strip() + ' ' + partes[i + 1]).strip()
+                if combined:
+                    linhas_out.append(combined)
+                i += 2
+            if i < len(partes) and partes[i].strip():
+                linhas_out.append(partes[i].strip())
+        else:
+            # Sem split multi-coluna — verifica se há transação DD/MM embarcada
+            # Ex: "RAFAELRODRIGUES(final8122) 04/03 BURGERKING 118,30"
+            stripped = linha_split_marker.strip()
+            if stripped and not re.match(r'\d{1,2}/\d{1,2}\b', stripped):
+                m = re.search(
+                    r'(\d{1,2}/\d{1,2}\s+\S.*?\s+\d{1,3}(?:\.\d{3})*,\d{2})\s*$',
+                    stripped
+                )
+                if m:
+                    linhas_out.append(m.group(1))
+                else:
+                    linhas_out.append(linha_split_marker)
+            else:
+                linhas_out.append(linha_split_marker)
     return '\n'.join(linhas_out)
 
 def limpar_linha(linha):
@@ -189,50 +225,6 @@ def limpar_linha(linha):
     linha = re.sub(r'\s+', ' ', linha)
 
     return linha
-    linha = limpar_linha(linha)
-        # Primeiro: separa quando um valor é seguido por marcador Itaú (L, S, E, P)
-        # Ex: "10/12 DROGRARIA SAO 04/04 51,87 L Total dos lancamentos atuais 1.579,37"
-        # → "10/12 DROGRARIA SAO 04/04 51,87" (descarta o resto que é resumo)
-    linha_split_marker = re.sub(
-            r'(\d{1,3}(?:\.\d{3})*,\d{2})\s+[LSEP]\s+(?:Total|Lancamentos|Credito).*',
-            r'\1',
-            linha, flags=re.IGNORECASE
-        )
-
-        # Divide onde um valor monetário (NNN,NN ou -NNN,NN) é seguido por DD/MM (nova transação)
-    partes = re.split(
-            r'(-?\d{1,3}(?:\.\d{3})*,\d{2})\s+(?=\d{1,2}/\d{1,2}\b)',
-            linha_split_marker
-        )
-
-    if len(partes) >= 3:
-            # partes alternadas: [texto0, valor0, texto1, valor1, ..., textoN]
-            i = 0
-            while i < len(partes) - 1:
-                combined = (partes[i].strip() + ' ' + partes[i + 1]).strip()
-                if combined:
-                    linhas_out.append(combined)
-                i += 2
-            # Último segmento (última transação da linha)
-            if i < len(partes) and partes[i].strip():
-                linhas_out.append(partes[i].strip())
-    else:
-            # Sem split multi-coluna — verifica se há transação DD/MM embarcada
-            # Ex: "RAFAELRODRIGUES(final8122) 04/03 BURGERKING 118,30"
-            stripped = linha_split_marker.strip()
-            if stripped and not re.match(r'\d{1,2}/\d{1,2}\b', stripped):
-                m = re.search(
-                    r'(\d{1,2}/\d{1,2}\s+\S.*?\s+\d{1,3}(?:\.\d{3})*,\d{2})\s*$',
-                    stripped
-                )
-                if m:
-                    linhas_out.append(m.group(1))
-                else:
-                    linhas_out.append(linha_split_marker)
-            else:
-                linhas_out.append(linha_split_marker)
-
-    return '\n'.join(linhas_out)
     
 def _cortar_texto_antes_proximas_faturas(texto):
     """Remove tudo a partir de 'Compras parceladas - próximas faturas' e seções similares.
@@ -546,10 +538,10 @@ def extrair_itens_avista(texto, itens_parcelados=None):
         #         continue
 
         # Regex permissivo: DD/MM <texto> <valor decimal no final>
-        match = re.match(r'^(\d{1,2}/\d{1,2})\s+(.+?)\s+(-?\d+[.,]\d{2})\s*$', linha)
+        match = re.match(r'^(\d{1,2}/\d{1,2})\s+(.+?)\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})\s*$', linha)
         if not match:
             # Tenta pegar valor colado ao final (ex: texto com valor grudado)
-            match_valor = re.search(r'(-?\d+[.,]\d{2})$', linha)
+            match_valor = re.search(r'(-?\d{1,3}(?:\.\d{3})*,\d{2})$', linha)
             if not match_valor:
                 print(f"[DESCARTADO - SEM VALOR] {linha}")
                 continue
@@ -561,6 +553,9 @@ def extrair_itens_avista(texto, itens_parcelados=None):
                 continue
             descricao = linha[:match_valor.start()].strip()
             descricao = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', descricao)
+            if not re.search(r'[A-Za-z]{3,}', descricao):
+                print(f"[DESCARTADO - DESC INVÁLIDA] {linha}")
+                continue
             desc_norm = re.sub(r'\s+', ' ', descricao.upper().strip())
             desc_base = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', ' ', desc_norm).strip()
             val_round = round(valor, 2)
