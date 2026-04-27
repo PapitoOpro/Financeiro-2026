@@ -706,7 +706,15 @@ class ParcelasManager:
                             continue
 
 
-                        # Desabilitado: trava anti-duplicidade (importa todos os itens)
+                        ja_existe = db.buscar_um(
+                            "SELECT id FROM itens_fatura WHERE fatura_id=%s AND descricao=%s AND parcela_atual=%s AND parcela_total=%s AND user_id=%s",
+                            (fatura_id, desc, num_parc_atual, total, user_id)
+                        )
+                        if ja_existe:
+                            duplicados += 1
+                            print(f"[IMPORT]   ⚠️ DUPLICADO: parc {num_parc_atual}/{total} comp={competencia} fatura_id={fatura_id}")
+                            continue
+
                         db.adicionar_item_fatura(
                             fatura_id, desc, val, data_base,
                             num_parc_atual, total, ctid, user_id
