@@ -105,7 +105,8 @@ if st.session_state.get('logado'):
     # Verifica se o usuário tem pelo menos uma conta/cartão cadastrada
     user_id = st.session_state.get('usuario_id')
     df_contas_check = db.buscar(
-        f"SELECT id FROM contas WHERE user_id = {user_id} LIMIT 1"
+        "SELECT id FROM contas WHERE user_id = %s LIMIT 1",
+        (user_id,)
     )
     if df_contas_check.empty:
         st.markdown("---")

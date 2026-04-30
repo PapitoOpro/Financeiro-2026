@@ -30,7 +30,9 @@ class AdminManager:
             db.sincronizar_transacao_fatura(row['id'], user_id)
     """Gerenciador de funções administrativas."""
     
-    SENHA_ADMIN = "05072019" # MUDE ISSO em produção!
+    @staticmethod
+    def _senha_admin() -> str:
+        return st.secrets.get("ADMIN_PASSWORD", "")
     
     @staticmethod
     def autenticar_admin():
@@ -44,7 +46,7 @@ class AdminManager:
             senha = st.text_input("Senha de Administrador", type="password", placeholder="Digite a senha")
             
             if st.button("Acessar Painel Admin"):
-                if senha == AdminManager.SENHA_ADMIN:
+                if senha == AdminManager._senha_admin():
                     st.session_state.admin_autenticado = True
                     st.success(" Acesso concedido!")
                     st.rerun()

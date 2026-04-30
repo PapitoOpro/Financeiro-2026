@@ -82,11 +82,11 @@ class ParcelasManager:
 
         @st.cache_data(ttl=60, show_spinner=False)
         def get_contas(user_id):
-            return db.buscar(f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome")
+            return db.buscar("SELECT * FROM contas WHERE user_id = %s ORDER BY nome", (user_id,))
 
         @st.cache_data(ttl=60, show_spinner=False)
         def get_categorias(user_id):
-            return db.buscar(f"SELECT * FROM categorias WHERE user_id = {user_id} ORDER BY nome")
+            return db.buscar("SELECT * FROM categorias WHERE user_id = %s ORDER BY nome", (user_id,))
 
         user_id = db.get_user_id()
         df_contas = get_contas(user_id)
@@ -762,21 +762,21 @@ class ParcelasManager:
         st.subheader("📈 Dashboard de Previsão de Gastos")
 
         user_id = db.get_user_id()
-        df_contas = db.buscar(f"SELECT * FROM contas WHERE user_id = {user_id} ORDER BY nome")
-        df_cats = db.buscar(f"SELECT * FROM categorias WHERE user_id = {user_id} ORDER BY nome")
+        df_contas = db.buscar("SELECT * FROM contas WHERE user_id = %s ORDER BY nome", (user_id,))
+        df_cats = db.buscar("SELECT * FROM categorias WHERE user_id = %s ORDER BY nome", (user_id,))
 
         # Busca faturas do usuário
-        df_faturas = db.buscar(f"""
+        df_faturas = db.buscar("""
             SELECT f.id as fatura_id, f.competencia, f.valor_total, f.data_vencimento,
                    f.status, f.data_pagamento, c.nome as banco, f.conta_id
             FROM faturas f
             LEFT JOIN contas c ON f.conta_id = c.id
-            WHERE f.user_id = {user_id}
+            WHERE f.user_id = %s
             ORDER BY f.data_vencimento ASC
-        """)
+        """, (user_id,))
 
                 # Busca itens de fatura do usuário (somente parcelas futuras + Trava Anti-Duplicidade na previsão)
-        df_itens = db.buscar(f"""
+        df_itens = db.buscar("""
                         SELECT i.id, i.fatura_id, i.descricao, i.valor, i.data_compra,
                                      i.parcela_atual, i.parcela_total,
                                      cat.nome as categoria, c.nome as banco,
@@ -786,14 +786,14 @@ class ParcelasManager:
                         JOIN faturas f ON i.fatura_id = f.id
                         LEFT JOIN contas c ON f.conta_id = c.id
                         LEFT JOIN categorias cat ON i.categoria_id = cat.id
-                        WHERE i.user_id = {user_id}
+                        WHERE i.user_id = %s
                             AND i.parcela_atual < i.parcela_total
                             -- TRAVA: Ignora esta parcela se ela já existir em uma fatura real/importada
                             AND NOT EXISTS (
-                                    SELECT 1 
+                                    SELECT 1
                                     FROM itens_fatura i_real
                                     JOIN faturas f_real ON i_real.fatura_id = f_real.id
-                                    WHERE i_real.user_id = {user_id}
+                                    WHERE i_real.user_id = %s
                                         -- 1. Valida se é o mesmo cartão e a mesma competência (mês/ano)
                                         AND f_real.conta_id = f.conta_id
                                         AND f_real.competencia = f.competencia
@@ -805,7 +805,7 @@ class ParcelasManager:
                                         AND (f_real.status = 'fechada' OR f_real.status = 'importada')
                             )
                         ORDER BY f.data_vencimento ASC, i.descricao
-                """)
+                """, (user_id, user_id))
 
         if df_itens.empty:
             st.info("📭 Nenhuma parcela lançada no cartão ainda.")
