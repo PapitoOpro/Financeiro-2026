@@ -32,7 +32,10 @@ class AdminManager:
     
     @staticmethod
     def _senha_admin() -> str:
-        return st.secrets.get("ADMIN_PASSWORD", "")
+        try:
+            return str(st.secrets["ADMIN_PASSWORD"])
+        except (KeyError, AttributeError):
+            return ""
     
     @staticmethod
     def autenticar_admin():
