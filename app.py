@@ -225,7 +225,7 @@ st.markdown("""
 
     /* Reduz gap vertical entre todos os elementos */
     [data-testid="stVerticalBlock"] {
-        gap: 0.25rem !important;
+        gap: 0.45rem !important;
     }
 
     /* Botões menores e sem excesso de altura */

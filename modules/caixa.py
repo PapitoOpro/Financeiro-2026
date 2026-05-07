@@ -395,11 +395,11 @@ class CaixaManager:
                 data_venc = pd.to_datetime(row["data"]).strftime("%d/%m/%Y")
 
                 st.markdown(
-                    f"<div style='background:#f8f9fa; border-left:4px solid {cor_borda}; "
-                    f"padding:12px 15px; border-radius:6px; margin:8px 0 4px 0;'>"
+                    f"<div style='background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-left:4px solid {cor_borda}; "
+                    f"padding:12px 15px; border-radius:6px; margin:4px 0 2px 0;'>"
                     f"<div style='display:flex; justify-content:space-between; align-items:center;'>"
                     f"<div>"
-                    f"<strong style='font-size:15px; color:#212529;'>{row['descricao']}</strong><br>"
+                    f"<strong style='font-size:15px;'>{row['descricao']}</strong><br>"
                     f"<span style='color:gray; font-size:12px;'>Vencimento: {data_venc} | {row['banco']}</span>"
                     f"</div>"
                     f"<div style='text-align:right;'>"
@@ -640,8 +640,9 @@ class CaixaManager:
                         else "<span style='background:#f39c12; color:gray; padding:1px 6px; "
                         "border-radius:4px; font-size:10px;'>Pend</span> "
                     )
+                    _desc = row['descricao'].replace('**', '').strip()
                     c2.markdown(
-                        f"{badge_comp}**{row['descricao']}**<br>"
+                        f"{badge_comp}**{_desc}**<br>"
                         f"<span style='color:gray; font-size:12px;'>{row['categoria']}"
                         f"{' → ' + row['subcategoria'] if row.get('subcategoria') else ''}"
                         f" | {row['banco']}</span>",
