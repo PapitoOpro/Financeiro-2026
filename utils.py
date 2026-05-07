@@ -487,17 +487,12 @@ def extrair_itens_avista(texto, itens_parcelados=None):
 
     # Padrões que indicam linhas de cabeçalho/rodapé (NÃO são transações).
     # Só filtra quando a linha NÃO começa com DD/MM (padrão de transação).
-    # Linhas com DD/MM são sempre processadas (são transações reais).
     skip_patterns = [
         'total da fatura', 'total desta fatura', 'total para',
-        'total dos lancamentos', 'total dos pagamentos',
+        'total dos lancamentos', 'total dos pagamentos', 'total r$',
         'lancamentos no cartao', 'lancamentos produtos',
-        'pagamento efetuado', 'pagamento minimo', 'pagamento pix',
         'saldo financiado', 'saldo anterior',
         'limite total', 'limite de credito',
-        'encargos (', 'encargos financ', 'encargos cobrados',
-        'encargos refin', 'juros de mora', 'juros do rotativo',
-        'multa por atraso', 'iof de financ',
         'lancamentos atuais',
         'credito disponivel',
         'proxima fatura', 'proximas faturas',
@@ -505,9 +500,23 @@ def extrair_itens_avista(texto, itens_parcelados=None):
         'cpf', 'cnpj',
         'demonstrativo', 'informacoes adicionais',
         'central de atendimento', 'ouvidoria',
-        'www.', 'http',
+        'www.', 'http', 'usd ',
     ]
 
+    # Padrões bancários que devem ser ignorados MESMO quando a linha começa
+    # com DD/MM — não são compras do usuário (pagamentos, taxas, juros).
+    bancarias_patterns = [
+        'pagamento da fatura', 'pagamento da conta', 'pagamento efetuado',
+        'pagamento minimo', 'pagamento pix',
+        'credito concedido', 'credito de estorno', 'credito aplicado',
+        'multa por atraso', 'juros do rotativo', 'juros de mora',
+        'iof do rotativo', 'iof de financ',
+        'encargo financeiro', 'encargo do rotativo', 'encargos financ',
+        'encargos cobrados', 'encargos refin', 'encargos (',
+        'taxa de servico', 'taxa de manutencao',
+        'saldo devedor', 'saldo financiado',
+        'cobranca encargo', 'cobranca de encargo',
+    ]
 
 
     for linha in texto.split('\n'):
@@ -520,22 +529,15 @@ def extrair_itens_avista(texto, itens_parcelados=None):
         linha_lower = linha.lower()
         comeca_com_data = re.match(r'^\d{1,2}/\d{1,2}\s', linha)
 
-        # AJUSTE: Nunca descartar linhas que começam com data, mesmo que contenham palavras de taxa/cabeçalho
+        # Filtra transações bancárias (pagamentos, juros, multas) mesmo com data
+        if any(pat in linha_lower for pat in bancarias_patterns):
+            print(f"[DESCARTADO - TAXA/PAGAMENTO BANCÁRIO] {linha}")
+            continue
+
         if not comeca_com_data:
             if any(skip in linha_lower for skip in skip_patterns):
                 print(f"[DESCARTADO - CABEÇALHO/RODAPÉ] {linha}")
                 continue
-
-        # Não descartar taxas bancárias se linha começa com data
-        # (mantém apenas filtro de linhas sem data)
-        #
-        # Se quiser filtrar taxas bancárias mesmo com data, descomente abaixo:
-        # taxas_bancarias = [...]
-        # if comeca_com_data:
-        #     resto = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', linha_lower)
-        #     if any(resto.startswith(taxa) for taxa in taxas_bancarias):
-        #         print(f"[DESCARTADO - TAXA BANCÁRIA] {linha}")
-        #         continue
 
         # Regex permissivo: DD/MM <texto> <valor decimal no final>
         match = re.match(r'^(\d{1,2}/\d{1,2})\s+(.+?)\s+(-?\d{1,3}(?:\.\d{3})*,\d{2})\s*$', linha)
