@@ -848,26 +848,26 @@ class ParcelasManager:
 
         c_met1, c_met2 = st.columns(2)
         c_met1.markdown(f"""
-            <div style="background:#f1f2f6; color:#333333; padding:15px; border-radius:10px; border-left:5px solid #e74c3c;">
-                <small>Total Parcelado a Pagar (Geral)</small><br><strong style="font-size: 22px; color: #c0392b;">{moeda(total_divida)}</strong>
+            <div style="background:rgba(231,76,60,0.1); padding:14px 18px; border-radius:8px; border-left:4px solid #e74c3c;">
+                <div style="font-size:0.75rem; color:#aaa; margin-bottom:4px;">Total Parcelado a Pagar</div>
+                <div style="font-size:1.5rem; font-weight:700; color:#e74c3c;">{moeda(total_divida)}</div>
             </div>
         """, unsafe_allow_html=True)
 
         if mes_mais_pesado is not None:
             c_met2.markdown(f"""
-                <div style="background:#f1f2f6; color:#333333; padding:15px; border-radius:10px; border-left:5px solid #f39c12;">
-                    <small>Mês mais pesado ({mes_mais_pesado['Mes_Ano_Str']})</small><br><strong style="font-size: 22px; color: #d35400;">{moeda(mes_mais_pesado['valor_abs'])}</strong>
+                <div style="background:rgba(243,156,18,0.1); padding:14px 18px; border-radius:8px; border-left:4px solid #f39c12;">
+                    <div style="font-size:0.75rem; color:#aaa; margin-bottom:4px;">Mês mais pesado — {mes_mais_pesado['Mes_Ano_Str']}</div>
+                    <div style="font-size:1.5rem; font-weight:700; color:#f39c12;">{moeda(mes_mais_pesado['valor_abs'])}</div>
                 </div>
             """, unsafe_allow_html=True)
         else:
             c_met2.info("Sem dados por mês para calcular o mês mais pesado.")
 
-        st.write("")
-
         st.markdown("---")
 
         # 2. GRÁFICO DE EVOLUÇÃO
-        st.markdown("** Evolução do Parcelamento nos Próximos Meses**")
+        st.markdown("### Evolução do Parcelamento nos Próximos Meses")
         agrupado_mes['cumulativo'] = agrupado_mes['valor_abs'].cumsum()
         fig = go.Figure()
         fig.add_bar(x=agrupado_mes['Mes_Ano_Str'], y=agrupado_mes['valor_abs'], name='Mensal', marker_color='#e74c3c')
@@ -879,7 +879,7 @@ class ParcelasManager:
         st.markdown("---")
 
         # 3. DISTRIBUIÇÃO POR CARTÃO / CATEGORIA
-        st.markdown("** Distribuição por Cartão / Categoria (Próximos Meses)**")
+        st.markdown("### Distribuição por Cartão / Categoria")
         distrib_cartao = df_itens.groupby('banco')['valor_abs'].sum().reset_index().sort_values('valor_abs', ascending=False)
         distrib_categoria = df_itens.groupby('categoria')['valor_abs'].sum().reset_index().sort_values('valor_abs', ascending=False)
 
@@ -900,7 +900,7 @@ class ParcelasManager:
         st.markdown("---")
 
         # 4. EXPORTAÇÃO / RELATÓRIO
-        st.markdown("** Exportar Relatório**")
+        st.markdown("### Exportar Relatório")
         csv_rel = df_itens[['id','data_vencimento','descricao','valor_abs','banco','categoria','parcela_atual','parcela_total']].copy()
         csv_rel = csv_rel.rename(columns={
             'id': 'ID',
@@ -918,7 +918,7 @@ class ParcelasManager:
         st.markdown("---")
 
         # 5. LISTAGEM POR FATURA (grouped by month ? card ? items)
-        st.markdown("** Detalhamento por Mês**")
+        st.markdown("### Detalhamento por Mês")
 
         msg_sucesso = st.session_state.pop('parcela_msg_sucesso', None)
         if msg_sucesso:

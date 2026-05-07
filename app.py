@@ -165,6 +165,7 @@ st.markdown("""
     section[data-testid="stSidebar"] div.menu-container button {
         width: 100%;
         text-align: left;
+        justify-content: flex-start !important;
         padding: 0.55rem 0.9rem;
         margin-bottom: 2px;
         border: none;
@@ -175,6 +176,9 @@ st.markdown("""
         font-weight: 500;
         cursor: pointer;
         transition: all 0.2s ease;
+    }
+    section[data-testid="stSidebar"] div.menu-container button p {
+        text-align: left !important;
     }
     section[data-testid="stSidebar"] div.menu-container button:hover {
         background: rgba(6, 182, 212, 0.10);
