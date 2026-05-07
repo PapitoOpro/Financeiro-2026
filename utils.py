@@ -555,6 +555,7 @@ def extrair_itens_avista(texto, itens_parcelados=None):
                 continue
             descricao = linha[:match_valor.start()].strip()
             descricao = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', descricao)
+            descricao = re.sub(r'\s*R\$\s*$', '', descricao).strip()
             if not re.search(r'[A-Za-z]{3,}', descricao):
                 print(f"[DESCARTADO - DESC INVÁLIDA] {linha}")
                 continue
@@ -587,7 +588,7 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             print(f"[DESCARTADO - DATA INVÁLIDA] {linha}")
             continue
 
-        desc = desc_raw.strip()
+        desc = re.sub(r'\s*R\$\s*$', '', desc_raw.strip()).strip()
         try:
             val = float(valor_str.replace(".", "").replace(",", "."))
             if abs(val) < 0.01:

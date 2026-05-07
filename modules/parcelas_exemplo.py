@@ -737,6 +737,16 @@ class ParcelasManager:
                 (cid, competencia_base, user_id),
             )
 
+            # Força recalculo e sync do caixa para a fatura base (mesmo sem novos itens)
+            fatura_base = db.buscar_um(
+                "SELECT id FROM faturas WHERE conta_id=%s AND competencia=%s AND user_id=%s",
+                (cid, competencia_base, user_id),
+            )
+            if fatura_base:
+                fid_base = int(fatura_base[0])
+                db.atualizar_total_fatura(fid_base)
+                db.sincronizar_transacao_fatura(fid_base, user_id)
+
             if novos > 0:
                 st.session_state['parcela_msg_sucesso'] = f"✅ {novos} itens salvos!"
             if duplicados > 0:
