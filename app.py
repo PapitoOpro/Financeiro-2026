@@ -205,6 +205,99 @@ st.markdown("""
         text-overflow: ellipsis;
         white-space: nowrap;
     }
+
+    /* ── TEMA COMPACTO / MINIMALISTA ── */
+
+    /* Container principal: remove excesso de padding */
+    .block-container {
+        padding-top: 1.2rem !important;
+        padding-bottom: 0.8rem !important;
+        padding-left: 1.8rem !important;
+        padding-right: 1.8rem !important;
+    }
+
+    /* Reduz gap vertical entre todos os elementos */
+    [data-testid="stVerticalBlock"] {
+        gap: 0.25rem !important;
+    }
+
+    /* Botões menores e sem excesso de altura */
+    .stButton > button {
+        padding: 0.28rem 0.75rem !important;
+        font-size: 0.82rem !important;
+        border-radius: 6px !important;
+        min-height: 1.9rem !important;
+        height: auto !important;
+        line-height: 1.3 !important;
+    }
+
+    /* Inputs de texto e número compactos */
+    .stTextInput > div > div > input,
+    .stNumberInput > div > div > input,
+    .stDateInput > div > div > input {
+        padding: 0.28rem 0.6rem !important;
+        font-size: 0.84rem !important;
+        min-height: 1.9rem !important;
+    }
+
+    /* Selectbox compacto */
+    .stSelectbox > div > div > div {
+        padding: 0.28rem 0.6rem !important;
+        font-size: 0.84rem !important;
+        min-height: 1.9rem !important;
+    }
+
+    /* Labels menores */
+    .stTextInput label, .stSelectbox label, .stNumberInput label,
+    .stDateInput label, .stRadio > label, .stCheckbox > label {
+        font-size: 0.78rem !important;
+        margin-bottom: 0.05rem !important;
+        color: #aaa !important;
+    }
+
+    /* Tabs mais compactas */
+    .stTabs [data-baseweb="tab"] {
+        padding: 0.35rem 0.9rem !important;
+        font-size: 0.83rem !important;
+    }
+
+    /* Expanders mais compactos */
+    [data-testid="stExpander"] summary {
+        padding: 0.4rem 0.7rem !important;
+        font-size: 0.86rem !important;
+    }
+
+    /* Métricas menores */
+    [data-testid="stMetric"] {
+        padding: 0.5rem 0.7rem !important;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 1.3rem !important;
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 0.75rem !important;
+    }
+
+    /* Formulários com menos padding interno */
+    [data-testid="stForm"] {
+        padding: 0.8rem 1rem !important;
+        border-radius: 8px !important;
+    }
+
+    /* Dividers mais finos */
+    hr {
+        margin: 0.4rem 0 !important;
+    }
+
+    /* Markdown: remove margem excessiva embaixo */
+    .stMarkdown p {
+        margin-bottom: 0.2rem !important;
+    }
+
+    /* Cabeçalhos de seção menores */
+    h1 { font-size: 1.4rem !important; }
+    h2 { font-size: 1.15rem !important; }
+    h3 { font-size: 1rem !important; }
 </style>
 """, unsafe_allow_html=True)
 

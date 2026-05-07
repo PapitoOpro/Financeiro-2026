@@ -774,6 +774,13 @@ class ParcelasManager:
         user_id = db.get_user_id()
         df_contas = db.buscar("SELECT * FROM contas WHERE user_id = %s ORDER BY nome", (user_id,))
         df_cats = db.buscar("SELECT * FROM categorias WHERE user_id = %s ORDER BY nome", (user_id,))
+        df_subs = db.buscar("""
+            SELECT s.id, s.nome, s.categoria_id, c.nome as categoria_nome
+            FROM subcategorias s
+            JOIN categorias c ON s.categoria_id = c.id
+            WHERE s.user_id = %s AND s.ativa = TRUE
+            ORDER BY c.nome, s.nome
+        """, (user_id,))
 
         # Busca faturas do usuário
         df_faturas = db.buscar("""
@@ -791,11 +798,13 @@ class ParcelasManager:
                                      i.parcela_atual, i.parcela_total,
                                      cat.nome as categoria, c.nome as banco,
                                      f.competencia, f.data_vencimento, f.status,
-                                     i.categoria_id
+                                     i.categoria_id, i.subcategoria_id,
+                                     COALESCE(sub.nome, '') as subcategoria
                         FROM itens_fatura i
                         JOIN faturas f ON i.fatura_id = f.id
                         LEFT JOIN contas c ON f.conta_id = c.id
                         LEFT JOIN categorias cat ON i.categoria_id = cat.id
+                        LEFT JOIN subcategorias sub ON i.subcategoria_id = sub.id
                         WHERE i.user_id = %s
                             AND i.parcela_atual < i.parcela_total
                             -- TRAVA: Ignora esta parcela se ela já existir em uma fatura real/importada
@@ -916,7 +925,8 @@ class ParcelasManager:
             st.toast(msg_sucesso)
 
         meses_previsao = st.slider("Ver previsão detalhada para quantos meses?", 1, 24, 6)
-        primeiro_mes = df_itens['data_vencimento'].min().replace(day=1)
+        hoje = datetime.today()
+        primeiro_mes = pd.Timestamp(hoje.year, hoje.month, 1)
 
         # IDs selecionados para exclusão em massa
         all_item_ids = df_itens['id'].tolist()
@@ -994,13 +1004,20 @@ class ParcelasManager:
                                 with st.form(f"form_edit_item_{r['id']}"):
                                     d_desc = st.text_input("Descrição", value=r['descricao'], key=f"edit_desc_i_{r['id']}")
                                     d_val = st.number_input("Valor (R$)", min_value=0.0, value=float(abs(r['valor'])), key=f"edit_val_i_{r['id']}")
-                                    cat_op = df_cats['nome'].tolist() if not df_cats.empty else []
-                                    default_cat_idx = 0
+
+                                    sub_nomes = df_subs['nome'].tolist() if not df_subs.empty else []
+                                    sub_atual = r.get('subcategoria', '')
                                     try:
-                                        default_cat_idx = cat_op.index(r.get('categoria', '')) if r.get('categoria', '') in cat_op else 0
+                                        default_sub_idx = sub_nomes.index(sub_atual) if sub_atual in sub_nomes else 0
                                     except Exception:
-                                        default_cat_idx = 0
-                                    sel_cat = st.selectbox("Categoria", cat_op, index=default_cat_idx, key=f"edit_cat_i_{r['id']}")
+                                        default_sub_idx = 0
+                                    sel_sub = st.selectbox(
+                                        "Subcategoria",
+                                        sub_nomes,
+                                        index=default_sub_idx,
+                                        key=f"edit_sub_i_{r['id']}",
+                                        help="A categoria é associada automaticamente à subcategoria.",
+                                    )
 
                                     save_clicked = st.form_submit_button("Salvar alterações")
                                     cancel_clicked = st.form_submit_button("Voltar")
@@ -1011,12 +1028,13 @@ class ParcelasManager:
 
                                     if save_clicked:
                                         try:
-                                            ctid = int(df_cats[df_cats.nome == sel_cat].id.values[0])
+                                            sub_row = df_subs[df_subs.nome == sel_sub]
+                                            sub_id = int(sub_row['id'].values[0]) if not sub_row.empty else None
+                                            cat_id = int(sub_row['categoria_id'].values[0]) if not sub_row.empty else None
                                             db.executar(
-                                                "UPDATE itens_fatura SET descricao=?, valor=?, categoria_id=? WHERE id=? AND user_id=?",
-                                                (d_desc, abs(float(d_val)), ctid, int(r['id']), user_id)
+                                                "UPDATE itens_fatura SET descricao=?, valor=?, categoria_id=?, subcategoria_id=? WHERE id=? AND user_id=?",
+                                                (d_desc, abs(float(d_val)), cat_id, sub_id, int(r['id']), user_id)
                                             )
-                                            # Recalcula total da fatura
                                             db.atualizar_total_fatura(int(r['fatura_id']))
                                             st.success("Item atualizado com sucesso.")
                                         except Exception as e:
