@@ -162,10 +162,11 @@ st.markdown("""
     }
 
     /* Botões do menu */
-    section[data-testid="stSidebar"] div.menu-container button {
+    /* Botões do menu lateral — alinhamento à esquerda */
+    section[data-testid="stSidebar"] .stButton > button {
         width: 100%;
-        text-align: left;
         justify-content: flex-start !important;
+        text-align: left !important;
         padding: 0.55rem 0.9rem;
         margin-bottom: 2px;
         border: none;
@@ -177,14 +178,16 @@ st.markdown("""
         cursor: pointer;
         transition: all 0.2s ease;
     }
-    section[data-testid="stSidebar"] div.menu-container button p {
+    section[data-testid="stSidebar"] .stButton > button p,
+    section[data-testid="stSidebar"] .stButton > button div {
         text-align: left !important;
+        justify-content: flex-start !important;
     }
-    section[data-testid="stSidebar"] div.menu-container button:hover {
+    section[data-testid="stSidebar"] .stButton > button:hover {
         background: rgba(6, 182, 212, 0.10);
         color: #fff;
     }
-    section[data-testid="stSidebar"] div.menu-container button[kind="primary"] {
+    section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
         background: linear-gradient(135deg, rgba(6,182,212,0.18), rgba(5,150,105,0.13));
         color: #06b6d4;
         font-weight: 700;
