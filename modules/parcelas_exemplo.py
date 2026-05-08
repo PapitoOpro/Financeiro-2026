@@ -961,7 +961,7 @@ class ParcelasManager:
                         badge = "✅ Paga" if status_fatura == 'paga' else "🔓 Aberta"
 
                         st.markdown(
-                            f"** Fatura: {cartao}** — Subtotal: "
+                            f"**Fatura: {cartao}** — Subtotal: "
                             f"<span style='color:#c0392b;'>{moeda(subtotal_cartao)}</span> "
                             f"<small>({badge})</small>",
                             unsafe_allow_html=True
@@ -1031,12 +1031,42 @@ class ParcelasManager:
                                             sub_row = df_subs[df_subs.nome == sel_sub]
                                             sub_id = int(sub_row['id'].values[0]) if not sub_row.empty else None
                                             cat_id = int(sub_row['categoria_id'].values[0]) if not sub_row.empty else None
+                                            desc_original = r['descricao']
+                                            parc_atual_num = int(r['parcela_atual'])
+                                            parc_total_num = int(r['parcela_total'])
+                                            val_novo = abs(float(d_val))
+
+                                            # Atualiza o item atual
                                             db.executar(
-                                                "UPDATE itens_fatura SET descricao=?, valor=?, categoria_id=?, subcategoria_id=? WHERE id=? AND user_id=?",
-                                                (d_desc, abs(float(d_val)), cat_id, sub_id, int(r['id']), user_id)
+                                                "UPDATE itens_fatura SET descricao=%s, valor=%s, categoria_id=%s, subcategoria_id=%s WHERE id=%s AND user_id=%s",
+                                                (d_desc, val_novo, cat_id, sub_id, int(r['id']), user_id)
                                             )
-                                            db.atualizar_total_fatura(int(r['fatura_id']))
-                                            st.success("Item atualizado com sucesso.")
+
+                                            # Propaga para todas as parcelas futuras do mesmo item
+                                            futuras = db.buscar(
+                                                """SELECT i.id, i.fatura_id FROM itens_fatura i
+                                                   WHERE i.user_id=%s
+                                                     AND i.descricao=%s
+                                                     AND i.parcela_total=%s
+                                                     AND i.parcela_atual > %s
+                                                     AND i.id != %s""",
+                                                (user_id, desc_original, parc_total_num, parc_atual_num, int(r['id']))
+                                            )
+                                            faturas_afetadas = set([int(r['fatura_id'])])
+                                            if not futuras.empty:
+                                                for _, fut in futuras.iterrows():
+                                                    db.executar(
+                                                        "UPDATE itens_fatura SET descricao=%s, valor=%s, categoria_id=%s, subcategoria_id=%s WHERE id=%s AND user_id=%s",
+                                                        (d_desc, val_novo, cat_id, sub_id, int(fut['id']), user_id)
+                                                    )
+                                                    faturas_afetadas.add(int(fut['fatura_id']))
+
+                                            for fid in faturas_afetadas:
+                                                db.atualizar_total_fatura(fid)
+                                                db.sincronizar_transacao_fatura(fid, user_id)
+
+                                            n_fut = len(futuras) if not futuras.empty else 0
+                                            st.success(f"Item atualizado! {n_fut} parcela(s) futura(s) também atualizadas.")
                                         except Exception as e:
                                             st.error(f"Erro ao atualizar item: {e}")
                                         st.session_state[f"editing_item_{r['id']}"] = False
