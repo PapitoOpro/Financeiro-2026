@@ -78,7 +78,7 @@ class ParcelasManager:
     @staticmethod
     def renderizar():
         """Renderiza a página de projeção de gastos."""
-        st.markdown("<div style='padding-top:1rem'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='padding-top:2.5rem'></div>", unsafe_allow_html=True)
         st.header("📅 Projeção de Gastos (Cartão/Parcelas)")
 
         @st.cache_data(ttl=60, show_spinner=False)
