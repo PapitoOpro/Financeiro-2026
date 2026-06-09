@@ -707,8 +707,8 @@ class ParcelasManager:
 
 
                         ja_existe = db.buscar_um(
-                            "SELECT id FROM itens_fatura WHERE fatura_id=%s AND descricao=%s AND parcela_atual=%s AND parcela_total=%s AND user_id=%s",
-                            (fatura_id, desc, num_parc_atual, total, user_id)
+                            "SELECT id FROM itens_fatura WHERE fatura_id=%s AND descricao=%s AND valor=%s AND parcela_atual=%s AND parcela_total=%s AND user_id=%s",
+                            (fatura_id, desc, val, num_parc_atual, total, user_id)
                         )
                         if ja_existe:
                             duplicados += 1
