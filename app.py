@@ -28,10 +28,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-st.markdown(
-    "<style>.block-container{padding-top:4rem!important}.stMainBlockContainer{padding-top:4rem!important}</style>",
-    unsafe_allow_html=True,
-)
 
 # ==========================================
 # FUNÇÃO DA API BÍBLICA (COM CACHE)
@@ -222,7 +218,7 @@ st.markdown("""
 
     /* Container principal: remove excesso de padding */
     .block-container {
-        padding-top: 1.2rem !important;
+        padding-top: 4rem !important;
         padding-bottom: 0.8rem !important;
         padding-left: 1.8rem !important;
         padding-right: 1.8rem !important;
