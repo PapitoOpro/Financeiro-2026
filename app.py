@@ -28,6 +28,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+st.markdown(
+    "<style>.block-container { padding-top: 2.5rem !important; }</style>",
+    unsafe_allow_html=True,
+)
+
 # ==========================================
 # FUNÇÃO DA API BÍBLICA (COM CACHE)
 # ==========================================
