@@ -29,7 +29,7 @@ st.set_page_config(
 )
 
 st.markdown(
-    "<style>.block-container { padding-top: 2.5rem !important; }</style>",
+    "<style>.block-container { padding-top: 3rem !important; }</style>",
     unsafe_allow_html=True,
 )
 
