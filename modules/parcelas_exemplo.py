@@ -761,6 +761,7 @@ class ParcelasManager:
             for k in list(st.session_state.keys()):
                 if isinstance(k, str) and (k.startswith("audit_") or k.startswith("manual_")):
                     del st.session_state[k]
+            st.cache_data.clear()
             ParcelasManager._safe_rerun()
 
         except Exception as e:
