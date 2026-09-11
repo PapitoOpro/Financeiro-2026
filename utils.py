@@ -324,21 +324,40 @@ def _is_parcela_valida(parc_str):
         return False
 
 
+def _linha_do_match(fonte, pos):
+    """Retorna o texto da linha (sem quebras) que contém a posição `pos` em `fonte`."""
+    inicio = fonte.rfind('\n', 0, pos) + 1
+    fim = fonte.find('\n', pos)
+    if fim == -1:
+        fim = len(fonte)
+    return fonte[inicio:fim].strip()
+
+
 def extrair_parcelas(texto):
     import re
     if not texto:
         return []
     resultados = []
-    # Removido: deduplicação por (desc, parcela, valor) para permitir lançamentos repetidos
 
     # 1. Limpeza de ruídos comuns de OCR
     texto = texto.replace("R4", "R$").replace("I0F", "IOF")
 
-    def _add_resultado(desc, parc, val):
-        """Adiciona resultado SEM deduplicação: permite lançamentos repetidos (mesmo desc/parc/valor). Ignora valores negativos (estornos)."""
+    # Dedup por LINHA DE ORIGEM: várias regex (A-E) podem casar a mesma
+    # linha física do texto — isso sim é redundância a remover. Já duas
+    # compras REAIS em linhas diferentes, mesmo com desc/parcela/valor
+    # idênticos (ex.: mesma loja, mesmo plano de 4x, em dois dias
+    # diferentes), NUNCA compartilham a mesma linha de origem e por isso
+    # são sempre mantidas.
+    linhas_usadas = set()
+
+    def _add_resultado(desc, parc, val, fonte, pos):
         if val < 0:
             # Ignora estornos
             return False
+        chave = (_linha_do_match(fonte, pos), parc, round(val, 2))
+        if chave in linhas_usadas:
+            return False
+        linhas_usadas.add(chave)
         desc_norm = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', desc.strip()).strip()
         desc_norm = re.sub(r'\s*Parcela\s*$', '', desc_norm, flags=re.IGNORECASE).strip()
         resultados.append((desc_norm, parc, val))
@@ -351,11 +370,11 @@ def extrair_parcelas(texto):
     if secao_parceladas:
         # Dentro da seção parcelada, formato típico:
         # DD/MM DESCRICAOXX/YY VALOR ou DD/MM DESCRICAO XX/YY VALOR
-        regex_secao = re.findall(
+        for m in re.finditer(
             r'(\d{1,2}/\d{1,2})\s+(.+?)(\d{1,2}/\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
             secao_parceladas, re.IGNORECASE
-        )
-        for date_str, desc, parc, valor in regex_secao:
+        ):
+            date_str, desc, parc, valor = m.groups()
             try:
                 val_limpo = float(valor.replace(".", "").replace(",", "."))
                 atual_p, total_p = map(int, parc.split("/"))
@@ -363,51 +382,51 @@ def extrair_parcelas(texto):
                 if atual_p == total_p and atual_p <= 12:
                     continue
                 if _is_parcela_valida(parc):
-                    _add_resultado(desc.strip(), parc, val_limpo)
+                    _add_resultado(desc.strip(), parc, val_limpo, secao_parceladas, m.start())
             except: continue
 
     # ==============================================================
     # PASSO 2: Padrões genéricos para outros bancos
     # ==============================================================
-    
+
     # PADRÃO A: "Descricao Parcela 01 de 10 R$ 100,00" (Mercado Pago / Nubank)
-    regex_extenso = re.findall(
-        r'(.+?)\s+Parcela\s+(\d{1,2})\s+de\s+(\d{1,2})\s+R\$\s?([\d\.,]+)', 
+    for m in re.finditer(
+        r'(.+?)\s+Parcela\s+(\d{1,2})\s+de\s+(\d{1,2})\s+R\$\s?([\d\.,]+)',
         texto, re.IGNORECASE
-    )
-    for desc, atual, total, valor in regex_extenso:
+    ):
+        desc, atual, total, valor = m.groups()
         try:
             val_limpo = float(valor.replace(".", "").replace(",", "."))
             parc_formatada = f"{int(atual)}/{int(total)}"
             if _is_parcela_valida(parc_formatada):
-                _add_resultado(desc.strip(), parc_formatada, val_limpo)
+                _add_resultado(desc.strip(), parc_formatada, val_limpo, texto, m.start())
         except: continue
 
     # PADRÃO B: "Descricao 01/10 R$ 100,00" (Itaú / Santander)
-    regex_barra = re.findall(
-        r'(.+?)\s+(\d{1,2}/\d{1,2})\s+R\$\s?([\d\.,]+)', 
+    for m in re.finditer(
+        r'(.+?)\s+(\d{1,2}/\d{1,2})\s+R\$\s?([\d\.,]+)',
         texto, re.IGNORECASE
-    )
-    for desc, parc, valor in regex_barra:
+    ):
+        desc, parc, valor = m.groups()
         try:
             val_limpo = float(valor.replace(".", "").replace(",", "."))
             # Só considera como parcela se NÃO for data (ex: 02/02 não é parcela, é data)
             if _is_parcela_valida(parc) and not _is_data_transacao(parc):
-                _add_resultado(desc.strip(), parc, val_limpo)
+                _add_resultado(desc.strip(), parc, val_limpo, texto, m.start())
         except: continue
 
     # PADRÃO C: formato '05 de 10 299,08' (sem palavra 'Parcela')
     # Também pega quando o número cola na desc: 'ALLIANZ SEGU*05 de 10 299,08'
-    regex_de = re.findall(
+    for m in re.finditer(
         r'(.+?)\s*(\d{1,2})\s+de\s+(\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
         texto, re.IGNORECASE
-    )
-    for desc, atual, total, valor in regex_de:
+    ):
+        desc, atual, total, valor = m.groups()
         try:
             val_limpo = float(valor.replace(".", "").replace(",", "."))
             parc_formatada = f"{int(atual)}/{int(total)}"
             if _is_parcela_valida(parc_formatada):
-                _add_resultado(desc.strip(), parc_formatada, val_limpo)
+                _add_resultado(desc.strip(), parc_formatada, val_limpo, texto, m.start())
         except: continue
 
     # PADRÃO D: linhas com data + descrição + parcela + valor
@@ -416,29 +435,29 @@ def extrair_parcelas(texto):
     # Nota: como a linha já começa com DD/MM (data da compra),
     # o segundo XX/YY é SEMPRE a parcela (nunca uma data).
     # IMPORTANTE: usar [ \t] em vez de \s para NÃO cruzar linhas!
-    regex_lead = re.findall(
+    for m in re.finditer(
         r'^[ \t]*(\d{1,2}/\d{1,2})[ \t]+(.+?)[ \t]+(\d{1,2}/\d{1,2})[ \t]+.*?(\d{1,3}(?:\.\d{3})*,\d{2})[ \t]*$',
         texto, re.IGNORECASE | re.MULTILINE
-    )
-    for date_str, desc, parc, valor in regex_lead:
+    ):
+        date_str, desc, parc, valor = m.groups()
         try:
             val_limpo = float(valor.replace(".", "").replace(",", "."))
             if _is_parcela_valida(parc):
-                _add_resultado(desc.strip(), parc, val_limpo)
+                _add_resultado(desc.strip(), parc, val_limpo, texto, m.start())
         except: continue
 
     # PADRÃO E: formato relaxado onde o 'xx/yy' cola ao texto
     # Ex: 'AMAZONMKTPLC*FITOW04/05 35,52' ou 'ANUIDADE DIFERENCI05/12 16,65'
     # Nota: usa [ \t] em vez de \s para NÃO casar quebras de linha (evita falsos positivos)
-    regex_relax = re.findall(
+    for m in re.finditer(
         r'([A-Za-z*][\w \t.*\-]*?)(\d{1,2}/\d{1,2})\s*(?:R\$\s*)?([\d\.,]+,\d{2})',
         texto, re.IGNORECASE
-    )
-    for desc, parc, valor in regex_relax:
+    ):
+        desc, parc, valor = m.groups()
         try:
             val_limpo = float(valor.replace(".", "").replace(",", "."))
             if _is_parcela_valida(parc):
-                _add_resultado(desc.strip(), parc, val_limpo)
+                _add_resultado(desc.strip(), parc, val_limpo, texto, m.start())
         except: continue
 
     # ================================================================
@@ -446,15 +465,22 @@ def extrair_parcelas(texto):
     # Itaú mostra parcela atual (ex: 04/12) E a do próximo mês (05/12)
     # no corpo da fatura. Manter apenas a de MENOR número — o sistema
     # projeta as futuras automaticamente ao importar.
+    #
+    # IMPORTANTE: só remove quando o número da parcela é MAIOR que o
+    # menor já visto para aquele (desc, total, valor) — isso é o que
+    # caracteriza o artefato "mês atual + mês seguinte" do Itaú (ex.:
+    # 4/12 e 5/12). Duas compras REAIS distintas no mesmo estabelecimento,
+    # com o mesmo valor e a MESMA parcela (ex.: duas compras "1 de 4" de
+    # R$119,90 em dias diferentes), têm atual IGUAL e nunca são removidas.
     # ================================================================
-    by_desc_total = {}  # (desc_base, total, valor) -> (menor_atual, indice)
-    for i, (desc, parc, val) in enumerate(resultados):
+    menor_atual_por_key = {}  # (desc_base, total, valor) -> menor atual visto
+    for desc, parc, val in resultados:
         try:
             atual, total = map(int, parc.split("/"))
             desc_base = re.sub(r'\s+', ' ', desc.upper().strip())
             key = (desc_base, total, round(val, 2))
-            if key not in by_desc_total or atual < by_desc_total[key][0]:
-                by_desc_total[key] = (atual, i)
+            if key not in menor_atual_por_key or atual < menor_atual_por_key[key]:
+                menor_atual_por_key[key] = atual
         except:
             pass
 
@@ -464,7 +490,7 @@ def extrair_parcelas(texto):
             atual, total = map(int, parc.split("/"))
             desc_base = re.sub(r'\s+', ' ', desc.upper().strip())
             key = (desc_base, total, round(val, 2))
-            if key in by_desc_total and by_desc_total[key][1] != i:
+            if key in menor_atual_por_key and atual > menor_atual_por_key[key]:
                 indices_remover.add(i)
         except:
             pass
@@ -832,33 +858,18 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
 
 
 def _dedup_itens(dados):
-    """Remove duplicatas de parcelas (mesma desc + mesma parcela + mesmo valor).
-    
-    Itens à vista (1/1) são mantidos mesmo que tenham mesma descrição
-    (ex: 3x TagItau 50,00 são cobranças reais distintas).
-    
-    Duas compras no mesmo estabelecimento com mesma parcela mas valores
-    diferentes são transações distintas (ex: 2x ATACADAO 02/02).
+    """Remove duplicatas reais entre a lista de parcelados e a de à-vista.
+
+    NÃO deduplica por (desc, parcela, valor) — duas compras genuinamente
+    repetidas (mesmo estabelecimento, mesmo valor, mesma parcela, em datas
+    diferentes) são transações distintas e devem ser mantidas. A remoção
+    de duplicatas geradas pelos próprios padrões de regex já acontece
+    dentro de extrair_parcelas() (por linha de origem no texto) e
+    extrair_itens_avista() (uma linha = um resultado), então aqui só
+    repassamos a lista combinada.
     """
-    seen_desc_parc = set()  # (desc_norm, parc, valor)
     resultado = []
     for desc, parc, val in dados:
-        desc_norm = re.sub(r'\s+', ' ', desc.upper().strip())
-        desc_base = re.sub(r'\s*\d{1,2}/\d{1,2}\s*', ' ', desc_norm).strip()
-        val_round = round(val, 2)
-        key = (desc_norm, parc, val_round)
-        key_base = (desc_base, parc, val_round)
-
-        # Permite múltiplas compras idênticas à vista (parc == '1/1')
-        if parc == '1/1':
-            resultado.append((desc, parc, val))
-            continue
-
-        # Para parcelas, deduplica normalmente
-        if key in seen_desc_parc or key_base in seen_desc_parc:
-            continue
-        seen_desc_parc.add(key)
-        seen_desc_parc.add(key_base)
         resultado.append((desc, parc, val))
     return resultado
 
