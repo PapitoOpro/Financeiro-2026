@@ -203,10 +203,15 @@ class CaixaManager:
             (user_id, marcador),
         )
 
+        # Mesmo filtro usado no card "Saldo Anterior": ignora faturas ainda
+        # projetadas (não importadas/pagas/fechadas) para o cálculo bater
+        # com o que é exibido na tela.
         row_soma_outros = db.buscar_um(
-            "SELECT COALESCE(SUM(valor), 0) FROM transacoes "
-            "WHERE user_id = %s AND (tipo_fluxo = 'CAIXA' OR tipo_fluxo IS NULL) "
-            "AND data_vencimento < %s AND descricao != %s",
+            "SELECT COALESCE(SUM(t.valor), 0) FROM transacoes t "
+            "LEFT JOIN faturas f ON t.fatura_id = f.id "
+            "WHERE t.user_id = %s AND (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL) "
+            "AND t.data_vencimento < %s AND t.descricao != %s "
+            "AND (t.fatura_id IS NULL OR f.status IN ('importada', 'paga', 'fechada'))",
             (user_id, data_inicio, marcador),
         )
         soma_outros = float(row_soma_outros[0]) if row_soma_outros else 0.0
