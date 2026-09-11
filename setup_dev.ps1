@@ -1,4 +1,4 @@
-<#
+﻿<#
 setup_dev.ps1
 PowerShell helper to create a virtualenv and install Python dependencies for the Financeiro-2026 project.
 

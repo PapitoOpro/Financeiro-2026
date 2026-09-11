@@ -121,6 +121,11 @@ class CaixaManager:
         )
         saldo_anterior = float(row_ant[0]) if row_ant else 0.0
 
+        # ── 4b. Correção manual do saldo anterior ─────────────────────────────
+        CaixaManager._renderizar_ajuste_saldo_anterior(
+            user_id, data_inicio, saldo_anterior, df_contas
+        )
+
         # ── 5. Resumo ─────────────────────────────────────────────────────────
         ent = df_caixa[df_caixa["valor"] > 0]["valor"].sum() if not df_caixa.empty else 0
         sai = abs(df_caixa[df_caixa["valor"] < 0]["valor"].sum()) if not df_caixa.empty else 0
@@ -147,6 +152,92 @@ class CaixaManager:
 
         with col_extrato:
             CaixaManager._renderizar_extrato(df_caixa, df_contas, df_cats)
+
+    # ─── Ajuste manual do saldo anterior ──────────────────────────────────────
+
+    _MARCADOR_AJUSTE = "[AJUSTE MANUAL] Saldo Anterior"
+
+    @staticmethod
+    def _renderizar_ajuste_saldo_anterior(user_id, data_inicio, saldo_anterior, df_contas):
+        """Permite corrigir manualmente o saldo anterior quando lançamentos
+        de meses passados foram apagados (ex.: reset de backup) e o saldo
+        acumulado calculado deixou de bater com o saldo real do banco."""
+        with st.expander("🔧 Corrigir saldo anterior manualmente"):
+            st.caption(
+                "Use apenas se o saldo anterior estiver incorreto (ex.: lançamentos "
+                "de meses passados foram apagados). Isso cria/atualiza um único "
+                "lançamento de ajuste datado do dia anterior ao mês selecionado — "
+                "não apaga nem altera nenhum outro lançamento."
+            )
+            st.write(f"Saldo anterior calculado atualmente: **{moeda(saldo_anterior)}**")
+
+            novo_saldo = st.number_input(
+                "Saldo anterior correto (R$)",
+                value=float(saldo_anterior),
+                step=0.01,
+                format="%.2f",
+                key="ajuste_saldo_valor",
+            )
+            conta_ajuste = st.selectbox(
+                "Conta de referência para o ajuste",
+                df_contas["nome"] if not df_contas.empty else [""],
+                key="ajuste_saldo_conta",
+            )
+
+            if st.button("Aplicar ajuste", key="btn_ajuste_saldo", icon=":material/build:"):
+                CaixaManager._aplicar_ajuste_saldo_anterior(
+                    user_id, data_inicio, novo_saldo, conta_ajuste, df_contas
+                )
+                _invalidar_cache()
+                st.rerun()
+
+    @staticmethod
+    def _aplicar_ajuste_saldo_anterior(user_id, data_inicio, valor_desejado, conta_nome, df_contas):
+        marcador = CaixaManager._MARCADOR_AJUSTE
+        data_ajuste = (
+            datetime.strptime(data_inicio, "%Y-%m-%d") - relativedelta(days=1)
+        ).date()
+
+        row_existente = db.buscar_um(
+            "SELECT id FROM transacoes WHERE user_id = %s AND descricao = %s",
+            (user_id, marcador),
+        )
+
+        row_soma_outros = db.buscar_um(
+            "SELECT COALESCE(SUM(valor), 0) FROM transacoes "
+            "WHERE user_id = %s AND (tipo_fluxo = 'CAIXA' OR tipo_fluxo IS NULL) "
+            "AND data_vencimento < %s AND descricao != %s",
+            (user_id, data_inicio, marcador),
+        )
+        soma_outros = float(row_soma_outros[0]) if row_soma_outros else 0.0
+        valor_ajuste = round(float(valor_desejado) - soma_outros, 2)
+
+        cid = (
+            int(df_contas[df_contas.nome == conta_nome].id.values[0])
+            if not df_contas.empty and conta_nome
+            else None
+        )
+
+        if row_existente:
+            if abs(valor_ajuste) < 0.005:
+                db.executar(
+                    "DELETE FROM transacoes WHERE id = ? AND user_id = ?",
+                    (int(row_existente[0]), user_id),
+                )
+            else:
+                db.executar(
+                    "UPDATE transacoes SET valor=?, data_vencimento=?, conta_id=?, "
+                    "compensado=TRUE, data_compensacao=? WHERE id=? AND user_id=?",
+                    (valor_ajuste, data_ajuste, cid, data_ajuste, int(row_existente[0]), user_id),
+                )
+        elif abs(valor_ajuste) >= 0.005:
+            db.executar(
+                "INSERT INTO transacoes "
+                "(descricao, valor, data_vencimento, conta_id, tipo_fluxo, "
+                " compensado, data_compensacao, user_id) "
+                "VALUES (?,?,?,?,'CAIXA',TRUE,?,?)",
+                (marcador, valor_ajuste, data_ajuste, cid, data_ajuste, user_id),
+            )
 
     # ─── Cards de resumo ──────────────────────────────────────────────────────
 
