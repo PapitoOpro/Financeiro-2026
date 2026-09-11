@@ -166,7 +166,6 @@ _LINHAS_RUIDO_RE = [re.compile(p, re.IGNORECASE) for p in [
     r'tarifas?\s+e\s+encargos',
     r'pagamentos?\s+e\s+creditos?\s+devolvidos',
     r'juros\s+do\s+m[eê]s\s+anterior',
-    r'multas?\s+por\s+atraso',
     r'saque\s+(utilizado|dispon[ií]vel|total)',
     r'tarifa\s+de\s+saque',
     r'\bate\s+\d+\s*\+\s*\d+x\b',  # oferta "Ate 1 + 9x R$ ..." (parcelamento do minimo)
@@ -198,19 +197,35 @@ _LINHAS_RUIDO_RE = [re.compile(p, re.IGNORECASE) for p in [
     r'limites?\s+de\s+credito\s+crediario',
     r'^\s*utilizado\s+r\$',
     r'limite\s+de\s+saque',
-    r'iof\s+adicional\s+sobre\s+saldo\s+financia',
     r'^\s*saldo\s+r\$\s*[\d.,]+\s*$',
     r'valor\s+da\s+fatura\s+e\s+r\$',  # boleto: "O VALOR DA FATURA E R$ ..."
     r'^\s*\d+\s+real\s+[\d.,]+\s*$',  # boleto: código de moeda "109 Real 617,54"
 ]]
 
+# Padrões que só indicam ruído quando a linha NÃO começa com data (DD/MM):
+# sem data é sempre um resumo/duplicata ("Resumo da fatura"); com data é um
+# encargo real lançado naquele dia (ex.: "05/08 MULTA POR ATRASO 13,12"),
+# que o usuário pode querer revisar/importar como item avulso.
+_LINHAS_RUIDO_SO_SEM_DATA_RE = [re.compile(p, re.IGNORECASE) for p in [
+    r'multas?\s+por\s+atraso',
+    r'iof\s+adicional\s+sobre\s+saldo\s+financia',
+    r'juros\s+de\s+mora',
+]]
+
+_RE_LINHA_COM_DATA = re.compile(r'^\s*\d{1,2}/\d{1,2}\s')
+
 
 def _remover_linhas_ruido(texto):
     """Remove linhas de resumo/rodapé que não representam uma compra real."""
-    linhas_out = [
-        linha for linha in texto.split('\n')
-        if not any(p.search(linha) for p in _LINHAS_RUIDO_RE)
-    ]
+    linhas_out = []
+    for linha in texto.split('\n'):
+        if any(p.search(linha) for p in _LINHAS_RUIDO_RE):
+            continue
+        if not _RE_LINHA_COM_DATA.match(linha) and any(
+            p.search(linha) for p in _LINHAS_RUIDO_SO_SEM_DATA_RE
+        ):
+            continue
+        linhas_out.append(linha)
     return '\n'.join(linhas_out)
 
 
@@ -603,7 +618,7 @@ def extrair_itens_avista(texto, itens_parcelados=None):
         'pagamento da fatura', 'pagamento da conta', 'pagamento efetuado',
         'pagamento minimo', 'pagamento pix',
         'credito concedido', 'credito de estorno', 'credito aplicado',
-        'multa por atraso', 'juros do rotativo', 'juros de mora',
+        'juros do rotativo',
         'iof do rotativo', 'iof de financ',
         'encargo financeiro', 'encargo do rotativo', 'encargos financ',
         'encargos cobrados', 'encargos refin', 'encargos (',
