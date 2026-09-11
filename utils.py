@@ -170,6 +170,10 @@ _LINHAS_RUIDO_RE = [re.compile(p, re.IGNORECASE) for p in [
     r'saque\s+(utilizado|dispon[ií]vel|total)',
     r'tarifa\s+de\s+saque',
     r'\bate\s+\d+\s*\+\s*\d+x\b',  # oferta "Ate 1 + 9x R$ ..." (parcelamento do minimo)
+    r'limite\s+dispon[ií]vel',
+    r'limite\s+total',
+    r'valor\s+original\s+da\s+d[ií]vida',
+    r'principal\s*\(?r\$',  # detalhamento "Principal (R$ X) + Juros (R$ Y)" de parcelamento
     r'^\s*compras\s+parceladas\b',
     r'^\s*fatura\s+parcelada\b',
     r'total\s*:',
@@ -778,7 +782,14 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
             return _split_multicolunas(tc)
 
         def _contar_transacoes(t):
-            return len(re.findall(r'^\d{1,2}/\d{1,2}\s+\S', t, re.MULTILINE))
+            # Exige data NO INÍCIO da linha e um valor monetário em algum
+            # ponto dela — só contar "começa com data" supervaloriza layouts
+            # que quebram a coluna do valor (ex.: crop_columns perdendo a
+            # coluna à direita) mesmo tendo MENOS transações completas.
+            return len(re.findall(
+                r'^\d{1,2}/\d{1,2}[ \t]+\S.*\d{1,3}(?:\.\d{3})*,\d{2}',
+                t, re.MULTILINE
+            ))
 
         candidatos = []
 
