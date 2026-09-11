@@ -178,6 +178,30 @@ _LINHAS_RUIDO_RE = [re.compile(p, re.IGNORECASE) for p in [
     r'^\s*fatura\s+parcelada\b',
     r'total\s*:',
     r'\d{1,2}/\d{1,2}\s+a\s+\d{1,2}/\d{1,2}',  # período "06/08 a 05/09"
+    # ── Resumo da fatura / simuladores de parcelamento (Porto Bank e similares) ──
+    r'total\s+de\s+despesas\s+parceladas',
+    r'^\s*(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|'
+    r'outubro|novembro|dezembro)\s+r\$',  # projeção "Outubro R$ 580,42"
+    r'^\s*demais\s+faturas\b',
+    r'saldo\s+fatura\s+anterior',
+    r'pagamento\s*/\s*creditos',
+    r'encargos\s+de\s+(rotativo|compras\s+parceladas|parcelamento\s+da\s+fatura|saque)',
+    r'despesas\s*/\s*debitos',
+    r'saldo\s+em\s+dolar',
+    r'saldo\s+convertido\s+em\s+reais',
+    r'^\s*(i{1,3})\s*-\s*(rotativo|parcelamento\s+de\s+rotativo|novos\s+lancamentos)',
+    r'^\s*parcelamento\s+de\s+fatura\b',
+    r'^\s*parcelamento\s+rotativo\b',
+    r'^\s*pagamento\s+de\s+contas\b',
+    r'renegociacao\s+de\s+divida',
+    r'^\s*renegociacao\s*:',
+    r'limites?\s+de\s+credito\s+crediario',
+    r'^\s*utilizado\s+r\$',
+    r'limite\s+de\s+saque',
+    r'iof\s+adicional\s+sobre\s+saldo\s+financia',
+    r'^\s*saldo\s+r\$\s*[\d.,]+\s*$',
+    r'valor\s+da\s+fatura\s+e\s+r\$',  # boleto: "O VALOR DA FATURA E R$ ..."
+    r'^\s*\d+\s+real\s+[\d.,]+\s*$',  # boleto: código de moeda "109 Real 617,54"
 ]]
 
 
