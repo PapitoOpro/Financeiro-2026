@@ -7,6 +7,8 @@ import pandas as pd
 import psycopg2
 import psycopg2.pool
 import atexit
+import json
+import re
 from contextlib import contextmanager
 from supabase import create_client
 
@@ -25,6 +27,9 @@ except Exception:
 class DatabaseManager:
     """Gerenciador centralizado de conexões e operações do banco."""
     _banco_inicializado = False
+    _LOG_ACAO_RE = re.compile(
+        r'^\s*(INSERT INTO|UPDATE|DELETE FROM)\s+([a-zA-Z_][a-zA-Z0-9_]*)', re.IGNORECASE
+    )
 
     def __init__(self):
         self.conn = None
@@ -190,6 +195,7 @@ class DatabaseManager:
             with conn.cursor() as cur:
                 cur.execute(q, params_native)
             conn.commit()
+            self._registrar_log_acao(q, params_native)
             return True
         except Exception as e:
             st.error(f" Erro na execução: {e}")
@@ -206,7 +212,44 @@ class DatabaseManager:
                 pass
             self.conn = None
             return False
-    
+
+    def _registrar_log_acao(self, query, params):
+        """Grava um registro de auditoria para toda mutação (INSERT/UPDATE/DELETE).
+
+        Nunca deve interromper o fluxo principal: qualquer falha aqui é
+        silenciosamente ignorada.
+        """
+        match = self._LOG_ACAO_RE.match(query)
+        if not match:
+            return
+        tabela = match.group(2).lower()
+        if tabela == "log_acoes":
+            return
+        acao = match.group(1).split()[0].upper()
+        user_id = self.get_user_id()
+        try:
+            parametros_json = json.dumps(params, default=str, ensure_ascii=False)
+            conn = self.get_connection()
+            if conn is None:
+                return
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO log_acoes (user_id, acao, tabela, query, parametros) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (user_id, acao, tabela, query.strip(), parametros_json),
+                )
+            conn.commit()
+        except Exception:
+            pass
+
+    def buscar_logs(self, user_id, limite=500):
+        """Retorna o log de ações (mutações) do usuário, mais recentes primeiro."""
+        return self.buscar(
+            "SELECT id, acao, tabela, query, parametros, criado_em "
+            "FROM log_acoes WHERE user_id = %s ORDER BY criado_em DESC LIMIT %s",
+            (user_id, limite),
+        )
+
     def buscar(self, query, params=()):
         """Retorna DataFrame com resultados."""
         conn = self.get_connection()

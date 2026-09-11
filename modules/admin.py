@@ -3,6 +3,7 @@
 # ==========================================
 
 import streamlit as st
+import pandas as pd
 from database import db
 
 class AdminManager:
@@ -91,16 +92,19 @@ class AdminManager:
                 AdminManager.limpar_residuos_e_sincronizar()
             st.success("Recalculo e sincronização concluídos!")
         # Seções do admin
-        tab1, tab2, tab3 = st.tabs(["Estatísticas", "Resetar Dados", "Usuários"])
-        
+        tab1, tab2, tab3, tab4 = st.tabs(["Estatísticas", "Resetar Dados", "Usuários", "Log de Ações"])
+
         with tab1:
             AdminManager._tab_estatisticas()
-        
+
         with tab2:
             AdminManager._tab_resetar()
-        
+
         with tab3:
             AdminManager._tab_usuarios()
+
+        with tab4:
+            AdminManager._tab_log_acoes()
     
     @staticmethod
     def _tab_estatisticas():
@@ -284,6 +288,49 @@ class AdminManager:
         except Exception as e:
             st.error(f" Erro ao deletar: {e}")
     
+    @staticmethod
+    def _tab_log_acoes():
+        """Exibe o log de ações (INSERT/UPDATE/DELETE) do usuário logado."""
+        st.subheader("Log de Ações")
+        st.caption(
+            "Todo lançamento, edição ou exclusão feito no sistema fica registrado aqui, "
+            "mais recente primeiro. O volume pode ficar grande — use os filtros abaixo."
+        )
+
+        user_id = db.get_user_id()
+        limite = st.number_input(
+            "Quantidade de registros", min_value=50, max_value=5000, value=500, step=50
+        )
+        df_log = db.buscar_logs(user_id, limite=int(limite))
+
+        if df_log.empty:
+            st.info("Nenhuma ação registrada ainda.")
+            return
+
+        acoes_disp = sorted(df_log["acao"].unique().tolist())
+        tabelas_disp = sorted(df_log["tabela"].unique().tolist())
+
+        col1, col2 = st.columns(2)
+        acao_sel = col1.multiselect("Filtrar por ação", acoes_disp, default=acoes_disp)
+        tabela_sel = col2.multiselect("Filtrar por tabela", tabelas_disp, default=tabelas_disp)
+
+        df_filtrado = df_log[
+            df_log["acao"].isin(acao_sel) & df_log["tabela"].isin(tabela_sel)
+        ]
+
+        st.caption(f"{len(df_filtrado)} de {len(df_log)} registro(s) carregado(s).")
+        st.dataframe(
+            df_filtrado.rename(columns={
+                "criado_em": "Data/Hora",
+                "acao": "Ação",
+                "tabela": "Tabela",
+                "query": "Query",
+                "parametros": "Parâmetros",
+            }),
+            width="stretch",
+            hide_index=True,
+        )
+
     @staticmethod
     def _recriar_banco():
         """Recria o banco do zero."""
