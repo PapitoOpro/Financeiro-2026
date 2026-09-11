@@ -62,6 +62,7 @@ def _fetch_extrato(user_id, data_inicio, data_fim):
         WHERE t.user_id = %s
           AND (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL)
           AND t.data_vencimento BETWEEN %s AND %s
+          AND (t.fatura_id IS NULL OR f.status IN ('importada', 'paga', 'fechada'))
         ORDER BY t.data_vencimento DESC
         """,
         (user_id, data_inicio, data_fim),
@@ -111,9 +112,11 @@ class CaixaManager:
 
         # ── 4. Saldo anterior (acumulado até início do mês) ───────────────────
         row_ant = db.buscar_um(
-            "SELECT COALESCE(SUM(valor), 0) FROM transacoes "
-            "WHERE user_id = %s AND (tipo_fluxo = 'CAIXA' OR tipo_fluxo IS NULL) "
-            "AND data_vencimento < %s",
+            "SELECT COALESCE(SUM(t.valor), 0) FROM transacoes t "
+            "LEFT JOIN faturas f ON t.fatura_id = f.id "
+            "WHERE t.user_id = %s AND (t.tipo_fluxo = 'CAIXA' OR t.tipo_fluxo IS NULL) "
+            "AND t.data_vencimento < %s "
+            "AND (t.fatura_id IS NULL OR f.status IN ('importada', 'paga', 'fechada'))",
             (user_id, data_inicio),
         )
         saldo_anterior = float(row_ant[0]) if row_ant else 0.0

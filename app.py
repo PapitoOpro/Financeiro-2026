@@ -22,7 +22,7 @@ from modules.onboarding import OnboardingManager
 # CONFIGURAÇÃO DA PÁGINA
 # ==========================================
 st.set_page_config(
-    page_title="Finanças IA Pro",
+    page_title="Finanças Pro",
     page_icon="$",
     layout="wide",
     initial_sidebar_state="expanded"
