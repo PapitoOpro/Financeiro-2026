@@ -157,6 +157,35 @@ def parser_generico(texto):
 # ORQUESTRADOR PRINCIPAL
 # ==========================================
 
+# Linhas de resumo/rodapé de fatura que NUNCA são uma compra do usuário,
+# mas que os parsers de parcela/à-vista acabavam capturando como item
+# (ex.: "Tarifas e encargos R$ 4,94 Pagamentos e creditos devolvidos R$ 1.342,19",
+# "Multas por atraso R$ 23,38", "06/08 a 05/09 R$ 1.402,49 ...", ofertas de
+# parcelamento do mínimo, saque, subtotais de seção).
+_LINHAS_RUIDO_RE = [re.compile(p, re.IGNORECASE) for p in [
+    r'tarifas?\s+e\s+encargos',
+    r'pagamentos?\s+e\s+creditos?\s+devolvidos',
+    r'juros\s+do\s+m[eê]s\s+anterior',
+    r'multas?\s+por\s+atraso',
+    r'saque\s+(utilizado|dispon[ií]vel|total)',
+    r'tarifa\s+de\s+saque',
+    r'\bate\s+\d+\s*\+\s*\d+x\b',  # oferta "Ate 1 + 9x R$ ..." (parcelamento do minimo)
+    r'^\s*compras\s+parceladas\b',
+    r'^\s*fatura\s+parcelada\b',
+    r'total\s*:',
+    r'\d{1,2}/\d{1,2}\s+a\s+\d{1,2}/\d{1,2}',  # período "06/08 a 05/09"
+]]
+
+
+def _remover_linhas_ruido(texto):
+    """Remove linhas de resumo/rodapé que não representam uma compra real."""
+    linhas_out = [
+        linha for linha in texto.split('\n')
+        if not any(p.search(linha) for p in _LINHAS_RUIDO_RE)
+    ]
+    return '\n'.join(linhas_out)
+
+
 def _split_multicolunas(texto):
     """Divide linhas com múltiplas transações (formato Itaú 2 colunas).
 
@@ -207,7 +236,7 @@ def _split_multicolunas(texto):
                     linhas_out.append(linha_split_marker)
             else:
                 linhas_out.append(linha_split_marker)
-    return '\n'.join(linhas_out)
+    return _remover_linhas_ruido('\n'.join(linhas_out))
 
 def limpar_linha(linha):
     linha = linha.strip()
