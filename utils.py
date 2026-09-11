@@ -254,6 +254,17 @@ def limpar_linha(linha):
     # corrige "- 0,01" → "-0,01"
     linha = re.sub(r'-\s+(\d)', r'-\1', linha)
 
+    # Remove texto de simulador de parcelamento colado após o valor real
+    # da transação (coluna vizinha mesclada pelo extract_text). Ex.:
+    # "21/08 Amazon Ad free for Prim 10,00 IOF de financiamento 0,38% ... 0,00"
+    # → "21/08 Amazon Ad free for Prim 10,00"
+    linha = re.sub(
+        r'(\d{1,3}(?:\.\d{3})*,\d{2})\s+(?:IOF\s+de\s+financiamento|Juros\s+M[aá]ximos?|'
+        r'Valor\s+total\s+financiado|Valor\s+solicitado|Encargos\b|CET\b).*$',
+        r'\1',
+        linha, flags=re.IGNORECASE
+    )
+
     # remove múltiplos espaços
     linha = re.sub(r'\s+', ' ', linha)
 
