@@ -10,7 +10,10 @@ from dateutil.relativedelta import relativedelta
 from database import db
 import plotly.express as px
 import plotly.graph_objects as go
-from utils import moeda, processar_fatura, processar_texto_colado, get_cor_valor, get_cor_saldo
+from utils import (
+    moeda, processar_fatura, processar_texto_colado, get_cor_valor, get_cor_saldo,
+    extrair_ultimos_digitos_cartao, encontrar_conta_por_digitos, sugerir_subcategoria,
+)
 from typing import Any, cast
 
 def normalizar_valor_fatura(valor):
@@ -168,9 +171,11 @@ class ParcelasManager:
         st.session_state["ocr_banco"] = "GENÉRICO"
         st.session_state["ocr_texto"] = ""
         st.session_state["ocr_dados"] = []
+        st.session_state["ocr_categorias"] = []
         st.session_state.pop("ocr_dados_editaveis", None)
         st.session_state.pop("ocr_manual_itens", None)
         st.session_state.pop("ocr_metodo", None)
+        st.session_state.pop("ocr_digitos_cartao", None)
         # Incrementa versão para invalidar widgets antigos
         st.session_state["ocr_version"] = st.session_state.get("ocr_version", 0) + 1
 
@@ -256,7 +261,7 @@ class ParcelasManager:
             if processar_btn:
                 with st.spinner("Lendo PDF e extraindo lançamentos... aguarde."):
                     try:
-                        banco_p, texto_p, dados_p, metodo_p = processar_fatura(
+                        banco_p, texto_p, dados_p, metodo_p, categorias_p = processar_fatura(
                             pdf_file, senha_pdf=senha_pdf, incluir_avista=True
                         )
 
@@ -274,7 +279,9 @@ class ParcelasManager:
                             st.session_state["ocr_banco"] = banco_p
                             st.session_state["ocr_texto"] = texto_p
                             st.session_state["ocr_dados"] = dados_p
+                            st.session_state["ocr_categorias"] = categorias_p
                             st.session_state["ocr_metodo"] = metodo_p
+                            st.session_state["ocr_digitos_cartao"] = extrair_ultimos_digitos_cartao(texto_p)
                             st.session_state.pop("ocr_dados_editaveis", None)
                             st.session_state["ocr_version"] = (
                                 st.session_state.get("ocr_version", 0) + 1
@@ -306,12 +313,14 @@ class ParcelasManager:
             )
             if texto_colado:
                 if st.button("Processar texto colado", icon=":material/refresh:", key="btn_processar_texto"):
-                    banco_c, texto_c, dados_c, metodo_c = processar_texto_colado(texto_colado)
+                    banco_c, texto_c, dados_c, metodo_c, categorias_c = processar_texto_colado(texto_colado)
                     if dados_c:
                         st.session_state["ocr_banco"] = banco_c
                         st.session_state["ocr_texto"] = texto_c
                         st.session_state["ocr_dados"] = dados_c
+                        st.session_state["ocr_categorias"] = categorias_c
                         st.session_state["ocr_metodo"] = metodo_c
+                        st.session_state["ocr_digitos_cartao"] = extrair_ultimos_digitos_cartao(texto_c)
                         st.session_state.pop("ocr_dados_editaveis", None)
                         st.session_state["ocr_version"] = (
                             st.session_state.get("ocr_version", 0) + 1
@@ -338,36 +347,65 @@ class ParcelasManager:
             def _excluir_item(idx_to_del):
                 eds = st.session_state.get("ocr_dados_editaveis", [])
                 svd = list(st.session_state.get("ocr_dados", []))
+                cats = list(st.session_state.get("ocr_categorias", []))
                 if 0 <= idx_to_del < len(eds):
                     eds.pop(idx_to_del)
                 if 0 <= idx_to_del < len(svd):
                     svd.pop(idx_to_del)
+                if 0 <= idx_to_del < len(cats):
+                    cats.pop(idx_to_del)
                 st.session_state["ocr_dados_editaveis"] = eds
                 st.session_state["ocr_dados"] = svd
+                st.session_state["ocr_categorias"] = cats
                 # Incrementa versão ? todos os widgets são recriados com chaves novas
                 st.session_state["ocr_version"] = st.session_state.get("ocr_version", 0) + 1
 
             # Inicializa dados editáveis no session_state (só na primeira vez)
             if "ocr_dados_editaveis" not in st.session_state or len(st.session_state["ocr_dados_editaveis"]) != len(dados_salvos):
+                categorias_salvas = st.session_state.get("ocr_categorias", [])
                 st.session_state["ocr_dados_editaveis"] = [
-                    {"desc": d[0], "parc": d[1], "valor": d[2], "importar": True}
-                    for d in dados_salvos
+                    {
+                        "desc": d[0], "parc": d[1], "valor": d[2], "importar": True,
+                        "categoria_sugerida": categorias_salvas[i] if i < len(categorias_salvas) else None,
+                    }
+                    for i, d in enumerate(dados_salvos)
                 ]
 
             dados_editaveis = st.session_state["ocr_dados_editaveis"]
             _v = st.session_state.get("ocr_version", 0)  # versão para chaves únicas
 
+            # Sugestões de subcategoria por item (best-effort, revisável na tabela)
+            df_subs_sugestao = db.buscar(
+                """
+                SELECT s.id, s.nome, s.categoria_id, c.nome as categoria_nome
+                FROM subcategorias s
+                JOIN categorias c ON s.categoria_id = c.id
+                WHERE s.user_id = %s AND s.ativa = TRUE
+                ORDER BY s.nome
+                """,
+                (db.get_user_id(),),
+            )
+            PLACEHOLDER_CAT_PADRAO = "— Categoria Padrão do lote —"
+            opcoes_subcategoria = [PLACEHOLDER_CAT_PADRAO] + [
+                f"{r['nome']} ({r['categoria_nome']})" for _, r in df_subs_sugestao.iterrows()
+            ]
+
             # Cabeçalho da tabela
-            hdr1, hdr2, hdr3, hdr4, hdr5, hdr6 = st.columns([0.4, 2.8, 1.0, 1.2, 1.5, 1.0])
+            hdr1, hdr2, hdr3, hdr4, hdr5, hdr_cat, hdr6 = st.columns([0.4, 2.4, 1.0, 1.1, 1.3, 1.8, 1.0])
             hdr1.markdown("****")
             hdr2.markdown("**Descrição**")
             hdr3.markdown("**Tipo**")
             hdr4.markdown("**Parcela**")
             hdr5.markdown("**Valor (R$)**")
+            hdr_cat.markdown("**Categoria**")
             hdr6.markdown("**Ação**")
 
+            categorias_sem_match = {}  # categoria_raw -> quantidade de itens
+
             for idx, item in enumerate(dados_editaveis):
-                c_check, c_desc, c_tipo, c_parc, c_val, c_del = st.columns([0.4, 2.8, 1.0, 1.2, 1.5, 1.0])
+                c_check, c_desc, c_tipo, c_parc, c_val, c_cat, c_del = st.columns(
+                    [0.4, 2.4, 1.0, 1.1, 1.3, 1.8, 1.0]
+                )
 
                 # Determina tipo (à vista ou parcelado)
                 # Só é "à vista" se parcela == 1/1. Ex: 02/02 é a última parcela, não à vista.
@@ -411,12 +449,85 @@ class ParcelasManager:
                         key=f"audit_val_{_v}_{idx}", label_visibility="collapsed",
                         format="%.2f"
                     )
+                with c_cat:
+                    categoria_raw = item.get("categoria_sugerida")
+                    sugestao = sugerir_subcategoria(categoria_raw, df_subs_sugestao) if categoria_raw else None
+                    if sugestao:
+                        sub_id_sug, cat_id_sug, nome_sug = sugestao
+                        nome_cat_sug = df_subs_sugestao.loc[
+                            df_subs_sugestao['id'] == sub_id_sug, 'categoria_nome'
+                        ].values[0]
+                        opcao_default = f"{nome_sug} ({nome_cat_sug})"
+                        idx_default = (
+                            opcoes_subcategoria.index(opcao_default)
+                            if opcao_default in opcoes_subcategoria else 0
+                        )
+                    else:
+                        idx_default = 0
+                        if categoria_raw:
+                            categorias_sem_match[categoria_raw] = categorias_sem_match.get(categoria_raw, 0) + 1
+
+                    escolha = st.selectbox(
+                        "Categoria", opcoes_subcategoria, index=idx_default,
+                        key=f"audit_cat_{_v}_{idx}", label_visibility="collapsed",
+                    )
+                    if escolha != PLACEHOLDER_CAT_PADRAO:
+                        sub_escolhida = df_subs_sugestao[
+                            (df_subs_sugestao['nome'] + " (" + df_subs_sugestao['categoria_nome'] + ")") == escolha
+                        ]
+                        item["subcategoria_id"] = int(sub_escolhida['id'].values[0]) if not sub_escolhida.empty else None
+                        item["categoria_id"] = int(sub_escolhida['categoria_id'].values[0]) if not sub_escolhida.empty else None
+                    else:
+                        item["subcategoria_id"] = None
+                        item["categoria_id"] = None
+                    if categoria_raw and not sugestao:
+                        st.caption(f"💡 '{categoria_raw}' não cadastrada")
                 with c_del:
                     st.button(
                         "Excluir", key=f"audit_del_{_v}_{idx}",
                         icon=":material/delete:",
                         on_click=_excluir_item, args=(idx,),
                     )
+
+            # ============================================================
+            # CATEGORIAS DA FATURA SEM SUBCATEGORIA CORRESPONDENTE
+            # ============================================================
+            if categorias_sem_match:
+                with st.expander(
+                    f"💡 {len(categorias_sem_match)} categoria(s) da fatura sem subcategoria cadastrada",
+                    expanded=False,
+                ):
+                    st.caption(
+                        "A fatura trouxe estas categorias automaticamente, mas você ainda não tem "
+                        "uma subcategoria parecida cadastrada. Crie uma agora se quiser aproveitar a sugestão."
+                    )
+                    df_cats_pai = db.buscar(
+                        "SELECT id, nome FROM categorias WHERE user_id = %s AND ativa = TRUE ORDER BY nome",
+                        (db.get_user_id(),),
+                    )
+                    for cat_raw, qtd in sorted(categorias_sem_match.items()):
+                        cc1, cc2, cc3 = st.columns([2, 2.5, 1.5])
+                        cc1.markdown(f"**{cat_raw}** ({qtd}x)")
+                        if not df_cats_pai.empty:
+                            cat_pai_nome = cc2.selectbox(
+                                "Categoria pai", df_cats_pai['nome'].tolist(),
+                                key=f"nova_sub_pai_{cat_raw}", label_visibility="collapsed",
+                            )
+                            if cc3.button(
+                                f"Criar '{cat_raw}'", key=f"btn_criar_sub_{cat_raw}",
+                                icon=":material/add:", use_container_width=True,
+                            ):
+                                cat_pai_id = int(df_cats_pai.loc[df_cats_pai['nome'] == cat_pai_nome, 'id'].values[0])
+                                db.executar(
+                                    "INSERT INTO subcategorias (nome, categoria_id, ativa, user_id) "
+                                    "VALUES (%s, %s, TRUE, %s) ON CONFLICT (nome, categoria_id, user_id) DO NOTHING",
+                                    (cat_raw.capitalize(), cat_pai_id, db.get_user_id())
+                                )
+                                st.toast(f"✅ Subcategoria '{cat_raw.capitalize()}' criada!")
+                                st.cache_data.clear()
+                                ParcelasManager._safe_rerun()
+                        else:
+                            cc2.caption("Cadastre uma categoria macro primeiro, em Cadastros.")
 
             # ============================================================
             # ADICIONAR COMPRAS MANUAIS (não capturadas pelo OCR)
@@ -439,13 +550,19 @@ class ParcelasManager:
                     elif not re.match(r'^\d{1,2}/\d{1,2}$', manual_parc.strip()):
                         st.error("Parcela deve estar no formato X/Y (ex: 1/1, 3/10).")
                     else:
-                        novo_item = {"desc": manual_desc.strip(), "parc": manual_parc.strip(), "valor": manual_valor, "importar": True}
+                        novo_item = {
+                            "desc": manual_desc.strip(), "parc": manual_parc.strip(), "valor": manual_valor,
+                            "importar": True, "categoria_sugerida": None,
+                        }
                         dados_editaveis.append(novo_item)
                         st.session_state["ocr_dados_editaveis"] = dados_editaveis
-                        # Sincroniza ocr_dados também
+                        # Sincroniza ocr_dados / ocr_categorias também
                         dados_salvos_list = list(st.session_state.get("ocr_dados", []))
                         dados_salvos_list.append((novo_item["desc"], novo_item["parc"], novo_item["valor"]))
                         st.session_state["ocr_dados"] = dados_salvos_list
+                        categorias_list = list(st.session_state.get("ocr_categorias", []))
+                        categorias_list.append(None)
+                        st.session_state["ocr_categorias"] = categorias_list
                         # Incrementa versão para widgets serem recriados
                         st.session_state["ocr_version"] = st.session_state.get("ocr_version", 0) + 1
                         st.toast(f"✅ \"{manual_desc.strip()}\" adicionado!")
@@ -485,15 +602,36 @@ class ParcelasManager:
                 if not lista_cats:
                     st.error("⚠️ Nenhuma categoria cadastrada. Cadastre em Cadastros antes de importar.")
 
-                conta = col1.selectbox("Cartão de Destino", lista_contas if lista_contas else ["Sem contas"])
+                digitos_detectados = st.session_state.get("ocr_digitos_cartao")
+                conta_detectada = (
+                    encontrar_conta_por_digitos(digitos_detectados, df_contas) if digitos_detectados else None
+                )
+                idx_conta_default = (
+                    lista_contas.index(conta_detectada)
+                    if conta_detectada and conta_detectada in lista_contas else 0
+                )
+
+                conta = col1.selectbox(
+                    "Cartão de Destino", lista_contas if lista_contas else ["Sem contas"],
+                    index=idx_conta_default,
+                )
+                if conta_detectada:
+                    col1.caption(f"✅ Detectado automaticamente pelos últimos dígitos ({digitos_detectados})")
+                elif digitos_detectados:
+                    col1.caption(
+                        f"Últimos dígitos detectados na fatura: {digitos_detectados} — cadastre em "
+                        "Cadastros › Bancos e Cartões para detecção automática da próxima vez."
+                    )
                 data_base = col2.date_input("Vencimento da 1ª Parcela do Lote")
                 cat = st.selectbox("Categoria Padrão", lista_cats if lista_cats else ["Sem categorias"])
 
                 if st.form_submit_button("Salvar no Banco (Aplicar Trava Anti-Duplicidade)", width='stretch'):
-                    # Monta lista final apenas com itens marcados para importar
-                    dados_finais = [
-                        (d["desc"], d["parc"], d["valor"])
-                        for d in dados_editaveis if d["importar"]
+                    # Monta lista final apenas com itens marcados para importar,
+                    # junto com a subcategoria escolhida (se houver) por item.
+                    itens_marcados = [d for d in dados_editaveis if d["importar"]]
+                    dados_finais = [(d["desc"], d["parc"], d["valor"]) for d in itens_marcados]
+                    subcategorias_finais = [
+                        (d.get("subcategoria_id"), d.get("categoria_id")) for d in itens_marcados
                     ]
                     if not dados_finais:
                         st.warning("⚠️ Nenhuma parcela selecionada para importar.")
@@ -505,7 +643,8 @@ class ParcelasManager:
                         st.error("⚠️ Selecione a data de vencimento da 1ª parcela.")
                     else:
                         ParcelasManager._importar_pdf_dados(
-                            dados_finais, banco_detectado, conta, cat, data_base, df_contas, df_cats
+                            dados_finais, banco_detectado, conta, cat, data_base, df_contas, df_cats,
+                            subcategorias_por_item=subcategorias_finais,
                         )
     @staticmethod
     def _tab_importar_csv(df_contas, df_cats):
@@ -656,8 +795,14 @@ class ParcelasManager:
                     st.session_state["csv_dados"] = [] 
 
     @staticmethod
-    def _importar_pdf_dados(dados, banco, conta, cat, data_base, df_contas, df_cats):
-        """Importa dados do PDF/CSV criando faturas + itens (modelo novo)."""
+    def _importar_pdf_dados(dados, banco, conta, cat, data_base, df_contas, df_cats, subcategorias_por_item=None):
+        """Importa dados do PDF/CSV criando faturas + itens (modelo novo).
+
+        `subcategorias_por_item`, se informado, é uma lista paralela a `dados`
+        com tuplas (subcategoria_id, categoria_id) — quando presentes, usam a
+        categoria escolhida naquele item da auditoria em vez da Categoria
+        Padrão do lote.
+        """
         try:
             contas_match = df_contas[df_contas.nome == conta]
             cats_match = df_cats[df_cats.nome == cat]
@@ -670,7 +815,7 @@ class ParcelasManager:
                 return
 
             cid = int(contas_match.id.values[0])
-            ctid = int(cats_match.id.values[0])
+            ctid_padrao = int(cats_match.id.values[0])
             user_id = db.get_user_id()
 
             novos = 0
@@ -679,7 +824,14 @@ class ParcelasManager:
 
             print(f"[IMPORT] Iniciando importação de {len(dados)} itens...")
 
-            for desc, parc, val in dados:
+            for item_idx, (desc, parc, val) in enumerate(dados):
+                sub_id_item = None
+                ctid = ctid_padrao
+                if subcategorias_por_item and item_idx < len(subcategorias_por_item):
+                    sub_id_par, cat_id_par = subcategorias_por_item[item_idx]
+                    if cat_id_par:
+                        sub_id_item = sub_id_par
+                        ctid = cat_id_par
                 try:
                     val = normalizar_valor_fatura(val)
                     val = abs(val)  # Garante que o valor do item de fatura é sempre positivo
@@ -717,7 +869,8 @@ class ParcelasManager:
 
                         db.adicionar_item_fatura(
                             fatura_id, desc, val, data_base,
-                            num_parc_atual, total, ctid, user_id
+                            num_parc_atual, total, ctid, user_id,
+                            subcategoria_id=sub_id_item
                         )
                         novos += 1
                         print(f"[IMPORT]   ✅ NOVO: parc {num_parc_atual}/{total} comp={competencia} fatura_id={fatura_id}")

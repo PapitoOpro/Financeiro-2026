@@ -110,6 +110,43 @@ def detectar_banco(texto):
 
 
 # ==========================================
+# DETECTOR DE CARTÃO (últimos dígitos)
+# ==========================================
+
+_PADROES_ULTIMOS_DIGITOS = [
+    re.compile(r'Cartao\s+\d{4}\.X{4}\.X{4}\.(\d{4})', re.IGNORECASE),       # Itaú: "Cartao 4705.XXXX.XXXX.4553"
+    re.compile(r'Cartao\s+\d{4}\s+\d{2}\*+\s+\*+\s+\*(\d{2,4})', re.IGNORECASE),  # Porto: "Cartao 5329 30** **** *115"
+    re.compile(r'\*{6,}(\d{4})\]?'),                                        # Mercado Pago: "[************8898]"
+    re.compile(r'final\s*\*?\s*(\d{3,4})\b', re.IGNORECASE),                # "final *115" / "final8122"
+]
+
+
+def extrair_ultimos_digitos_cartao(texto):
+    """Extrai os últimos dígitos visíveis do número do cartão na fatura,
+    usados para identificar automaticamente a conta correspondente ao
+    importar. Retorna None se não encontrar nenhum padrão conhecido."""
+    if not texto:
+        return None
+    for padrao in _PADROES_ULTIMOS_DIGITOS:
+        m = padrao.search(texto)
+        if m:
+            return m.group(1)
+    return None
+
+
+def encontrar_conta_por_digitos(digitos, df_contas):
+    """Retorna o nome da conta cujo `ultimos_digitos` bate com os dígitos
+    informados, ou None se não houver correspondência."""
+    if not digitos or df_contas is None or df_contas.empty or 'ultimos_digitos' not in df_contas.columns:
+        return None
+    for _, row in df_contas.iterrows():
+        cadastrado = str(row.get('ultimos_digitos') or '').strip()
+        if cadastrado and cadastrado == str(digitos).strip():
+            return row['nome']
+    return None
+
+
+# ==========================================
 # PARSER - MERCADO PAGO (SEU CASO)
 # ==========================================
 
@@ -369,6 +406,63 @@ def _mesma_compra(v1, v2):
     return abs(v1 - v2) <= max(2.00, 0.02 * max(abs(v1), abs(v2)))
 
 
+# ==========================================
+# CATEGORIA AUTOMÁTICA (algumas faturas, ex. Itaú, trazem uma
+# categoria própria por lançamento, na linha logo abaixo da compra)
+# ==========================================
+
+_RE_LINHA_CATEGORIA = re.compile(r'^([a-zà-ú]{3,})\s+[A-ZÀ-Ú]')
+
+# Palavras que aparecem na "linha de categoria" mas não são categoria
+# nenhuma — evita falso positivo com a cidade/rodapé.
+_PALAVRAS_NAO_CATEGORIA = {
+    'lancamentos', 'lancamento', 'total', 'valor', 'proxima', 'demais',
+    'limite', 'limites', 'encargos', 'juros', 'pagamento', 'pagamentos',
+    'data', 'esses', 'caso', 'para', 'compras',
+}
+
+
+def _categoria_da_linha_seguinte(fonte, pos):
+    """Dada a posição de um match na fonte, olha a PRÓXIMA linha física e,
+    se parecer uma linha 'categoria CIDADE' (padrão usado pelo Itaú logo
+    abaixo de cada lançamento), retorna a categoria bruta (ex.: 'saude').
+    Retorna None se a linha seguinte não parecer uma categoria."""
+    fim_linha_atual = fonte.find('\n', pos)
+    if fim_linha_atual == -1:
+        return None
+    inicio_prox = fim_linha_atual + 1
+    fim_prox = fonte.find('\n', inicio_prox)
+    linha_prox = fonte[inicio_prox: fim_prox if fim_prox != -1 else len(fonte)].strip()
+    m = _RE_LINHA_CATEGORIA.match(linha_prox)
+    if not m:
+        return None
+    palavra = m.group(1).lower()
+    if palavra in _PALAVRAS_NAO_CATEGORIA:
+        return None
+    return palavra
+
+
+def sugerir_subcategoria(categoria_raw, df_subs):
+    """Tenta casar uma categoria bruta extraída da fatura (ex.: 'saude')
+    com uma subcategoria já cadastrada pelo usuário, por correspondência
+    de substring (sem acento, case-insensitive).
+
+    Retorna (subcategoria_id, categoria_id, nome_subcategoria) ou None.
+    """
+    if not categoria_raw or df_subs is None or df_subs.empty:
+        return None
+    alvo = normalizar_texto(categoria_raw).strip().lower()
+    if not alvo:
+        return None
+    for _, row in df_subs.iterrows():
+        nome_sub = normalizar_texto(str(row['nome'])).strip().lower()
+        if not nome_sub:
+            continue
+        if alvo in nome_sub or nome_sub in alvo:
+            return (int(row['id']), int(row['categoria_id']), row['nome'])
+    return None
+
+
 def _linha_do_match(fonte, pos):
     """Retorna o texto da linha (sem quebras) que contém a posição `pos` em `fonte`."""
     inicio = fonte.rfind('\n', 0, pos) + 1
@@ -381,8 +475,9 @@ def _linha_do_match(fonte, pos):
 def extrair_parcelas(texto):
     import re
     if not texto:
-        return []
+        return [], []
     resultados = []
+    categorias = []
 
     # 1. Limpeza de ruídos comuns de OCR
     texto = texto.replace("R4", "R$").replace("I0F", "IOF")
@@ -406,6 +501,7 @@ def extrair_parcelas(texto):
         desc_norm = re.sub(r'^\d{1,2}/\d{1,2}\s+', '', desc.strip()).strip()
         desc_norm = re.sub(r'\s*Parcela\s*$', '', desc_norm, flags=re.IGNORECASE).strip()
         resultados.append((desc_norm, parc, val))
+        categorias.append(_categoria_da_linha_seguinte(fonte, pos))
         return True
 
     # ==============================================================
@@ -546,9 +642,10 @@ def extrair_parcelas(texto):
                 indices_remover.add(i)
 
     if indices_remover:
+        categorias = [c for i, c in enumerate(categorias) if i not in indices_remover]
         resultados = [r for i, r in enumerate(resultados) if i not in indices_remover]
 
-    return resultados
+    return resultados, categorias
 
 
 def _is_compra_avista(parc):
@@ -578,8 +675,19 @@ def extrair_itens_avista(texto, itens_parcelados=None):
     """
 
     if not texto:
-        return []
+        return [], []
     resultados = []
+    categorias = []
+    linhas = texto.split('\n')
+
+    def _categoria_da_proxima_linha(idx):
+        if idx + 1 >= len(linhas):
+            return None
+        m = _RE_LINHA_CATEGORIA.match(linhas[idx + 1].strip())
+        if not m:
+            return None
+        palavra = m.group(1).lower()
+        return None if palavra in _PALAVRAS_NAO_CATEGORIA else palavra
 
     # Normaliza itens já capturados como parcelas para evitar duplicatas
     # Armazena (desc_normalizada, valor) para detecção precisa:
@@ -624,7 +732,7 @@ def extrair_itens_avista(texto, itens_parcelados=None):
     ]
 
 
-    for linha in texto.split('\n'):
+    for idx, linha in enumerate(linhas):
         linha = linha.strip()
         print(f"[DEBUG] Processando linha: {linha}")
         if not linha or len(linha) < 8:
@@ -681,6 +789,7 @@ def extrair_itens_avista(texto, itens_parcelados=None):
                 continue
             print(f"[ACEITO - AVISTA] {descricao} | {valor}")
             resultados.append((descricao, "1/1", valor))
+            categorias.append(_categoria_da_proxima_linha(idx))
             continue
 
         date_str, desc_raw, valor_str = match.groups()
@@ -721,8 +830,9 @@ def extrair_itens_avista(texto, itens_parcelados=None):
 
         print(f"[ACEITO - AVISTA] {desc} | {val}")
         resultados.append((desc, "1/1", val))
+        categorias.append(_categoria_da_proxima_linha(idx))
 
-    return resultados
+    return resultados, categorias
 
 
 # ==========================================
@@ -799,18 +909,21 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
         senha_pdf: Senha do PDF (se houver)
         incluir_avista: Se True, inclui itens à vista (sem parcela) além dos parcelados
     Returns:
-        Tupla (banco_detectado, texto_extraido, lista_de_itens)
-        Cada item é uma tupla (descricao, parcela_str, valor)
+        Tupla (banco_detectado, texto_extraido, lista_de_itens, metodo, categorias_sugeridas)
+        Cada item de lista_de_itens é uma tupla (descricao, parcela_str, valor).
+        categorias_sugeridas é uma lista paralela (mesmo tamanho/ordem de
+        lista_de_itens) com a categoria bruta detectada na fatura para cada
+        item (ou None quando não há sugestão).
     """
     try:
         # 1. Extrair texto básico (para exibição debug e detecção de banco)
         texto = extrair_texto_pdf(file, senha_pdf)
 
         if not texto or texto.strip() == "":
-            return "DESCONHECIDO", "", [], ""
+            return "DESCONHECIDO", "", [], "", []
 
         if texto.strip() == "__PDF_PROTEGIDO__":
-            return "__PDF_PROTEGIDO__", "", [], ""
+            return "__PDF_PROTEGIDO__", "", [], "", []
 
         # 2. Normalizar texto (remover acentos para regex funcionar)
         texto_norm = normalizar_texto(texto)
@@ -899,22 +1012,24 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
         print(f"[DEBUG] Usando {melhor_nome} ({n_tx} transações)")
 
         # 6. Extrair parcelas (itens com indicador XX/YY) — apenas da fatura atual
-        dados_parcelados = extrair_parcelas(texto_fatura_atual)
+        dados_parcelados, cat_parcelados = extrair_parcelas(texto_fatura_atual)
         print(f"[DEBUG] Parcelas encontradas: {len(dados_parcelados)}")
 
         # 7. Extrair itens à vista (sem indicador de parcela) — apenas da fatura atual
         if incluir_avista:
-            dados_avista = extrair_itens_avista(texto_fatura_atual, dados_parcelados)
+            dados_avista, cat_avista = extrair_itens_avista(texto_fatura_atual, dados_parcelados)
             print(f"[DEBUG] Itens à vista encontrados: {len(dados_avista)}")
             dados = dados_parcelados + dados_avista
+            categorias = cat_parcelados + cat_avista
         else:
             dados = dados_parcelados
+            categorias = cat_parcelados
 
-        return banco, texto, _dedup_itens(dados), melhor_nome
+        return banco, texto, _dedup_itens(dados), melhor_nome, categorias
 
     except Exception as e:
         print("Erro ao processar fatura:", e)
-        return "ERRO", "", [], ""
+        return "ERRO", "", [], "", []
 
 
 def _dedup_itens(dados):
@@ -941,24 +1056,26 @@ def processar_texto_colado(texto_raw, incluir_avista=True):
     pode selecionar e copiar o texto do PDF e colar aqui.
 
     Returns:
-        Tupla (banco_detectado, texto_normalizado, lista_de_itens, metodo)
+        Tupla (banco_detectado, texto_normalizado, lista_de_itens, metodo, categorias_sugeridas)
     """
     if not texto_raw or not texto_raw.strip():
-        return "DESCONHECIDO", "", [], "texto_colado"
+        return "DESCONHECIDO", "", [], "texto_colado", []
 
     texto_norm = normalizar_texto(texto_raw)
     banco = detectar_banco(texto_norm)
     texto_processado = _split_multicolunas(texto_norm)
 
-    dados_parcelados = extrair_parcelas(texto_processado)
+    dados_parcelados, cat_parcelados = extrair_parcelas(texto_processado)
 
     if incluir_avista:
-        dados_avista = extrair_itens_avista(texto_processado, dados_parcelados)
+        dados_avista, cat_avista = extrair_itens_avista(texto_processado, dados_parcelados)
         dados = dados_parcelados + dados_avista
+        categorias = cat_parcelados + cat_avista
     else:
         dados = dados_parcelados
+        categorias = cat_parcelados
 
-    return banco, texto_norm, _dedup_itens(dados), "texto_colado"
+    return banco, texto_norm, _dedup_itens(dados), "texto_colado", categorias
 
 
 # ==========================================

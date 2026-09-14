@@ -257,16 +257,22 @@ class CadastrosManager:
         user_id = db.get_user_id()
 
         with st.form("form_novo_banco", clear_on_submit=True):
-            col_input, col_btn = st.columns([3, 1])
+            col_input, col_digitos, col_btn = st.columns([3, 1.2, 1])
             n_banco = col_input.text_input(
                 "Novo Banco/Cartão", label_visibility="collapsed",
                 placeholder="Ex: Nubank, Itaú..."
             )
+            n_digitos = col_digitos.text_input(
+                "Últimos dígitos", label_visibility="collapsed",
+                placeholder="Últimos dígitos (opcional)",
+                help="Últimos dígitos impressos no cartão/fatura — usado para detectar "
+                     "automaticamente esta conta ao importar um PDF.",
+            )
             if col_btn.form_submit_button("Adicionar", use_container_width=True):
                 if (n_banco or "").strip():
                     if db.executar(
-                        "INSERT INTO contas (nome, user_id) VALUES (%s, %s)",
-                        (n_banco.strip(), user_id)
+                        "INSERT INTO contas (nome, ultimos_digitos, user_id) VALUES (%s, %s, %s)",
+                        (n_banco.strip(), (n_digitos or "").strip() or None, user_id)
                     ):
                         st.success("✅ Banco adicionado!")
                         st.rerun()
@@ -293,18 +299,26 @@ class CadastrosManager:
             if edit_flag not in st.session_state:
                 st.session_state[edit_flag] = False
 
-            col_nome, col_edit, col_del = st.columns([4, 0.5, 0.5])
+            col_nome, col_digitos, col_edit, col_del = st.columns([3, 1.2, 0.5, 0.5])
+            digitos_key = f"input_digitos_{r['id']}"
 
             if st.session_state[edit_flag]:
                 with col_nome:
                     novo_nome = st.text_input("Nome", value=r['nome'], key=input_key, label_visibility="collapsed")
+                with col_digitos:
+                    novo_digitos = st.text_input(
+                        "Últimos dígitos", value=r.get('ultimos_digitos') or "",
+                        key=digitos_key, label_visibility="collapsed",
+                        placeholder="Últimos dígitos",
+                    )
                 with col_edit:
                     if st.button("Salvar", key=save_key, use_container_width=True):
                         novo_val = (st.session_state.get(input_key) or "").strip()
+                        novo_digitos_val = (st.session_state.get(digitos_key) or "").strip()
                         if novo_val:
                             if db.executar(
-                                "UPDATE contas SET nome=%s WHERE id=%s AND user_id=%s",
-                                (novo_val, r['id'], user_id)
+                                "UPDATE contas SET nome=%s, ultimos_digitos=%s WHERE id=%s AND user_id=%s",
+                                (novo_val, novo_digitos_val or None, r['id'], user_id)
                             ):
                                 st.session_state[edit_flag] = False
                                 st.rerun()
@@ -315,6 +329,12 @@ class CadastrosManager:
             else:
                 col_nome.markdown(
                     f"<div style='line-height: 1.8; font-weight: 500;'>{r['nome']}</div>",
+                    unsafe_allow_html=True
+                )
+                digitos_atual = r.get('ultimos_digitos') or ""
+                col_digitos.markdown(
+                    f"<div style='line-height: 1.8; color:gray; font-size:13px;'>"
+                    f"{'•••• ' + digitos_atual if digitos_atual else '—'}</div>",
                     unsafe_allow_html=True
                 )
                 with col_edit:
