@@ -13,7 +13,7 @@ import plotly.graph_objects as go
 from utils import (
     moeda, processar_fatura, processar_texto_colado, get_cor_valor, get_cor_saldo,
     extrair_ultimos_digitos_cartao, encontrar_conta_por_digitos, sugerir_subcategoria,
-    sugerir_categoria_pai,
+    sugerir_categoria_pai, normalizar_texto,
 )
 from typing import Any, cast
 
@@ -288,7 +288,7 @@ class ParcelasManager:
                             st.session_state["ocr_dados"] = dados_p
                             st.session_state["ocr_categorias"] = categorias_p
                             st.session_state["ocr_metodo"] = metodo_p
-                            st.session_state["ocr_digitos_cartao"] = extrair_ultimos_digitos_cartao(texto_p)
+                            st.session_state["ocr_digitos_cartao"] = extrair_ultimos_digitos_cartao(normalizar_texto(texto_p))
                             st.session_state.pop("ocr_dados_editaveis", None)
                             st.session_state["ocr_version"] = (
                                 st.session_state.get("ocr_version", 0) + 1
