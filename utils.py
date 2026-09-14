@@ -181,7 +181,9 @@ _LINHAS_RUIDO_RE = [re.compile(p, re.IGNORECASE) for p in [
     r'total\s+de\s+despesas\s+parceladas',
     r'^\s*(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|'
     r'outubro|novembro|dezembro)\s+r\$',  # projeção "Outubro R$ 580,42"
-    r'^\s*demais\s+faturas\b',
+    r'demais\s+faturas\b',
+    r'proxima\s+fatura\b',
+    r'total\s+para\s+proximas?\s+faturas?',
     r'saldo\s+fatura\s+anterior',
     r'pagamento\s*/\s*creditos',
     r'encargos\s+de\s+(rotativo|compras\s+parceladas|parcelamento\s+da\s+fatura|saque)',
@@ -200,6 +202,10 @@ _LINHAS_RUIDO_RE = [re.compile(p, re.IGNORECASE) for p in [
     r'^\s*saldo\s+r\$\s*[\d.,]+\s*$',
     r'valor\s+da\s+fatura\s+e\s+r\$',  # boleto: "O VALOR DA FATURA E R$ ..."
     r'^\s*\d+\s+real\s+[\d.,]+\s*$',  # boleto: código de moeda "109 Real 617,54"
+    r'repasse\s+de\s+iof',
+    r'total\s+(transacoes|lancamentos)\s+inter\b',
+    r'entrada\s*\+\s*parcelas\s+fixas',  # simulador "Entrada + Parcelas fixas: R$X + Nx R$Y"
+    r'total\s+a\s+pagar',
 ]]
 
 # Padrões que só indicam ruído quando a linha NÃO começa com data (DD/MM):
@@ -299,7 +305,9 @@ def limpar_linha(linha):
     # → "21/08 Amazon Ad free for Prim 10,00"
     linha = re.sub(
         r'(\d{1,3}(?:\.\d{3})*,\d{2})\s+(?:IOF\s+de\s+financiamento|Juros\s+M[aá]ximos?|'
-        r'Valor\s+total\s+financiado|Valor\s+solicitado|Encargos\b|CET\b).*$',
+        r'Valor\s+total\s+financiado|Valor\s+solicitado|Encargos\b|CET\b|'
+        r'Proxima\s+fatura|Demais\s+faturas?|Total\s+para\s+proximas?\s+faturas?|'
+        r'DATA\s+ESTABELECIMENTO).*$',
         r'\1',
         linha, flags=re.IGNORECASE
     )
@@ -309,32 +317,6 @@ def limpar_linha(linha):
 
     return linha
     
-def _cortar_texto_antes_proximas_faturas(texto):
-    """Remove tudo a partir de 'Compras parceladas - próximas faturas' e seções similares.
-    
-    Essas seções listam parcelas que cairão em faturas FUTURAS e não devem
-    ser importadas — o sistema já projeta parcelas futuras automaticamente.
-    """
-    # Padrões específicos de seções de parcelas futuras.
-    # Os padrões amplos (ex: 'Proximas faturas') requerem início de linha
-    # para não casar com menções no cabeçalho como 'Data proxima fatura: 15/04'.
-    padroes_corte = [
-        # Formato Itaú: "Compras parceladas - próximas faturas"
-        r'Compras\s+parceladas\s*[-–—:]\s*proximas?\s+faturas?',
-        # Seção genérica (somente como título de linha, não no meio de texto)
-        r'(?:^|\n)\s*Proximas?\s+faturas?\s*(?:\n|$)',
-        # Seção "Demais faturas" (somente como título de linha)
-        r'(?:^|\n)\s*Demais\s+faturas?\s*(?:\n|$)',
-        # Formato descritivo
-        r'Compras\s+que\s+serao\s+cobradas',
-    ]
-    for padrao in padroes_corte:
-        match = re.search(padrao, texto, re.IGNORECASE)
-        if match:
-            return texto[:match.start()]
-    return texto
-
-
 def _extrair_secao_parceladas(texto):
     """Extrai apenas a seção de compras parceladas de faturas Itaú/similares.
     
@@ -823,13 +805,16 @@ def processar_fatura(file, senha_pdf=None, incluir_avista=True):
         banco = detectar_banco(texto_norm)
 
         # 4. Preparar candidatos de extração — cada um com pipeline independente
-        #    (normalizar → cortar próximas faturas → split multicolunas)
-        #    Antes, concatenávamos tudo e o corte "próximas faturas" eliminava
-        #    dados de outros métodos de extração.
+        #    (normalizar → split multicolunas). Não cortamos mais a seção de
+        #    "próximas faturas": em faturas com colunas lado a lado (compras
+        #    reais + projeção futura), o marcador de corte aparece MESCLADO
+        #    no meio de uma linha real, e cortar tudo dali pra frente também
+        #    apagava compras reais legítimas que vinham depois. A projeção
+        #    futura (mesma descrição/total, parcela maior) já é removida pelo
+        #    dedup de "menor parcela" em extrair_parcelas().
         def _preparar_candidato(texto_raw):
             tn = normalizar_texto(texto_raw)
-            tc = _cortar_texto_antes_proximas_faturas(tn)
-            return _split_multicolunas(tc)
+            return _split_multicolunas(tn)
 
         def _contar_transacoes(t):
             # Exige data NO INÍCIO da linha e um valor monetário em algum
@@ -949,8 +934,7 @@ def processar_texto_colado(texto_raw, incluir_avista=True):
 
     texto_norm = normalizar_texto(texto_raw)
     banco = detectar_banco(texto_norm)
-    texto_cortado = _cortar_texto_antes_proximas_faturas(texto_norm)
-    texto_processado = _split_multicolunas(texto_cortado)
+    texto_processado = _split_multicolunas(texto_norm)
 
     dados_parcelados = extrair_parcelas(texto_processado)
 
