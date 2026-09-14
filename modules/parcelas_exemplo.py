@@ -90,7 +90,13 @@ class ParcelasManager:
 
         @st.cache_data(ttl=60, show_spinner=False)
         def get_categorias(user_id):
-            return db.buscar("SELECT * FROM categorias WHERE user_id = %s ORDER BY nome", (user_id,))
+            # Projeção de Gastos só lança compras/parcelas (saídas) — categorias
+            # de Entrada não fazem sentido aqui.
+            return db.buscar(
+                "SELECT * FROM categorias WHERE user_id = %s AND ativa = TRUE "
+                "AND (tipo = 'saida' OR tipo IS NULL) ORDER BY nome",
+                (user_id,)
+            )
 
         user_id = db.get_user_id()
         df_contas = get_contas(user_id)
@@ -375,13 +381,15 @@ class ParcelasManager:
             dados_editaveis = st.session_state["ocr_dados_editaveis"]
             _v = st.session_state.get("ocr_version", 0)  # versão para chaves únicas
 
-            # Sugestões de subcategoria por item (best-effort, revisável na tabela)
+            # Sugestões de subcategoria por item (best-effort, revisável na tabela).
+            # Só categorias de Saída fazem sentido para uma fatura de cartão.
             df_subs_sugestao = db.buscar(
                 """
                 SELECT s.id, s.nome, s.categoria_id, c.nome as categoria_nome
                 FROM subcategorias s
                 JOIN categorias c ON s.categoria_id = c.id
                 WHERE s.user_id = %s AND s.ativa = TRUE
+                AND (c.tipo = 'saida' OR c.tipo IS NULL)
                 ORDER BY s.nome
                 """,
                 (db.get_user_id(),),
@@ -503,7 +511,8 @@ class ParcelasManager:
                         "uma subcategoria parecida cadastrada. Crie uma agora se quiser aproveitar a sugestão."
                     )
                     df_cats_pai = db.buscar(
-                        "SELECT id, nome FROM categorias WHERE user_id = %s AND ativa = TRUE ORDER BY nome",
+                        "SELECT id, nome FROM categorias WHERE user_id = %s AND ativa = TRUE "
+                        "AND (tipo = 'saida' OR tipo IS NULL) ORDER BY nome",
                         (db.get_user_id(),),
                     )
                     PLACEHOLDER_CAT_PAI = "— Escolha a categoria —"
