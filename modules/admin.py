@@ -274,23 +274,30 @@ class AdminManager:
     
     @staticmethod
     def _deletar_dados():
-        """Deleta todos os dados do usuário logado, mantendo a estrutura das tabelas.
+        """Deleta todos os DADOS FINANCEIROS do usuário logado, mantendo a
+        estrutura das tabelas E a própria conta/login intactos.
 
         Sempre filtra por user_id: a tabela `usuarios` não tem Row Level
         Security (diferente de transacoes/contas/categorias/etc.), então um
         DELETE sem filtro apagaria a conta de TODOS os usuários do sistema,
         não só a de quem clicou no botão. A ordem respeita as chaves
         estrangeiras (tabelas filhas antes das tabelas-pai que elas referenciam).
+
+        Não apaga `usuarios` nem `log_acoes`: a conta/login do usuário é
+        preservada (senão ele perderia o acesso e precisaria recriar a conta
+        para "recomeçar"), e o log de ações é auditoria histórica — além
+        disso, log_acoes.user_id referencia usuarios sem CASCADE, então
+        apagar o usuário sempre falharia enquanto houver log dele.
         """
         try:
             user_id = db.get_user_id()
+            # transacoes referencia faturas (fatura_id) — precisa ser apagada
+            # ANTES de faturas, não depois.
             tabelas_em_ordem = [
-                "itens_fatura", "faturas", "transacoes",
+                "itens_fatura", "transacoes", "faturas",
                 "subcategorias", "limites_financeiros", "contas", "categorias",
             ]
             falhas = [t for t in tabelas_em_ordem if not db.executar(f"DELETE FROM {t} WHERE user_id=?", (user_id,))]
-            if not db.executar("DELETE FROM usuarios WHERE id=?", (user_id,)):
-                falhas.append("usuarios")
 
             if falhas:
                 st.error(f"⚠️ Falha ao limpar: {', '.join(falhas)}. Veja as mensagens de erro acima.")
