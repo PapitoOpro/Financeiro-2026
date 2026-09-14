@@ -206,6 +206,7 @@ _LINHAS_RUIDO_RE = [re.compile(p, re.IGNORECASE) for p in [
     r'total\s+(transacoes|lancamentos)\s+inter\b',
     r'entrada\s*\+\s*parcelas\s+fixas',  # simulador "Entrada + Parcelas fixas: R$X + Nx R$Y"
     r'total\s+a\s+pagar',
+    r'^\s*[lsep]\s+(total|lancamentos|credito|saldo)\b',  # marcador boleto Itaú: "E Total de encargos em R$ ..."
 ]]
 
 # Padrões que só indicam ruído quando a linha NÃO começa com data (DD/MM):
@@ -307,7 +308,7 @@ def limpar_linha(linha):
         r'(\d{1,3}(?:\.\d{3})*,\d{2})\s+(?:IOF\s+de\s+financiamento|Juros\s+M[aá]ximos?|'
         r'Valor\s+total\s+financiado|Valor\s+solicitado|Encargos\b|CET\b|'
         r'Proxima\s+fatura|Demais\s+faturas?|Total\s+para\s+proximas?\s+faturas?|'
-        r'DATA\s+ESTABELECIMENTO).*$',
+        r'DATA\s+ESTABELECIMENTO|DATA\s+PRODUTOS|Anuidade\s+Diferenciada).*$',
         r'\1',
         linha, flags=re.IGNORECASE
     )
@@ -358,6 +359,14 @@ def _is_parcela_valida(parc_str):
         return False
     except (ValueError, AttributeError):
         return False
+
+
+def _mesma_compra(v1, v2):
+    """Compara dois valores com tolerância para ajustes de juros entre
+    parcelas do mesmo item (ex.: 180,51 no mês atual vs 180,49 no
+    próximo, uma diferença de arredondamento que não os torna compras
+    distintas)."""
+    return abs(v1 - v2) <= max(2.00, 0.02 * max(abs(v1), abs(v2)))
 
 
 def _linha_do_match(fonte, pos):
@@ -508,28 +517,33 @@ def extrair_parcelas(texto):
     # 4/12 e 5/12). Duas compras REAIS distintas no mesmo estabelecimento,
     # com o mesmo valor e a MESMA parcela (ex.: duas compras "1 de 4" de
     # R$119,90 em dias diferentes), têm atual IGUAL e nunca são removidas.
+    #
+    # A comparação de valor usa TOLERÂNCIA (não igualdade exata nem bucket
+    # arredondado): a exibição do mês seguinte às vezes vem com um pequeno
+    # ajuste de juros (ex.: 180,51 no mês atual vs 180,49 no próximo — só
+    # 2 centavos de diferença, mas que cairiam em baldes de arredondamento
+    # diferentes). Duas parcelas do mesmo grupo (desc_base, total) só são
+    # consideradas "a mesma compra" se o valor estiver dentro da tolerância.
     # ================================================================
-    menor_atual_por_key = {}  # (desc_base, total, valor) -> menor atual visto
-    for desc, parc, val in resultados:
-        try:
-            atual, total = map(int, parc.split("/"))
-            desc_base = re.sub(r'\s+', ' ', desc.upper().strip())
-            key = (desc_base, total, round(val, 2))
-            if key not in menor_atual_por_key or atual < menor_atual_por_key[key]:
-                menor_atual_por_key[key] = atual
-        except:
-            pass
-
-    indices_remover = set()
+    grupos = {}  # (desc_base, total) -> lista de (atual, val, indice)
     for i, (desc, parc, val) in enumerate(resultados):
         try:
             atual, total = map(int, parc.split("/"))
             desc_base = re.sub(r'\s+', ' ', desc.upper().strip())
-            key = (desc_base, total, round(val, 2))
-            if key in menor_atual_por_key and atual > menor_atual_por_key[key]:
-                indices_remover.add(i)
+            grupos.setdefault((desc_base, total), []).append((atual, val, i))
         except:
             pass
+
+    indices_remover = set()
+    for entradas in grupos.values():
+        if len(entradas) < 2:
+            continue
+        for atual, val, i in entradas:
+            if any(
+                atual2 < atual and _mesma_compra(val, val2)
+                for atual2, val2, i2 in entradas if i2 != i
+            ):
+                indices_remover.add(i)
 
     if indices_remover:
         resultados = [r for i, r in enumerate(resultados) if i not in indices_remover]
@@ -657,7 +671,7 @@ def extrair_itens_avista(texto, itens_parcelados=None):
                 print(f"[DESCARTADO - DUPLICATA PARCELADO] {linha}")
                 continue
             if any(
-                (dp in desc_norm or desc_norm in dp) and v == val_round
+                (dp in desc_norm or desc_norm in dp) and _mesma_compra(v, val_round)
                 for dp, v in parcelados_desc_val
             ):
                 print(f"[DESCARTADO - DUPLICATA SUBSTRING] {linha}")
@@ -699,7 +713,7 @@ def extrair_itens_avista(texto, itens_parcelados=None):
             print(f"[DESCARTADO - DUPLICATA PARCELADO] {linha}")
             continue
         if any(
-            (dp in desc_norm or desc_norm in dp) and v == val_round
+            (dp in desc_norm or desc_norm in dp) and _mesma_compra(v, val_round)
             for dp, v in parcelados_desc_val
         ):
             print(f"[DESCARTADO - DUPLICATA SUBSTRING] {linha}")
