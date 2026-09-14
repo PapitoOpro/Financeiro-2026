@@ -637,6 +637,29 @@ class DatabaseManager:
         except Exception:
             pass
 
+        # ── MIGRAÇÃO: últimos dígitos do cartão (detecção automática na importação) ──
+        try:
+            self.executar("ALTER TABLE contas ADD COLUMN IF NOT EXISTS ultimos_digitos TEXT")
+        except Exception:
+            pass
+
+        # ── MIGRAÇÃO: log de ações (auditoria) ──
+        try:
+            self.executar('''CREATE TABLE IF NOT EXISTS log_acoes (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES usuarios(id),
+                acao TEXT NOT NULL,
+                tabela TEXT NOT NULL,
+                query TEXT,
+                parametros TEXT,
+                criado_em TIMESTAMPTZ DEFAULT now()
+            )''')
+            self.executar(
+                "CREATE INDEX IF NOT EXISTS ix_log_acoes_user_criado ON log_acoes(user_id, criado_em DESC)"
+            )
+        except Exception:
+            pass
+
         self._skip_rls = False
         DatabaseManager._banco_inicializado = True
 

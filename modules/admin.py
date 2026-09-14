@@ -274,17 +274,30 @@ class AdminManager:
     
     @staticmethod
     def _deletar_dados():
-        """Deleta todos os dados."""
+        """Deleta todos os dados do usuário logado, mantendo a estrutura das tabelas.
+
+        Sempre filtra por user_id: a tabela `usuarios` não tem Row Level
+        Security (diferente de transacoes/contas/categorias/etc.), então um
+        DELETE sem filtro apagaria a conta de TODOS os usuários do sistema,
+        não só a de quem clicou no botão. A ordem respeita as chaves
+        estrangeiras (tabelas filhas antes das tabelas-pai que elas referenciam).
+        """
         try:
-            db.executar("DELETE FROM transacoes")
-            db.executar("DELETE FROM limites_financeiros")
-            db.executar("DELETE FROM contas")
-            db.executar("DELETE FROM categorias")
-            db.executar("DELETE FROM usuarios")
-            
-            st.success(" Todos os dados foram deletados!")
-            st.info(" As tabelas foram mantidas. Você pode começar a adicionar novos dados.")
-            
+            user_id = db.get_user_id()
+            tabelas_em_ordem = [
+                "itens_fatura", "faturas", "transacoes",
+                "subcategorias", "limites_financeiros", "contas", "categorias",
+            ]
+            falhas = [t for t in tabelas_em_ordem if not db.executar(f"DELETE FROM {t} WHERE user_id=?", (user_id,))]
+            if not db.executar("DELETE FROM usuarios WHERE id=?", (user_id,)):
+                falhas.append("usuarios")
+
+            if falhas:
+                st.error(f"⚠️ Falha ao limpar: {', '.join(falhas)}. Veja as mensagens de erro acima.")
+            else:
+                st.success(" Todos os seus dados foram deletados!")
+                st.info(" As tabelas foram mantidas. Você pode começar a adicionar novos dados.")
+
         except Exception as e:
             st.error(f" Erro ao deletar: {e}")
     
@@ -333,18 +346,31 @@ class AdminManager:
 
     @staticmethod
     def _recriar_banco():
-        """Recria o banco do zero."""
+        """Recria o banco do zero (afeta TODOS os usuários — reset nuclear)."""
         try:
-            db.executar("DROP TABLE IF EXISTS transacoes")
-            db.executar("DROP TABLE IF EXISTS limites_financeiros")
-            db.executar("DROP TABLE IF EXISTS contas")
-            db.executar("DROP TABLE IF EXISTS categorias")
-            db.executar("DROP TABLE IF EXISTS usuarios")
-            
+            from database import DatabaseManager
+
+            # CASCADE evita ter que respeitar manualmente a ordem das chaves
+            # estrangeiras — é um reset nuclear mesmo, então arrasta tudo.
+            for tabela in [
+                "log_acoes", "itens_fatura", "faturas", "transacoes",
+                "subcategorias", "limites_financeiros", "contas", "categorias", "usuarios",
+            ]:
+                db.executar(f"DROP TABLE IF EXISTS {tabela} CASCADE")
+
+            # inicializar_banco() só roda de verdade uma vez por processo
+            # (trava _banco_inicializado, já ativada no start do app) — sem
+            # resetar a flag aqui, as tabelas ficariam derrubadas para sempre
+            # nesta sessão.
+            DatabaseManager._banco_inicializado = False
             db.inicializar_banco()
-            
+
             st.success(" Banco de dados foi completamente recriado!")
+            st.info(
+                " Lembre-se de reaplicar as políticas de RLS "
+                "(scripts/passo4_rls_policies.sql) no SQL Editor do Supabase."
+            )
             st.balloons()
-            
+
         except Exception as e:
             st.error(f" Erro ao recriar: {e}")
