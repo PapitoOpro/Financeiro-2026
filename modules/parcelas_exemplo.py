@@ -846,6 +846,18 @@ class ParcelasManager:
             duplicados = 0
             erros = 0
 
+            # Conta quantas vezes cada chave (fatura, desc, valor, parcela) já
+            # foi INSERIDA NESTA MESMA EXECUÇÃO de importação. A trava
+            # anti-duplicidade só deve barrar uma chave quando ela já existia
+            # no banco ANTES desta importação (ex.: reimportar o mesmo PDF por
+            # engano) — nunca quando duas compras genuinamente repetidas (ex.:
+            # "FORBODY CANDIDO PORTI" parcela 1/4 de R$119,90 duas vezes, em
+            # dias diferentes) aparecem dentro do MESMO lote sendo importado
+            # agora. Comparar a contagem já inserida neste lote com a
+            # contagem total no banco resolve isso sem duplicar nem descartar
+            # compras reais.
+            contagem_neste_lote = {}
+
             print(f"[IMPORT] Iniciando importação de {len(dados)} itens...")
 
             for item_idx, (desc, parc, val) in enumerate(dados):
@@ -882,12 +894,19 @@ class ParcelasManager:
                             continue
 
 
-                        ja_existe = db.buscar_um(
-                            "SELECT id FROM itens_fatura WHERE fatura_id=%s AND descricao=%s AND valor=%s AND parcela_atual=%s AND parcela_total=%s AND user_id=%s",
+                        chave = (fatura_id, desc, val, num_parc_atual, total)
+                        ja_usadas_neste_lote = contagem_neste_lote.get(chave, 0)
+
+                        qtd_no_banco = db.buscar_um(
+                            "SELECT COUNT(*) FROM itens_fatura WHERE fatura_id=%s AND descricao=%s AND valor=%s AND parcela_atual=%s AND parcela_total=%s AND user_id=%s",
                             (fatura_id, desc, val, num_parc_atual, total, user_id)
                         )
-                        if ja_existe:
+                        qtd_no_banco = int(qtd_no_banco[0]) if qtd_no_banco else 0
+
+                        if ja_usadas_neste_lote < qtd_no_banco:
+                            # Já existia no banco de uma importação anterior — pula de verdade.
                             duplicados += 1
+                            contagem_neste_lote[chave] = ja_usadas_neste_lote + 1
                             print(f"[IMPORT]   ⚠️ DUPLICADO: parc {num_parc_atual}/{total} comp={competencia} fatura_id={fatura_id}")
                             continue
 
@@ -896,6 +915,7 @@ class ParcelasManager:
                             num_parc_atual, total, ctid, user_id,
                             subcategoria_id=sub_id_item
                         )
+                        contagem_neste_lote[chave] = ja_usadas_neste_lote + 1
                         novos += 1
                         print(f"[IMPORT]   ✅ NOVO: parc {num_parc_atual}/{total} comp={competencia} fatura_id={fatura_id}")
 
