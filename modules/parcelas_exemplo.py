@@ -13,6 +13,7 @@ import plotly.graph_objects as go
 from utils import (
     moeda, processar_fatura, processar_texto_colado, get_cor_valor, get_cor_saldo,
     extrair_ultimos_digitos_cartao, encontrar_conta_por_digitos, sugerir_subcategoria,
+    sugerir_categoria_pai,
 )
 from typing import Any, cast
 
@@ -505,27 +506,41 @@ class ParcelasManager:
                         "SELECT id, nome FROM categorias WHERE user_id = %s AND ativa = TRUE ORDER BY nome",
                         (db.get_user_id(),),
                     )
+                    PLACEHOLDER_CAT_PAI = "— Escolha a categoria —"
+                    opcoes_cat_pai = [PLACEHOLDER_CAT_PAI] + df_cats_pai['nome'].tolist()
+
                     for cat_raw, qtd in sorted(categorias_sem_match.items()):
                         cc1, cc2, cc3 = st.columns([2, 2.5, 1.5])
                         cc1.markdown(f"**{cat_raw}** ({qtd}x)")
                         if not df_cats_pai.empty:
+                            # Tenta achar uma categoria macro com nome parecido (ex.:
+                            # 'vestuario' -> 'Vestuario') em vez de cair sempre na
+                            # primeira da lista em ordem alfabética.
+                            sugestao_pai = sugerir_categoria_pai(cat_raw, df_cats_pai)
+                            idx_default = (
+                                opcoes_cat_pai.index(sugestao_pai[1])
+                                if sugestao_pai and sugestao_pai[1] in opcoes_cat_pai else 0
+                            )
                             cat_pai_nome = cc2.selectbox(
-                                "Categoria pai", df_cats_pai['nome'].tolist(),
+                                "Categoria pai", opcoes_cat_pai, index=idx_default,
                                 key=f"nova_sub_pai_{cat_raw}", label_visibility="collapsed",
                             )
                             if cc3.button(
                                 f"Criar '{cat_raw}'", key=f"btn_criar_sub_{cat_raw}",
                                 icon=":material/add:", use_container_width=True,
                             ):
-                                cat_pai_id = int(df_cats_pai.loc[df_cats_pai['nome'] == cat_pai_nome, 'id'].values[0])
-                                db.executar(
-                                    "INSERT INTO subcategorias (nome, categoria_id, ativa, user_id) "
-                                    "VALUES (%s, %s, TRUE, %s) ON CONFLICT (nome, categoria_id, user_id) DO NOTHING",
-                                    (cat_raw.capitalize(), cat_pai_id, db.get_user_id())
-                                )
-                                st.toast(f"✅ Subcategoria '{cat_raw.capitalize()}' criada!")
-                                st.cache_data.clear()
-                                ParcelasManager._safe_rerun()
+                                if cat_pai_nome == PLACEHOLDER_CAT_PAI:
+                                    st.error("Escolha em qual categoria macro essa subcategoria vai entrar.")
+                                else:
+                                    cat_pai_id = int(df_cats_pai.loc[df_cats_pai['nome'] == cat_pai_nome, 'id'].values[0])
+                                    db.executar(
+                                        "INSERT INTO subcategorias (nome, categoria_id, ativa, user_id) "
+                                        "VALUES (%s, %s, TRUE, %s) ON CONFLICT (nome, categoria_id, user_id) DO NOTHING",
+                                        (cat_raw.capitalize(), cat_pai_id, db.get_user_id())
+                                    )
+                                    st.toast(f"✅ Subcategoria '{cat_raw.capitalize()}' criada!")
+                                    st.cache_data.clear()
+                                    ParcelasManager._safe_rerun()
                         else:
                             cc2.caption("Cadastre uma categoria macro primeiro, em Cadastros.")
 

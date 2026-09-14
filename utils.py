@@ -463,6 +463,32 @@ def sugerir_subcategoria(categoria_raw, df_subs):
     return None
 
 
+def sugerir_categoria_pai(categoria_raw, df_categorias):
+    """Tenta casar uma categoria bruta extraída da fatura (ex.: 'vestuario')
+    com uma categoria MACRO já cadastrada (ex.: 'Vestuario'), pelo mesmo
+    critério de substring sem acento usado em sugerir_subcategoria().
+
+    Usado para pré-selecionar a categoria-pai ao oferecer a criação de uma
+    subcategoria nova — sem isso, o seletor cairia sempre no primeiro item
+    em ordem alfabética, o que é enganoso (ex.: sugerir 'Alimentação' como
+    pai de 'Vestuário').
+
+    Retorna (categoria_id, nome_categoria) ou None.
+    """
+    if not categoria_raw or df_categorias is None or df_categorias.empty:
+        return None
+    alvo = normalizar_texto(categoria_raw).strip().lower()
+    if not alvo:
+        return None
+    for _, row in df_categorias.iterrows():
+        nome_cat = normalizar_texto(str(row['nome'])).strip().lower()
+        if not nome_cat:
+            continue
+        if alvo in nome_cat or nome_cat in alvo:
+            return (int(row['id']), row['nome'])
+    return None
+
+
 def _linha_do_match(fonte, pos):
     """Retorna o texto da linha (sem quebras) que contém a posição `pos` em `fonte`."""
     inicio = fonte.rfind('\n', 0, pos) + 1
