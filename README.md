@@ -20,7 +20,7 @@ Sistema de gestão financeira pessoal construído com **Streamlit**, **Supabase*
 
 | Camada       | Tecnologia                                    |
 | ------------ | --------------------------------------------- |
-| Frontend/UI  | Streamlit 1.30+                               |
+| Frontend/UI  | Streamlit 1.55+                               |
 | Backend/DB   | Supabase (PostgreSQL + Auth + RLS)            |
 | IA           | Claude Haiku via SDK Anthropic                |
 | Linguagem    | Python 3.11                                   |
@@ -88,7 +88,8 @@ api_key = "sk-ant-..."
 ```
 
 ```bash
-# 4. Execute o schema do banco (pasta scripts/ — ordem: passo1 → passo4)
+# 4. Execute o schema do banco (pasta scripts/ — ordem: passo1 → passo7,
+#    ou use scripts/criar_banco_zerado.sql para criar tudo de uma vez)
 
 # 5. Rode o app
 streamlit run app.py
@@ -110,8 +111,10 @@ Todas as tabelas usam **RLS** — dados são isolados por usuário automaticamen
 | `limites_financeiros` | Limites personalizados por categoria   |
 | `faturas`             | Faturas importadas via PDF             |
 | `itens_fatura`        | Itens individuais de cada fatura       |
+| `log_acoes`           | Log de auditoria de ações do usuário   |
 
-Para recriar o schema do zero: execute os scripts em `scripts/` na ordem `passo1 → passo4`.
+Para recriar o schema do zero: execute os scripts em `scripts/` na ordem `passo1 → passo7`
+(ou `criar_banco_zerado.sql` para uma instalação única).
 
 ---
 

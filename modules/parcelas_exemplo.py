@@ -162,6 +162,14 @@ class ParcelasManager:
                     fatura_id, desc, float(val), dt_ini,
                     num_parc, int(p_total), ctid, user_id
                 )
+                # Lançamento manual é uma compra real confirmada pelo usuário
+                # (diferente da importação de PDF, não há uma "fatura futura"
+                # a ser confirmada depois) — por isso já entra como 'importada'
+                # para aparecer no Controle de Caixa, e não só na Projeção.
+                db.executar(
+                    "UPDATE faturas SET status = 'importada' WHERE id = %s AND status = 'aberta'",
+                    (fatura_id,)
+                )
                 db.atualizar_total_fatura(int(fatura_id))
                 db.sincronizar_transacao_fatura(int(fatura_id), user_id)
 
