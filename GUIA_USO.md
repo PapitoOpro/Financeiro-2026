@@ -15,7 +15,19 @@
 
 ## Módulos
 
-### 1. Controle de Caixa
+### 1. Consultor Financeiro IA
+
+Chat com IA (Claude Haiku) sobre seus dados financeiros e uso do sistema.
+
+- Carrega automaticamente o contexto financeiro (saldos, gastos, alertas) 1x por dia — use **🔄 Atualizar dados** para forçar.
+- Clique em uma das **perguntas frequentes** sugeridas ou digite sua própria pergunta no chat.
+- **🗑️ Limpar chat** apaga o histórico da conversa.
+
+> Requer `ANTHROPIC_API_KEY` configurada em `.streamlit/secrets.toml`.
+
+---
+
+### 2. Controle de Caixa
 
 Registrar entradas e saídas do dia a dia.
 
@@ -28,35 +40,45 @@ Registrar entradas e saídas do dia a dia.
 
 ---
 
-### 2. Projeção de Gastos
+### 3. Projeção de Gastos
 
 Controlar parcelas de cartão e prever gastos futuros.
 
 | Aba             | O que faz                                                             |
 | --------------- | --------------------------------------------------------------------- |
 | **Manual**      | Cadastra parcelas manualmente                                         |
-| **Importações** | Importa faturas via texto colado ou arquivo                           |
+| **Importações** | Importa faturas via upload de PDF, CSV ou texto colado                |
 | **Previsão**    | Dashboard com total de dívidas, mês mais pesado e previsão mês a mês |
 
-#### Importação de Fatura — Método Preferido: Copiar e Colar
+#### Importação de Fatura
 
-> **Prefira sempre colar o texto do PDF** ao invés de fazer upload do arquivo.
-> O upload depende de OCR, que pode errar em valores, datas e descrições.
-> Copiar direto do PDF garante extração exata sem perda de dados.
+##### Opção 1 — Upload do PDF (método preferido)
 
-**Como fazer:**
+> Suporte automático a **Nubank, Itaú, Bradesco, Mercado Pago e Porto Bank**.
+> O sistema detecta o banco, o cartão (pelos últimos dígitos) e sugere a categoria/subcategoria de cada item automaticamente.
 
-1. Abra a fatura no seu leitor de PDF.
-2. Selecione todo o conteúdo (`Ctrl+A`) e copie (`Ctrl+C`).
-3. Na aba **Importações**, cole o texto no campo indicado.
-4. Revise os itens extraídos, ajuste se necessário.
+1. Na aba **Importações**, envie o PDF da fatura.
+2. Se o PDF tiver senha, informe-a no campo indicado.
+3. Clique em **🔍 Extrair lançamentos**.
+4. Revise os itens extraídos (banco, cartão e categorias sugeridas) e ajuste se necessário.
 5. Confirme a importação.
+
+##### Opção 2 — Copiar e colar *(use somente se o upload não funcionar)*
+
+1. Abra o PDF, selecione os lançamentos (`Ctrl+A`) e copie (`Ctrl+C`).
+2. Cole o texto no campo indicado e clique em **Processar texto colado**.
+
+##### Opção 3 — Upload de CSV
+
+1. Envie o arquivo `.csv` da fatura.
+2. Mapeie as colunas (Descrição, Valor e, se houver, Parcela).
+3. Clique em **Extrair Dados do CSV** e revise antes de confirmar.
 
 As parcelas aparecem na aba **Previsão** e são consideradas nos relatórios.
 
 ---
 
-### 3. Cadastros
+### 4. Cadastros
 
 Gerenciar categorias, subcategorias e bancos/cartões.
 
@@ -66,7 +88,7 @@ Gerenciar categorias, subcategorias e bancos/cartões.
 
 ---
 
-### 4. Relatórios
+### 5. Relatórios
 
 | Aba                        | O que contém                                                                                    |
 | -------------------------- | ----------------------------------------------------------------------------------------------- |
@@ -77,16 +99,21 @@ Gerenciar categorias, subcategorias e bancos/cartões.
 
 ---
 
-### 5. Admin *(somente admin)*
+### 6. Admin *(somente admin)*
 
-Aprovar usuários, ver estatísticas e resetar dados.
+| Aba                | O que faz                                             |
+| ------------------ | ------------------------------------------------------ |
+| **Estatísticas**   | Visão geral do banco (usuários, lançamentos, etc.)    |
+| **Resetar Dados**  | Reseta dados do sistema — ação irreversível           |
+| **Usuários**       | Aprova cadastros pendentes e lista usuários aprovados |
+| **Log de Ações**   | Histórico de ações realizadas no sistema              |
 
 ---
 
 ## Fluxo Recomendado
 
 ```text
-Cadastros → Controle de Caixa → Importar Faturas → Acompanhamento → Relatórios
+Cadastros → Controle de Caixa → Importar Faturas → Acompanhamento → Relatórios → Consultor Financeiro
 ```
 
 ---
@@ -94,6 +121,8 @@ Cadastros → Controle de Caixa → Importar Faturas → Acompanhamento → Rela
 ## Dicas Rápidas
 
 - **Compensação** = confirmar que o dinheiro efetivamente entrou/saiu da conta
-- **Copiar e colar do PDF** é mais confiável do que upload de arquivo para importação de faturas
+- **Upload do PDF** é o método preferido para importar faturas — detecta banco, cartão e categoria automaticamente
+- Se o upload não detectar os itens, use **copiar e colar** como alternativa
 - Use **Previsão** para saber qual mês será mais apertado
 - Exporte em **Excel** ou **PDF** para análise externa
+- Tire dúvidas sobre seus gastos direto no **Consultor Financeiro IA**
